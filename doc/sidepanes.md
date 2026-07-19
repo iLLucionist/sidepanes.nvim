@@ -62,6 +62,12 @@ be configured individually with `commands = { ... }`.
 | `:Sidepanes focus` | Toggle focus between the pane and previous non-pane window. |
 | `:Sidepanes zoom` | Toggle pane zoom. |
 | `:Sidepanes width [value]` | Report or change pane width. |
+| `:Sidepanes width next` | Snap width up. |
+| `:Sidepanes width previous` | Snap width down. |
+| `:Sidepanes width prev` | Alias for `previous`. |
+| `:Sidepanes width +` | Alias for `next`. |
+| `:Sidepanes width -` | Alias for `previous`. |
+| `:Sidepanes width pick` | Open the width picker. |
 | `:Sidepanes width-pick` | Open the width picker. |
 | `:Sidepanes ask` | Ask via the target picker. |
 | `:Sidepanes ask-codex [preset]` | Ask Codex directly. |
@@ -411,6 +417,41 @@ Private or unstable:
 Those exist for companion modules and command-string callbacks. They are not
 the user-facing contract.
 
+## Markdown Reflow
+
+Markdown reflow is built in as `sidepanes.markdown_reflow`. Sidepanes uses it
+internally, and users can configure it directly for standalone buffer reflow.
+
+```lua
+require("sidepanes.markdown_reflow").setup({
+  external_reflow_cmd = { "mdfmt", "--stdin", "--width", "{width}", "--wrap", "always" },
+  external_reflow_fallback = true,
+  external_reflow_protect_tables = true,
+  commands = true,
+  mappings = {
+    reflow = "<leader>mR",
+  },
+})
+```
+
+| Setup key | Behavior |
+| --- | --- |
+| `external_reflow_cmd` | External formatter command as a string, argv table, or function. `{width}` is replaced with the target width. |
+| `external_reflow_fallback` | Fall back to internal paragraph reflow when the external formatter fails. |
+| `external_reflow_protect_tables` | Mask Markdown tables before external formatting and restore them afterward. |
+| `commands` | `true`, `false`, or `{ reflow = "CommandName" }`. |
+| `mappings.reflow` | Optional normal-mode mapping for `reflow_buffer(0)`. |
+
+When `commands = true`, the module registers:
+
+```vim
+:MarkdownReflow [width]
+```
+
+If no external formatter is configured, the internal reflow implementation is
+used. If an external formatter fails and fallback is disabled, the command
+reports an error and leaves the buffer unchanged.
+
 ## Dependencies and Health
 
 Run:
@@ -423,16 +464,18 @@ Health checks report configured commands, mapping lhs values with their
 expected modes, tool presets, external commands, optional dependencies, and
 malformed config.
 
-Optional dependencies are tied to features:
+Sidepanes has no required Lua dependency for loading the core module. Optional
+dependencies are tied to features:
 
-| Dependency | Used for |
-| --- | --- |
-| `telescope.nvim` | Document and heading pickers. |
-| Markdown Treesitter parser | Heading/code-fence context. |
-| `mdfmt` | External Markdown reflow when configured. |
-| `codex` | Codex terminal tool. |
-| `claude` | Claude terminal tool. |
-| `ipython` / `uv` | IPython pane. |
+| Dependency | Required for | Missing behavior | Validation | Health |
+| --- | --- | --- | --- | --- |
+| `telescope.nvim` | Document and heading pickers. | Picker commands notify and do not open. | Warns when related command or mapping is enabled. | Warns as optional Lua dependency. |
+| Markdown Treesitter parser | Heading picker and Markdown code-fence context. | Heading picker notifies; ask context falls back where possible. | Warns when heading picker command or mapping is enabled. | Warns when parser cannot be created. |
+| `markview` | Optional Markdown pane decorations. | Markdown still opens without decorations. | No warning; rendering is opportunistic. | Warns as optional Lua dependency. |
+| `mdfmt` | External Markdown reflow when configured. | Falls back to internal reflow when fallback is enabled; otherwise errors. | No warning from setup validation. | Ok/warn/error depending on command availability and fallback. |
+| `codex` | Codex terminal tool. | Opening Codex fails through terminal job startup. | Warns when configured executable is missing. | Errors when configured command is missing. |
+| `claude` | Claude terminal tool. | Opening Claude fails through terminal job startup. | Warns when configured executable is missing. | Errors when configured command is missing. |
+| `ipython` / `uv` | IPython terminal tool. | Opening IPython fails if no configured command can start. | Warns when configured executable is missing. | Errors for missing `ipython`; reports `uv` as informational fallback support. |
 
 Pane-local `gf` is built in as `sidepanes.smart_gf`.
 
@@ -448,6 +491,26 @@ require("sidepanes").setup({
   validation = { enabled = false },
 })
 ```
+
+## Compatibility
+
+Grouped setup keys are preferred for new configuration. Older flat runtime keys
+remain supported by config normalization.
+
+Documented command aliases such as `:Sidepanes width prev`,
+`:Sidepanes width +`, `:Sidepanes width -`, and the matching
+`:SidepanesWidth` aliases are supported conveniences. The clearest forms remain
+`next`, `previous`, and explicit width values.
+
+Current advanced helper names remain available:
+
+```lua
+require("sidepanes").show_last_agent()
+require("sidepanes").toggle_markdown_agent()
+```
+
+They may be revisited in a future naming cleanup, but no rename is part of the
+current extraction work.
 
 ## Refactor and Test Standard
 

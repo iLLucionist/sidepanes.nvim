@@ -27,6 +27,7 @@ run_fast() {
     run_lua sidepanes-regression sidepanes_regression.lua
     run_lua sidepanes-audit-smoke sidepanes_audit_smoke.lua
     run_lua sidepanes-help-smoke sidepanes_help_smoke.lua
+    run_lua sidepanes-docs-contract-smoke sidepanes_docs_contract_smoke.lua
     run_lua sidepanes-checkhealth-smoke sidepanes_checkhealth_smoke.lua
 }
 

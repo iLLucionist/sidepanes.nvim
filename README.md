@@ -71,6 +71,9 @@ With lazy.nvim:
 :Sidepanes ipython
 :Sidepanes width 100
 :Sidepanes width next
+:Sidepanes width previous
+:Sidepanes width +
+:Sidepanes width -
 :Sidepanes width pick
 :Sidepanes ask
 :MarkdownReflow
@@ -96,6 +99,19 @@ require("sidepanes.markdown_reflow").setup({
 
 If no external formatter is configured, Sidepanes falls back to its internal
 paragraph reflow.
+
+## Dependencies
+
+Core loading has no required Lua dependency. Feature dependencies are optional:
+
+- `telescope.nvim` for document and heading pickers
+- Markdown Treesitter parser for heading picking and richer Markdown context
+- `markview` for optional Markdown decorations
+- `mdfmt` only when configured as an external Markdown formatter
+- `codex`, `claude`, `ipython`, and optionally `uv` for terminal tools
+
+Run `:checkhealth sidepanes` for the full dependency contract and setup
+validation status.
 
 ## Checks
 

@@ -1601,6 +1601,7 @@ test("setup validation reports malformed config and implied dependency gaps", fu
             root = "Sidepanes",
             pick = "SidepanesPick",
             headings = "SidepanesHeadings",
+            width = "SidepanesWidth",
             bogus = "Nope",
             zoom = true,
         },
@@ -1633,6 +1634,7 @@ test("setup validation reports malformed config and implied dependency gaps", fu
     local joined = table.concat(messages, "\n")
 
     assert(joined:find("Unknown Sidepanes command config key: bogus", 1, true), joined)
+    assert(not joined:find("Unknown Sidepanes command config key: width", 1, true), joined)
     assert(joined:find("Invalid Sidepanes command config for zoom", 1, true), joined)
     assert(joined:find("Invalid Sidepanes global mapping for zoom", 1, true), joined)
     assert(joined:find("Invalid Sidepanes pane mapping for markdown", 1, true), joined)

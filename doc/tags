@@ -2,10 +2,13 @@ sidepanes	sidepanes.txt	/*sidepanes*
 sidepanes-api	sidepanes.txt	/*sidepanes-api*
 sidepanes-ask	sidepanes.txt	/*sidepanes-ask*
 sidepanes-commands	sidepanes.txt	/*sidepanes-commands*
+sidepanes-compatibility	sidepanes.txt	/*sidepanes-compatibility*
 sidepanes-configuration	sidepanes.txt	/*sidepanes-configuration*
+sidepanes-dependencies	sidepanes.txt	/*sidepanes-dependencies*
 sidepanes-design	sidepanes.txt	/*sidepanes-design*
 sidepanes-health	sidepanes.txt	/*sidepanes-health*
 sidepanes-mappings	sidepanes.txt	/*sidepanes-mappings*
+sidepanes-markdown-reflow	sidepanes.txt	/*sidepanes-markdown-reflow*
 sidepanes-overview	sidepanes.txt	/*sidepanes-overview*
 sidepanes-quick-start	sidepanes.txt	/*sidepanes-quick-start*
 sidepanes-tools	sidepanes.txt	/*sidepanes-tools*

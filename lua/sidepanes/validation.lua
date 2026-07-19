@@ -24,6 +24,7 @@ local known_commands = {
     ipython_clear = true,
     focus = true,
     zoom = true,
+    width = true,
     width_picker = true,
     ask = true,
     ask_codex = true,

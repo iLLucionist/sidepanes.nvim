@@ -349,6 +349,8 @@ First extraction commit target:
 
 #### 5.4 Docs Contract Pass
 
+Status: completed.
+
 Keep each documentation surface focused:
 
 - `README.md`: quickstart.
@@ -364,6 +366,15 @@ Acceptance:
 - Every Sidepanes config group appears in Sidepanes help/docs.
 - Every built-in Markdown Reflow command/config/mapping appears in Sidepanes help/docs.
 - Help tags remain valid after doc changes.
+
+Completed:
+
+- Added root width alias coverage to README, help, and Markdown docs.
+- Added an explicit Markdown Reflow help/reference section covering
+  `:MarkdownReflow`, setup keys, mappings, fallback, and table protection.
+- Added dependency and compatibility sections to help/docs.
+- Added `tests/sidepanes_docs_contract_smoke.lua` to enforce command, API,
+  mapping, config, Markdown Reflow, dependency, and compatibility docs.
 
 #### 5.5 Portable Test / CI Wrapper
 
@@ -402,8 +413,7 @@ Full checks:
 
 #### 5.6 Update `illu.nvim` To Consume GitHub Plugins
 
-Status: in progress; `illu.nvim` loads the GitHub-installed plugin path, and
-the local source remains as a deliberate fallback until a later cleanup pass.
+Status: completed.
 
 After the standalone repo works locally, update personal config to install it from GitHub.
 
@@ -443,9 +453,12 @@ Current verification:
 - `illu.nvim` `tests/run_sidepanes_checks.sh` selects the lazy-installed
   `sidepanes.nvim` runtime path first via `SIDEPANES_RUNTIME_PATH`, falling
   back to the local repo only when the installed plugin is absent.
-- Local `illu.nvim/lua/sidepanes/**` has not been removed.
+- Local `illu.nvim/lua/sidepanes/**` and local Sidepanes docs were removed
+  after the GitHub-installed plugin path passed acceptance testing.
 
 #### 5.7 Dependency Contract Pass
+
+Status: completed.
 
 Make optional dependencies explicit and consistent.
 
@@ -464,7 +477,18 @@ Specific extraction decision:
 - Later extraction should be possible by moving `sidepanes.markdown_reflow` into its own repo and making Sidepanes require the external module through one compatibility boundary.
 - `sidepanes.smart_gf` stays built into `sidepanes.nvim`.
 
+Completed:
+
+- Documented each optional dependency, when it is required, runtime behavior
+  when missing, setup validation behavior, and health behavior.
+- Kept `sidepanes.smart_gf` and `sidepanes.markdown_reflow` as built-in
+  required health checks.
+- Fixed setup validation so `commands.width` is recognized alongside
+  `commands.width_picker`.
+
 #### 5.8 Compatibility And Deprecation Cleanup
+
+Status: completed for the extraction pass.
 
 Decide how long older public names and aliases remain.
 
@@ -472,6 +496,15 @@ Questions:
 
 - Should old flat Sidepanes config keys remain permanently supported?
 - Should command aliases be documented as stable or convenience-only?
+
+Decisions:
+
+- Older flat setup keys remain supported by config normalization for
+  compatibility; grouped setup keys remain preferred in docs and examples.
+- Width aliases are documented supported conveniences, with `next`,
+  `previous`, and explicit width values presented as the clearest forms.
+- `show_last_agent()` and `toggle_markdown_agent()` remain available and
+  documented as advanced helpers; possible renames stay in item 6.
 
 #### 5.9 Release Readiness Later
 

@@ -12,8 +12,11 @@ CONTENTS                                                        *sidepanes*
 7. Public API                                    |sidepanes-api|
 8. Tools                                         |sidepanes-tools|
 9. Ask workflow                                  |sidepanes-ask|
-10. Health                                       |sidepanes-health|
-11. Design notes                                 |sidepanes-design|
+10. Markdown Reflow                             |sidepanes-markdown-reflow|
+11. Health                                      |sidepanes-health|
+12. Dependencies                                |sidepanes-dependencies|
+13. Compatibility                               |sidepanes-compatibility|
+14. Design notes                                |sidepanes-design|
 
 ==============================================================================
 OVERVIEW                                                 *sidepanes-overview*
@@ -113,6 +116,9 @@ subcommands:
     :Sidepanes width [value]
     :Sidepanes width next
     :Sidepanes width previous
+    :Sidepanes width prev
+    :Sidepanes width +
+    :Sidepanes width -
     :Sidepanes width pick
     :Sidepanes width-pick
     :Sidepanes ask
@@ -398,6 +404,53 @@ Useful calls:
 <
 
 ==============================================================================
+MARKDOWN REFLOW                                 *sidepanes-markdown-reflow*
+
+Markdown reflow is built in as:
+>
+    require("sidepanes.markdown_reflow")
+<
+
+Sidepanes uses that module internally for pane reflow, and users may configure
+it for standalone buffer reflow:
+>
+    require("sidepanes.markdown_reflow").setup({
+      external_reflow_cmd = { "mdfmt", "--stdin", "--width", "{width}", "--wrap", "always" },
+      external_reflow_fallback = true,
+      external_reflow_protect_tables = true,
+      commands = true,
+      mappings = {
+        reflow = "<leader>mR",
+      },
+    })
+<
+
+Setup keys:
+>
+    external_reflow_cmd
+    external_reflow_fallback
+    external_reflow_protect_tables
+    commands
+    mappings.reflow
+<
+
+When `commands = true`, Markdown Reflow registers:
+>
+    :MarkdownReflow [width]
+<
+
+`external_reflow_cmd` may be a string, argv table, or function. The token
+`{width}` is replaced with the computed target width.
+
+If no external formatter is configured, internal paragraph reflow is used. If
+an external formatter fails and `external_reflow_fallback` is true, Sidepanes
+falls back to internal reflow. If fallback is false, the command reports an
+error and leaves the buffer unchanged.
+
+When `external_reflow_protect_tables` is true, Markdown table blocks are masked
+before the external formatter runs and restored afterward.
+
+==============================================================================
 HEALTH                                                     *sidepanes-health*
 
 Run:
@@ -421,6 +474,89 @@ Setup also performs lightweight validation by default. Disable it with:
       validation = { enabled = false },
     })
 <
+
+==============================================================================
+DEPENDENCIES                                         *sidepanes-dependencies*
+
+Sidepanes has no required Lua dependency for loading the core module. Feature
+dependencies are optional and reported by setup validation and health checks.
+
+Dependency contract:
+
+- `telescope.nvim`
+  - Required for: `:Sidepanes pick`, `:Sidepanes headings`,
+    `:SidepanesPick`, `:SidepanesHeadings`, and their mappings.
+  - If missing at runtime: the picker command reports a Sidepanes dependency
+    warning and does not open the picker.
+  - Setup validation: warns when the related command or mapping is enabled.
+  - Health: warns that the optional Telescope module is missing.
+
+- Treesitter Markdown parser
+  - Required for: heading picker and Markdown code-fence context detection.
+  - If missing at runtime: heading picker reports a dependency warning; ask
+    context falls back where possible.
+  - Setup validation: warns when heading picker command or mapping is enabled.
+  - Health: warns when the parser cannot be created.
+
+- `markview`
+  - Used for: optional Markdown rendering decorations in the pane.
+  - If missing at runtime: Markdown still opens; decorations are skipped.
+  - Setup validation: no warning, because rendering is opportunistic.
+  - Health: warns that the optional module is missing.
+
+- `mdfmt`
+  - Used for: external Markdown reflow only when configured through
+    `markdown.reflow.cmd` or `external_reflow_cmd`.
+  - If missing at runtime: Sidepanes falls back to internal reflow when
+    fallback is enabled, otherwise reports an error.
+  - Setup validation: no warning unless the command is part of tool config.
+  - Health: ok/warn/error depending on command availability and fallback.
+
+- `codex`, `claude`, `ipython`, and `uv`
+  - Used for: terminal tools.
+  - If missing at runtime: opening the related tool fails through terminal job
+    startup.
+  - Setup validation: warns when configured tool executables are missing.
+  - Health: errors for missing configured tool commands; `uv` is informational
+    because IPython may fall back to `ipython`.
+
+Built-in modules:
+
+- `sidepanes.smart_gf`
+- `sidepanes.markdown_reflow`
+
+Both are shipped inside `sidepanes.nvim` and are required health checks.
+
+==============================================================================
+COMPATIBILITY                                       *sidepanes-compatibility*
+
+Grouped setup keys are preferred for new configuration:
+>
+    layout
+    markdown
+    lifecycle
+    validation
+    commands
+    mappings
+    tools
+<
+
+Older flat setup keys remain supported by config normalization. They are kept
+for compatibility, but docs and examples should use grouped keys.
+
+Command aliases such as `:Sidepanes width prev`, `:Sidepanes width +`,
+`:Sidepanes width -`, and the matching `:SidepanesWidth` aliases are supported
+conveniences. They are documented and covered by tests, but the most readable
+forms remain `next`, `previous`, and explicit width values.
+
+Current advanced API names remain available:
+>
+    show_last_agent(opts)
+    toggle_markdown_agent()
+<
+
+They may be revisited in a future naming cleanup, but no rename is part of the
+current extraction work.
 
 ==============================================================================
 DESIGN NOTES                                             *sidepanes-design*
