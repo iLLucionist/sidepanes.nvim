@@ -440,6 +440,9 @@ Current verification:
 - `:help sidepanes` resolves to the lazy-installed plugin docs.
 - Existing `illu.nvim` `tests/run_sidepanes_checks.sh` passes with the
   GitHub-installed plugin path active.
+- `illu.nvim` `tests/run_sidepanes_checks.sh` selects the lazy-installed
+  `sidepanes.nvim` runtime path first via `SIDEPANES_RUNTIME_PATH`, falling
+  back to the local repo only when the installed plugin is absent.
 - Local `illu.nvim/lua/sidepanes/**` has not been removed.
 
 #### 5.7 Dependency Contract Pass
