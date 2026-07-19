@@ -184,4 +184,20 @@ for _, item in ipairs({
     assert_has(docs, item)
 end
 
+for _, item in ipairs({
+    "Full documentation:",
+    "[doc/sidepanes.md](doc/sidepanes.md)",
+    "## Tutorial",
+    "## Mappings",
+    "complete functionality",
+    "nvim-lua/plenary.nvim",
+    "nvim-treesitter/nvim-treesitter",
+    "OXY2DEV/markview.nvim",
+    "markdown_inline",
+    "`mappings.global`",
+    "`mappings.pane`",
+}) do
+    assert_has(readme, item, "README " .. item)
+end
+
 print("sidepanes docs contract smoke passed")
