@@ -13,7 +13,10 @@ but they should be called out clearly in this changelog.
 
 ## Unreleased
 
-No changes yet.
+### Changed
+
+- Replaced pre-release README badge placeholders with live release and tag
+  badges after publishing `v0.1.0`.
 
 ## v0.1.0 - 2026-07-19
 
