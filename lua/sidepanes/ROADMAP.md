@@ -563,6 +563,8 @@ mapping, help, health, and advanced helper surfaces.
 - Document lifecycle expectations for third-party pane tools if that API exists.
 - Add tests that prove external integrations can register and use a tool
   without reaching into private state.
+- Explore UI refinements and enhancements for pane controls, switcher/picker
+  polish, visual feedback, and everyday workflow ergonomics.
 
 ## Testing Standard
 
