@@ -9,12 +9,12 @@ local M = {}
 
 --- Toggle between markdown view and the last remembered pane terminal.
 ---
---- From markdown mode this delegates to show_last_agent({ focus = true }), which may open
+--- From markdown mode this delegates to show_last_terminal({ focus = true }), which may open
 --- or reuse Codex, Claude, IPython, or another configured terminal depending on remembered
 --- runtime state. From any terminal mode it switches back to the markdown viewer.
-function M.toggle_markdown_agent(state, deps)
+function M.toggle_markdown_terminal(state, deps)
     if state.active_mode == "markdown" then
-        deps.show_last_agent({ focus = true })
+        deps.show_last_terminal({ focus = true })
     else
         deps.show_markdown()
     end

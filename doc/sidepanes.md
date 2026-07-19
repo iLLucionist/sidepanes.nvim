@@ -363,10 +363,12 @@ sidepanes.switch_to({ tool = "codex", preset = "gpt55_high_fast", focus = true }
 the normalized internal entry. It is useful for integration code, but normal
 users should prefer `switch_to()`.
 
-`show_last_agent(opts)` and `toggle_markdown_agent()` are advanced workflow
+`show_last_terminal(opts)` and `toggle_markdown_terminal()` are advanced workflow
 helpers. They rely on Sidepanes' current runtime memory, not a durable history
-model. Despite the name, `show_last_agent()` may show IPython or a custom pane
-terminal if that was the last terminal used.
+model, and may show Codex, Claude, IPython, or a configured custom pane terminal.
+
+`show_last_agent(opts)` and `toggle_markdown_agent()` remain compatibility
+aliases for older callers.
 
 ## Public and Private API
 
@@ -396,6 +398,8 @@ switch_picker()
 switch_to(target, opts)
 make_switch_entry(target, opts)
 open_terminal(tool_name, preset_name, opts)
+show_last_terminal(opts)
+toggle_markdown_terminal()
 open_ipython(opts)
 send_ipython(opts)
 clear_ipython(opts)
@@ -502,15 +506,14 @@ Documented command aliases such as `:Sidepanes width prev`,
 `:SidepanesWidth` aliases are supported conveniences. The clearest forms remain
 `next`, `previous`, and explicit width values.
 
-Current advanced helper names remain available:
+Older advanced helper names remain available as compatibility aliases:
 
 ```lua
 require("sidepanes").show_last_agent()
 require("sidepanes").toggle_markdown_agent()
 ```
 
-They may be revisited in a future naming cleanup, but no rename is part of the
-current extraction work.
+New code should prefer `show_last_terminal()` and `toggle_markdown_terminal()`.
 
 ## Refactor and Test Standard
 

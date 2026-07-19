@@ -320,6 +320,8 @@ Stable public functions:
     switch_to(target, opts)
     make_switch_entry(target, opts)
     open_terminal(tool_name, preset_name, opts)
+    show_last_terminal(opts)
+    toggle_markdown_terminal()
     open_ipython(opts)
     send_ipython(opts)
     clear_ipython(opts)
@@ -343,9 +345,15 @@ Stable public functions:
 
 Advanced helpers:
 >
+    show_last_terminal(opts)
+    toggle_markdown_terminal()
+    make_switch_entry(target, opts)
+<
+
+Compatibility aliases:
+>
     show_last_agent(opts)
     toggle_markdown_agent()
-    make_switch_entry(target, opts)
 <
 
 Internal functions such as raw `switch(entry)` and `ask_with_entry(entry, opts)`
@@ -549,14 +557,13 @@ Command aliases such as `:Sidepanes width prev`, `:Sidepanes width +`,
 conveniences. They are documented and covered by tests, but the most readable
 forms remain `next`, `previous`, and explicit width values.
 
-Current advanced API names remain available:
+Older advanced API names remain available as compatibility aliases:
 >
     show_last_agent(opts)
     toggle_markdown_agent()
 <
 
-They may be revisited in a future naming cleanup, but no rename is part of the
-current extraction work.
+New code should prefer `show_last_terminal()` and `toggle_markdown_terminal()`.
 
 ==============================================================================
 DESIGN NOTES                                             *sidepanes-design*

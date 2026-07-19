@@ -94,6 +94,8 @@ for _, item in ipairs({
     "switch_to(target, opts)",
     "make_switch_entry(target, opts)",
     "open_terminal(tool_name, preset_name, opts)",
+    "show_last_terminal(opts)",
+    "toggle_markdown_terminal()",
     "show_last_agent(opts)",
     "toggle_markdown_agent()",
     "open_ipython(opts)",

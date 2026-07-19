@@ -255,6 +255,8 @@ test("public facade hides mutable state and exposes config copy", function()
         "pick",
         "pick_headings",
         "open_terminal",
+        "show_last_terminal",
+        "toggle_markdown_terminal",
         "open_ipython",
         "send_ipython",
         "clear_ipython",
@@ -2001,13 +2003,13 @@ test("show last agent falls back to Codex when no terminal was remembered", func
     })
     pane.open(root .. "/docs/doc.md")
 
-    pane.show_last_agent({ root = root, focus = true })
+    pane.show_last_terminal({ root = root, focus = true })
 
-    assert(pane.active_mode == "codex", "show_last_agent did not fall back to Codex")
-    assert(vim.api.nvim_get_current_win() == pane.winid, "show_last_agent focus option did not focus pane")
+    assert(pane.active_mode == "codex", "show_last_terminal did not fall back to Codex")
+    assert(vim.api.nvim_get_current_win() == pane.winid, "show_last_terminal focus option did not focus pane")
 end)
 
-test("toggle markdown agent flips between markdown and last remembered terminal", function()
+test("toggle markdown terminal flips between markdown and last remembered terminal", function()
     reset_pane()
 
     local root = root_fixture("toggle-agent-test")
@@ -2033,11 +2035,16 @@ test("toggle markdown agent flips between markdown and last remembered terminal"
     pane.open_terminal("ipython", nil, { root = root, focus = true })
     pane.show_markdown()
 
-    pane.toggle_markdown_agent()
+    pane.toggle_markdown_terminal()
     assert(pane.active_mode == "ipython", "toggle did not return to last remembered terminal")
 
-    pane.toggle_markdown_agent()
+    pane.toggle_markdown_terminal()
     assert(pane.active_mode == "markdown", "toggle did not return to markdown")
+end)
+
+test("old terminal helper names remain compatibility aliases", function()
+    assert(pane.show_last_agent == pane.show_last_terminal, "show_last_agent is not an alias")
+    assert(pane.toggle_markdown_agent == pane.toggle_markdown_terminal, "toggle_markdown_agent is not an alias")
 end)
 
 test("public IPython send captures current line through terminal deps", function()

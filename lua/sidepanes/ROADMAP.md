@@ -23,7 +23,7 @@ Recently completed or in progress:
 - `switch(entry)` is internal and not exposed on the public facade.
 - `ask_with_entry(entry, opts)` is internal and not exposed on the public facade.
 - Scratch-buffer lifecycle callbacks moved to `sidepanes.internal`.
-- `show_last_agent(opts)` and `toggle_markdown_agent()` are documented as advanced workflow helpers.
+- `show_last_terminal(opts)` and `toggle_markdown_terminal()` are documented as advanced workflow helpers; old agent-named helpers remain compatibility aliases.
 - Runtime width API exists through `get_width()`, `set_width(value)`, and `adjust_width(delta)`.
 - Width commands exist through `:SidepanesWidth` and `:Sidepanes width`.
 - Width values support columns, percentages, screen fractions, numeric ratios, and deltas.
@@ -503,8 +503,9 @@ Decisions:
   compatibility; grouped setup keys remain preferred in docs and examples.
 - Width aliases are documented supported conveniences, with `next`,
   `previous`, and explicit width values presented as the clearest forms.
-- `show_last_agent()` and `toggle_markdown_agent()` remain available and
-  documented as advanced helpers; possible renames stay in item 6.
+- `show_last_terminal()` and `toggle_markdown_terminal()` are now the preferred
+  advanced helper names; `show_last_agent()` and `toggle_markdown_agent()`
+  remain compatibility aliases.
 
 #### 5.9 Release Readiness Later
 
@@ -533,18 +534,22 @@ Remaining release-readiness work:
 
 ### 6. Naming And API Cleanup Later
 
-Consider renaming helpers whose names no longer perfectly match behavior.
+Status: completed for the current public helper rename pass.
 
-Candidates:
+Completed:
 
-- `show_last_agent()` -> `show_last_terminal()`
-- `toggle_markdown_agent()` -> `toggle_markdown_terminal()`
+- Added `show_last_terminal()` and `toggle_markdown_terminal()` as the preferred
+  terminal-oriented helper names.
+- Kept `show_last_agent()` and `toggle_markdown_agent()` as documented
+  compatibility aliases.
+- Left mapping/config keys `toggle_agent` and `toggle_agent_alt` unchanged to
+  avoid unnecessary config churn.
 
-Current leaning:
+Future consideration:
 
-- Do not rename immediately.
-- Keep current names documented because they match existing keymaps/workflow.
-- Revisit only if the public surface becomes confusing.
+- If the mapping/config names become confusing, consider adding
+  `toggle_terminal` and `toggle_terminal_alt` aliases in a deliberate
+  compatibility pass.
 
 ## Testing Standard
 

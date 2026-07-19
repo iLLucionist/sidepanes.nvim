@@ -31,12 +31,16 @@ but they should be called out clearly in this changelog.
   keeping older flat setup keys supported.
 - Width aliases such as `:Sidepanes width prev`, `:Sidepanes width +`, and
   `:Sidepanes width -` are documented supported conveniences.
+- Added terminal-oriented public helper names: `show_last_terminal()` and
+  `toggle_markdown_terminal()`.
 
 ### Fixed
 
 - Setup validation now recognizes `commands.width`.
 - Personal `illu.nvim` tests now target the lazy-installed plugin path through
   `SIDEPANES_RUNTIME_PATH`.
+- Kept `show_last_agent()` and `toggle_markdown_agent()` as compatibility
+  aliases for existing callers.
 
 ### Notes
 

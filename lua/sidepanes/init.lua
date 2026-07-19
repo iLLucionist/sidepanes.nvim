@@ -234,7 +234,7 @@ setup_pane_maps = function(bufnr)
         pane_root = pane_root,
         send_ipython = M.send_ipython,
         show_markdown = M.show_markdown,
-        toggle_markdown_agent = M.toggle_markdown_agent,
+        toggle_markdown_agent = M.toggle_markdown_terminal,
         toggle_zoom = M.toggle_zoom,
         toggle_wrap = M.toggle_wrap,
         wrap_toggle_key = function()
@@ -474,9 +474,12 @@ function M.open_terminal(tool_name, preset_name, opts)
 end
 
 --- Show the most recently used pane terminal, falling back to Codex.
-function M.show_last_agent(opts)
-    terminal.show_last_agent(M, terminal_deps(), opts)
+function M.show_last_terminal(opts)
+    terminal.show_last_terminal(M, terminal_deps(), opts)
 end
+
+--- Compatibility alias for show_last_terminal().
+M.show_last_agent = M.show_last_terminal
 
 
 -- =============================================================================
@@ -490,7 +493,7 @@ switcher_deps = function()
         numbered_select = numbered_select,
         open_terminal = M.open_terminal,
         pane_root = pane_root,
-        show_last_agent = M.show_last_agent,
+        show_last_terminal = M.show_last_terminal,
         show_markdown = M.show_markdown,
         terminal_context_for_buf = terminal_context_for_buf,
         terminal_entries = terminal_entries,
@@ -499,9 +502,12 @@ switcher_deps = function()
 end
 
 --- Toggle between the markdown viewer and the last remembered pane terminal.
-function M.toggle_markdown_agent()
-    switcher.toggle_markdown_agent(M, switcher_deps())
+function M.toggle_markdown_terminal()
+    switcher.toggle_markdown_terminal(M, switcher_deps())
 end
+
+--- Compatibility alias for toggle_markdown_terminal().
+M.toggle_markdown_agent = M.toggle_markdown_terminal
 
 --- Switch the pane using a raw internal switcher entry.
 function M.switch(entry)
@@ -704,6 +710,8 @@ local public_functions = {
     "text_width",
     "toggle_wrap",
     "open_terminal",
+    "show_last_terminal",
+    "toggle_markdown_terminal",
     "show_last_agent",
     "toggle_markdown_agent",
     "switch_to",

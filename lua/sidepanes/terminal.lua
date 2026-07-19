@@ -224,7 +224,7 @@ end
 --- IPython, or a configured custom terminal. If that terminal is still running, it is reused.
 --- If it is not running, Sidepanes opens the remembered tool/preset when available, otherwise
 --- it opens Codex with its default preset. This is a navigation convenience, not an audit log.
-function M.show_last_agent(state, deps, opts)
+function M.show_last_terminal(state, deps, opts)
     opts = opts or {}
 
     local ctx = state.last_terminal_key and state.terminals[state.last_terminal_key] or nil
