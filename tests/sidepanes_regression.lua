@@ -1989,7 +1989,7 @@ end)
 test("show last terminal falls back to Codex when no terminal was remembered", function()
     reset_pane()
 
-    local root = root_fixture("last-agent-fallback-test")
+    local root = root_fixture("last-terminal-fallback-test")
 
     write(root .. "/docs/doc.md", { "# Doc" })
     pane.setup({
