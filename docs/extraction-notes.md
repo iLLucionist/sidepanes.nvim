@@ -1,6 +1,13 @@
-# Sidepanes Roadmap
+# Sidepanes Extraction Notes
 
-This is the living roadmap for `sidepanes.nvim`.
+This file archives the internal extraction roadmap used while splitting
+`sidepanes.nvim` out of `illu.nvim`.
+
+The current public roadmap lives in `ROADMAP.md`.
+
+## Archived Roadmap
+
+This was the living roadmap for `sidepanes.nvim`.
 
 When discussing "what's next?", use this file as the reference point:
 
