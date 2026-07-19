@@ -15,7 +15,8 @@ end
 local help = read("doc/sidepanes.txt")
 local markdown = read("doc/sidepanes.md")
 local readme = read("README.md")
-local docs = table.concat({ help, markdown, readme }, "\n")
+local changelog = read("CHANGELOG.md")
+local docs = table.concat({ help, markdown, readme, changelog }, "\n")
 
 local function assert_has(text, needle, label)
     assert(text:find(needle, 1, true), "missing docs contract entry for " .. (label or needle))
@@ -167,6 +168,10 @@ for _, item in ipairs({
     "Compatibility",
     "Older flat runtime keys",
     ":Sidepanes width prev",
+    "Release Policy",
+    "CHANGELOG.md",
+    "semantic versioning",
+    "markdown-reflow.nvim",
 }) do
     assert_has(docs, item)
 end

@@ -100,6 +100,10 @@ require("sidepanes.markdown_reflow").setup({
 If no external formatter is configured, Sidepanes falls back to its internal
 paragraph reflow.
 
+Markdown Reflow intentionally lives behind the `sidepanes.markdown_reflow`
+module boundary. It may split into a separate `markdown-reflow.nvim` plugin
+later if that becomes useful.
+
 ## Dependencies
 
 Core loading has no required Lua dependency. Feature dependencies are optional:
@@ -112,6 +116,21 @@ Core loading has no required Lua dependency. Feature dependencies are optional:
 
 Run `:checkhealth sidepanes` for the full dependency contract and setup
 validation status.
+
+## Release Policy
+
+The project will use lightweight semantic versioning once tags begin. Patch
+releases are for fixes, docs, tests, and internal refactors. Minor releases are
+for backward-compatible features and public API additions. Major releases are
+reserved for intentional breaking changes after `v1.0.0`.
+
+Before `v1.0.0`, breaking changes may still happen in minor releases, but they
+should be called out clearly in [CHANGELOG.md](CHANGELOG.md).
+
+Grouped setup keys are preferred for new configuration. Older flat setup keys
+remain supported by config normalization. Documented command aliases are
+supported conveniences; the clearest forms are still `next`, `previous`, and
+explicit width values.
 
 ## Checks
 

@@ -508,16 +508,28 @@ Decisions:
 
 #### 5.9 Release Readiness Later
 
-Only needed if either plugin is published as a public-ish plugin.
+Status: mostly completed for the first public-ish plugin pass.
 
-Possible work:
+Completed:
 
-- Add install examples for `lazy.nvim`.
-- Add `CHANGELOG.md`.
-- Decide whether versioning matters.
-- Decide support policy for old flat config keys and convenience command aliases.
+- README has a `lazy.nvim` install example.
+- Added `CHANGELOG.md`.
+- Documented a lightweight SemVer release policy in README and changelog:
+  patch for fixes/docs/tests/refactors, minor for compatible features/API
+  additions, major for breaking changes after `v1.0.0`; pre-`v1.0.0`
+  breaking changes may happen in minor releases but must be called out.
+- Resolved compatibility policy in item 5.8: older flat setup keys remain
+  supported; documented command aliases are supported conveniences.
+- Treated `sidepanes.nvim` as public-facing enough to keep README, help docs,
+  dependency docs, and changelog maintained.
+- README notes that Markdown Reflow may later split into
+  `markdown-reflow.nvim`.
+
+Remaining release-readiness work:
+
 - Add a minimal GitHub Actions workflow for headless Neovim tests.
-- Consider a future note that Markdown reflow may later split out into `markdown-reflow.nvim`.
+- Decide when to create the first tag, likely `v0.1.0`.
+- Optionally add GitHub release notes when tagging.
 
 ### 6. Naming And API Cleanup Later
 
