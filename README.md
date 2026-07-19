@@ -132,6 +132,11 @@ remain supported by config normalization. Documented command aliases are
 supported conveniences; the clearest forms are still `next`, `previous`, and
 explicit width values.
 
+## Project Status
+
+See [CHANGELOG.md](CHANGELOG.md) for release history and [ROADMAP.md](ROADMAP.md)
+for the short public roadmap.
+
 ## Checks
 
 ```sh
