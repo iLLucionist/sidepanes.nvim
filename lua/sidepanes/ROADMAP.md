@@ -542,14 +542,27 @@ Completed:
   terminal-oriented helper names.
 - Kept `show_last_agent()` and `toggle_markdown_agent()` as documented
   compatibility aliases.
-- Left mapping/config keys `toggle_agent` and `toggle_agent_alt` unchanged to
-  avoid unnecessary config churn.
+- Added `toggle_terminal` and `toggle_terminal_alt` as the preferred
+  terminal-oriented pane-local mapping keys.
+- Kept `toggle_agent` and `toggle_agent_alt` as documented compatibility
+  aliases.
 
-Future consideration:
+### 7. Platform API Design For `v0.2.0`
 
-- If the mapping/config names become confusing, consider adding
-  `toggle_terminal` and `toggle_terminal_alt` aliases in a deliberate
-  compatibility pass.
+Status: deferred until after the initial `v0.1.0` standalone release.
+
+Do not block `v0.1.0` on making Sidepanes a platform for other plugins.
+For the initial release, maintain the documented user-facing setup, command,
+mapping, help, health, and advanced helper surfaces.
+
+`v0.2.0` candidate work:
+
+- Define stable, advanced, and internal API tiers for plugin authors.
+- Decide whether Sidepanes should expose an extension registration API such as
+  `register_tool(name, spec)`.
+- Document lifecycle expectations for third-party pane tools if that API exists.
+- Add tests that prove external integrations can register and use a tool
+  without reaching into private state.
 
 ## Testing Standard
 

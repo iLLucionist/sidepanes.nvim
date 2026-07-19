@@ -234,6 +234,7 @@ setup_pane_maps = function(bufnr)
         pane_root = pane_root,
         send_ipython = M.send_ipython,
         show_markdown = M.show_markdown,
+        toggle_markdown_terminal = M.toggle_markdown_terminal,
         toggle_markdown_agent = M.toggle_markdown_terminal,
         toggle_zoom = M.toggle_zoom,
         toggle_wrap = M.toggle_wrap,

@@ -42,6 +42,24 @@ local function pane_mappings(deps)
     return deps.pane_mappings() or {}
 end
 
+--- Prefer terminal-named mappings while keeping old agent-named keys working.
+local function mapping(mappings, preferred, legacy)
+    if mappings[preferred] ~= nil then
+        return mappings[preferred]
+    end
+
+    return mappings[legacy]
+end
+
+--- Toggle between Markdown and terminal through either old or new deps.
+local function toggle_markdown_terminal(deps)
+    local toggle = deps.toggle_markdown_terminal or deps.toggle_markdown_agent
+
+    if toggle then
+        toggle()
+    end
+end
+
 --- Install pane-local normal and visual mappings for one pane buffer.
 function M.setup(bufnr, deps)
     deps = deps or {}
@@ -63,13 +81,13 @@ function M.setup(bufnr, deps)
         deps.open_terminal("ipython", nil, { root = deps.pane_root(bufnr), focus = true })
     end, "Show IPython pane", { nowait = true })
 
-    map(bufnr, "n", mappings.toggle_agent, function()
-        deps.toggle_markdown_agent()
-    end, "Toggle markdown/agent pane")
+    map(bufnr, "n", mapping(mappings, "toggle_terminal", "toggle_agent"), function()
+        toggle_markdown_terminal(deps)
+    end, "Toggle markdown/terminal pane")
 
-    map(bufnr, "n", mappings.toggle_agent_alt, function()
-        deps.toggle_markdown_agent()
-    end, "Toggle markdown/agent pane")
+    map(bufnr, "n", mapping(mappings, "toggle_terminal_alt", "toggle_agent_alt"), function()
+        toggle_markdown_terminal(deps)
+    end, "Toggle markdown/terminal pane")
 
     map(bufnr, "n", mappings.ipython_alt, function()
         deps.open_terminal("ipython", nil, { root = deps.pane_root(bufnr), focus = true })

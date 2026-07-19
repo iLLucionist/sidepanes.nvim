@@ -137,8 +137,8 @@ Sidepanes buffers.
 | `codex` | `<space>x` | Show Codex. |
 | `claude` | `<space>c` | Show Claude. |
 | `ipython` | `<space>i` | Show IPython. |
-| `toggle_agent` | `<leader>gg` | Toggle Markdown and last terminal. |
-| `toggle_agent_alt` | `<C-g>` | Faster toggle Markdown and last terminal. |
+| `toggle_terminal` | `<leader>gg` | Toggle Markdown and last terminal. |
+| `toggle_terminal_alt` | `<C-g>` | Faster toggle Markdown and last terminal. |
 | `ipython_alt` | `<leader>gi` | Show IPython. |
 | `gf` | `gf` | Smart go-to-file from the pane into the last non-pane window. |
 | `send_ipython` | `ll` | Send visual selection to IPython. |
@@ -192,8 +192,8 @@ require("sidepanes").setup({
       codex = "<space>x",
       claude = "<space>c",
       ipython = "<space>i",
-      toggle_agent = "<leader>gg",
-      toggle_agent_alt = "<C-g>",
+      toggle_terminal = "<leader>gg",
+      toggle_terminal_alt = "<C-g>",
       ipython_alt = "<leader>gi",
       gf = "gf",
       send_ipython = "ll",
@@ -500,6 +500,10 @@ require("sidepanes").setup({
 
 Grouped setup keys are preferred for new configuration. Older flat runtime keys
 remain supported by config normalization.
+
+The pane-local mapping keys `toggle_agent` and `toggle_agent_alt` remain
+supported as compatibility aliases for `toggle_terminal` and
+`toggle_terminal_alt`. New configuration should use the terminal-named keys.
 
 Documented command aliases such as `:Sidepanes width prev`,
 `:Sidepanes width +`, `:Sidepanes width -`, and the matching

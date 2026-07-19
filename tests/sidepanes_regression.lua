@@ -474,8 +474,8 @@ test("pane-local mappings are configurable", function()
                 codex = "mx",
                 claude = "mc",
                 ipython = "mi",
-                toggle_agent = "mg",
-                toggle_agent_alt = false,
+                toggle_terminal = "mt",
+                toggle_terminal_alt = false,
                 ipython_alt = false,
                 gf = "mf",
                 send_ipython = "ml",
@@ -494,8 +494,8 @@ test("pane-local mappings are configurable", function()
         send_ipython = function(opts)
             calls.send_ipython = opts
         end,
-        toggle_markdown_agent = function()
-            calls.toggle_agent = true
+        toggle_markdown_terminal = function()
+            calls.toggle_terminal = true
         end,
         toggle_zoom = function()
             calls.zoom = true
@@ -512,14 +512,14 @@ test("pane-local mappings are configurable", function()
     assert(has_nowait_map(bufnr, "mx"), "custom Codex pane map missing")
     assert(has_nowait_map(bufnr, "mc"), "custom Claude pane map missing")
     assert(has_nowait_map(bufnr, "mi"), "custom IPython pane map missing")
-    assert(has_map(bufnr, "mg"), "custom toggle-agent pane map missing")
+    assert(has_map(bufnr, "mt"), "custom toggle-terminal pane map missing")
     assert(has_map(bufnr, "mf"), "custom smart-gf pane map missing")
     assert(has_map(bufnr, "ml", "x"), "custom send-IPython pane map missing")
     assert(has_map(bufnr, "mz"), "custom zoom pane map missing")
     assert(has_map(bufnr, "ma", "x"), "custom ask-last pane map missing")
     assert(has_map(bufnr, "mx", "x"), "custom ask-Codex pane map missing")
     assert(has_map(bufnr, "mc", "x"), "custom ask-Claude pane map missing")
-    assert(not has_map(bufnr, "<C-g>"), "disabled toggle-agent alternate map was installed")
+    assert(not has_map(bufnr, "<C-g>"), "disabled toggle-terminal alternate map was installed")
     assert(not has_map(bufnr, "<leader>gi"), "disabled IPython alternate map was installed")
 
     call_map(bufnr, "m0")
@@ -531,8 +531,8 @@ test("pane-local mappings are configurable", function()
     assert(calls.open_terminal.tool_name == "claude", "custom Claude pane map used wrong tool")
     call_map(bufnr, "mi")
     assert(calls.open_terminal.tool_name == "ipython", "custom IPython pane map used wrong tool")
-    call_map(bufnr, "mg")
-    assert(calls.toggle_agent == true, "custom toggle-agent pane map did not call toggle")
+    call_map(bufnr, "mt")
+    assert(calls.toggle_terminal == true, "custom toggle-terminal pane map did not call toggle")
     call_map(bufnr, "ml", "x")
     assert(calls.send_ipython.bufnr == bufnr and calls.send_ipython.visual == true, "custom send-IPython pane map did not pass visual opts")
     call_map(bufnr, "mz")
@@ -545,6 +545,59 @@ test("pane-local mappings are configurable", function()
     assert(calls.ask_current.tool_name == "claude", "custom ask-Claude pane map used wrong tool")
     call_map(bufnr, "mw")
     assert(calls.wrap == true, "wrap toggle key no longer worked beside pane mappings")
+end)
+
+test("legacy pane-local terminal toggle mapping keys remain aliases", function()
+    reset_pane()
+
+    local normalized = config.normalize(vim.deepcopy(defaults.config), {
+        mappings = {
+            pane = {
+                toggle_agent = "ma",
+                toggle_agent_alt = false,
+            },
+        },
+    })
+
+    assert(normalized.mappings.pane.toggle_terminal == "ma", "legacy toggle_agent did not set toggle_terminal")
+    assert(normalized.mappings.pane.toggle_terminal_alt == false, "legacy toggle_agent_alt did not disable toggle_terminal_alt")
+
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    local called = false
+
+    local_maps.setup(bufnr, {
+        ask_current_coding_agent = function() end,
+        ask_last_coding_agent = function() end,
+        markdown_bufnr = function()
+            return -1
+        end,
+        open_terminal = function() end,
+        pane_mappings = function()
+            return {
+                toggle_agent = "ma",
+                toggle_agent_alt = false,
+            }
+        end,
+        pane_root = function()
+            return helpers.tmp_path("sidepanes-legacy-pane-map-root")
+        end,
+        send_ipython = function() end,
+        show_markdown = function() end,
+        toggle_markdown_agent = function()
+            called = true
+        end,
+        toggle_zoom = function() end,
+        toggle_wrap = function() end,
+        wrap_toggle_key = function()
+            return "mw"
+        end,
+    })
+
+    assert(has_map(bufnr, "ma"), "legacy toggle_agent pane map missing")
+    assert(not has_map(bufnr, "<C-g>"), "legacy disabled toggle_agent_alt map was installed")
+
+    call_map(bufnr, "ma")
+    assert(called == true, "legacy toggle_agent pane map did not call toggle")
 end)
 
 test("document picker entries preserve display and resolve absolute values", function()

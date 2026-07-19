@@ -146,6 +146,8 @@ for _, item in ipairs({
     "ask_last",
     "ask_codex",
     "ask_claude",
+    "toggle_terminal",
+    "toggle_terminal_alt",
     "toggle_agent",
     "toggle_agent_alt",
     "ipython_alt",

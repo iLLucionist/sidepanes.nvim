@@ -161,6 +161,26 @@ local function normalize_width(config, base, expanded)
     }
 end
 
+--- Normalize renamed pane mapping keys while preserving old setup aliases.
+local function normalize_mapping_aliases(config, expanded)
+    local mappings = config.mappings
+    local pane = type(mappings) == "table" and mappings.pane or nil
+    local expanded_pane = type(expanded.mappings) == "table" and type(expanded.mappings.pane) == "table" and expanded.mappings.pane or nil
+
+    if type(pane) ~= "table" then
+        return
+    end
+
+    local function alias(preferred, legacy)
+        if expanded_pane and expanded_pane[preferred] == nil and expanded_pane[legacy] ~= nil then
+            pane[preferred] = expanded_pane[legacy]
+        end
+    end
+
+    alias("toggle_terminal", "toggle_agent")
+    alias("toggle_terminal_alt", "toggle_agent_alt")
+end
+
 --- Return a canonical grouped setup table for an already-normalized runtime config.
 function M.to_setup(runtime_config)
     local config = vim.deepcopy(runtime_config or defaults.config)
@@ -213,6 +233,7 @@ function M.normalize(base, opts)
         width = normalize_width(result, base, expanded),
     }
 
+    normalize_mapping_aliases(result, expanded)
     remove_disabled_tools(result, opts)
 
     return result, metadata

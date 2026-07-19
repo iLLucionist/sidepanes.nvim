@@ -33,6 +33,8 @@ but they should be called out clearly in this changelog.
   `:Sidepanes width -` are documented supported conveniences.
 - Added terminal-oriented public helper names: `show_last_terminal()` and
   `toggle_markdown_terminal()`.
+- Added terminal-oriented pane mapping keys: `toggle_terminal` and
+  `toggle_terminal_alt`.
 
 ### Fixed
 
@@ -41,6 +43,8 @@ but they should be called out clearly in this changelog.
   `SIDEPANES_RUNTIME_PATH`.
 - Kept `show_last_agent()` and `toggle_markdown_agent()` as compatibility
   aliases for existing callers.
+- Kept `toggle_agent` and `toggle_agent_alt` as compatibility aliases for
+  existing pane-local mapping configuration.
 
 ### Notes
 

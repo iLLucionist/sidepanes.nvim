@@ -552,6 +552,10 @@ Grouped setup keys are preferred for new configuration:
 Older flat setup keys remain supported by config normalization. They are kept
 for compatibility, but docs and examples should use grouped keys.
 
+Pane-local mapping keys `toggle_agent` and `toggle_agent_alt` remain supported
+as compatibility aliases for `toggle_terminal` and `toggle_terminal_alt`. New
+configuration should use the terminal-named keys.
+
 Command aliases such as `:Sidepanes width prev`, `:Sidepanes width +`,
 `:Sidepanes width -`, and the matching `:SidepanesWidth` aliases are supported
 conveniences. They are documented and covered by tests, but the most readable
