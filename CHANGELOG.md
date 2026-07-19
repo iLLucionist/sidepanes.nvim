@@ -22,6 +22,9 @@ but they should be called out clearly in this changelog.
 - Added docs-contract smoke coverage for commands, API, mappings, config,
   Markdown Reflow, dependencies, and compatibility notes.
 - Documented the release policy and compatibility stance.
+- Added a short public `ROADMAP.md` and archived extraction notes in
+  `docs/extraction-notes.md`.
+- Added a draft `v0.1.0` GitHub release-notes file.
 
 ### Changed
 
@@ -35,6 +38,8 @@ but they should be called out clearly in this changelog.
   `toggle_markdown_terminal()`.
 - Added terminal-oriented pane mapping keys: `toggle_terminal` and
   `toggle_terminal_alt`.
+- Expanded the README with full documentation links, complete-functionality
+  install guidance, mapping tables, and a workflow tutorial.
 
 ### Fixed
 
