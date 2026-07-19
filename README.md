@@ -1,5 +1,10 @@
 # sidepanes.nvim
 
+[![Tests](https://github.com/iLLucionist/sidepanes.nvim/actions/workflows/tests.yml/badge.svg)](https://github.com/iLLucionist/sidepanes.nvim/actions/workflows/tests.yml)
+[![Latest release](https://img.shields.io/github/v/release/iLLucionist/sidepanes.nvim?sort=semver&label=release)](https://github.com/iLLucionist/sidepanes.nvim/releases)
+[![Latest tag](https://img.shields.io/github/v/tag/iLLucionist/sidepanes.nvim?sort=semver&label=tag)](https://github.com/iLLucionist/sidepanes.nvim/tags)
+[![License](https://img.shields.io/github/license/iLLucionist/sidepanes.nvim)](LICENSE)
+
 Reusable Neovim side panes for Markdown references, coding-agent terminals, and
 IPython.
 
