@@ -25,7 +25,7 @@ but they should be called out clearly in this changelog.
 - Added a short public `ROADMAP.md` and archived extraction notes in
   `docs/extraction-notes.md`.
 - Added a draft `v0.1.0` GitHub release-notes file.
-- Added README badges for CI, latest release, latest tag, and license.
+- Added README badges for CI, pre-release status, tag status, and license.
 
 ### Changed
 
