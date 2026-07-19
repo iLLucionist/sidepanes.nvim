@@ -1,6 +1,15 @@
-# sidepanes.nvim v0.1.0 Draft Release Notes
+# sidepanes.nvim v0.1.0 Release Notes
 
-This is the first standalone release draft for `sidepanes.nvim`.
+This is the first release of `sidepanes.nvim`.
+
+Sidepanes is built for a hybrid artisan-and-agentic coding workflow: draft a
+spec, let an agent produce reference implementation material, then keep that
+reference beside your code while you review, revise, and refactor line by line.
+It keeps Markdown reference docs, Codex, Claude, and IPython in one right-hand
+pane, so you can switch between implementation files and reference material, ask
+questions about selected code or prose, and send Python snippets to a live
+IPython session. This initial release is intentionally Python-centered because
+that is the workflow it was built to support first.
 
 ## Highlights
 

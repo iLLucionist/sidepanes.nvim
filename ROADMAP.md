@@ -9,7 +9,7 @@ day-to-day planning once the repository is managed primarily on GitHub.
 
 ## v0.1.0 Initial Standalone Release
 
-Status: release candidate.
+Status: released.
 
 Goal: publish the first named standalone release of Sidepanes as a Neovim
 plugin, without expanding the scope beyond the already-extracted feature set.
@@ -30,13 +30,7 @@ Included:
 - Built-in Markdown Reflow as `sidepanes.markdown_reflow`.
 - `main` as the default install target.
 
-Remaining:
-
-- Decide whether to tag the first release as `v0.1.0`.
-- Publish the drafted GitHub release notes when tagging.
-- Convert `CHANGELOG.md` from `Unreleased` to `v0.1.0` when the tag is cut.
-- Replace the pre-release README badge placeholders with dynamic release/tag
-  badges after `v0.1.0` exists.
+Released as `v0.1.0` on 2026-07-19.
 
 ## v0.2.0 Platform And UI Pass
 

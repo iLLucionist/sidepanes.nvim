@@ -8,6 +8,14 @@
 Reusable Neovim side panes for Markdown references, coding-agent terminals, and
 IPython.
 
+Sidepanes is built for a hybrid artisan-and-agentic coding workflow: draft a
+spec, let an agent produce reference implementation material, then keep that
+reference beside your code while you review, revise, and refactor line by line.
+It keeps Markdown reference docs, Codex, Claude, and IPython in one right-hand
+pane, so you can switch between implementation files and reference material, ask
+questions about selected code or prose, and send Python snippets to a live
+IPython session.
+
 Full documentation:
 
 - [doc/sidepanes.md](doc/sidepanes.md)

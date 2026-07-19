@@ -13,6 +13,10 @@ but they should be called out clearly in this changelog.
 
 ## Unreleased
 
+No changes yet.
+
+## v0.1.0 - 2026-07-19
+
 ### Added
 
 - Extracted Sidepanes into a standalone plugin repository.
@@ -26,6 +30,8 @@ but they should be called out clearly in this changelog.
   `docs/extraction-notes.md`.
 - Added a draft `v0.1.0` GitHub release-notes file.
 - Added README badges for CI, pre-release status, tag status, and license.
+- Added a short README and release-notes motivation for the workflow Sidepanes
+  was built around.
 
 ### Changed
 
