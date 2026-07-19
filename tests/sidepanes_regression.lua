@@ -1986,7 +1986,7 @@ test("pane switch picker selects markdown and shortcut entries without enter", f
     assert(vim.api.nvim_win_get_buf(pane.winid) == pane.bufnr, "picker 0 did not restore markdown buffer")
 end)
 
-test("show last agent falls back to Codex when no terminal was remembered", function()
+test("show last terminal falls back to Codex when no terminal was remembered", function()
     reset_pane()
 
     local root = root_fixture("last-agent-fallback-test")
@@ -2012,7 +2012,7 @@ end)
 test("toggle markdown terminal flips between markdown and last remembered terminal", function()
     reset_pane()
 
-    local root = root_fixture("toggle-agent-test")
+    local root = root_fixture("toggle-terminal-test")
 
     write(root .. "/docs/doc.md", { "# Doc" })
     pane.setup({
