@@ -128,23 +128,25 @@ are available in your environment.
    project and opens the file in your last non-pane window, leaving the reference
    pane intact.
 
-4. When you want an agent beside the same reference, press `<leader>px` for
-   Codex or `<leader>pc` for Claude. The pane switches from Markdown to the
-   terminal and reuses the session for that project.
+4. As you are coding or reading reference material, you might want to ask a
+   question about it using a coding agent. Select the relevant lines and press
+   `<leader>pa` from any buffer, or `aa` inside the Sidepanes panel. Sidepanes
+   opens an editable prompt buffer. Notice that it automatically prefills the
+   filename, line numbers, and snippet from your selection.
 
-5. Press `<leader>gg` or `<C-g>` inside the pane to toggle between the Markdown
-   document and the last terminal. Use `<space>0`, `<space>x`, `<space>c`, and
-   `<space>i` inside the pane for direct switches.
+5. You may also want to interact with your Python code live. As with asking
+   questions, select code in visual mode and press `<leader>pl` from any buffer,
+   or `ll` inside the Sidepanes panel. Sidepanes sends those lines to an IPython
+   session in a terminal.
 
-6. Select code in a normal buffer and press `<leader>pa` to ask a coding agent
-   about it. Sidepanes opens an editable prompt buffer so you can refine the
-   question before sending it.
+6. If you want to interact directly with one of the tools, switch to it with
+   `<leader>px` for Codex, `<leader>pc` for Claude, or `<leader>pi` for IPython.
+   Inside the Sidepanes panel, use the faster pane-local mappings: `<space>x`
+   for Codex, `<space>c` for Claude, `<space>i` for IPython, and `<space>0` for
+   the Markdown viewer. Press `<leader>gg` or `<C-g>` inside the pane to toggle
+   between the Markdown document and the last terminal.
 
-7. For Python work, press `<leader>pi` to open IPython. Use `<leader>pl` from a
-   normal buffer, or `ll` from visual mode inside the pane mappings, to send code
-   into IPython.
-
-8. If the pane feels too wide or narrow, use `<leader>p-`, `<leader>p+`, or
+7. If the pane feels too wide or narrow, use `<leader>p-`, `<leader>p+`, or
    `<leader>pw` to adjust it. Use `<leader>p%` when you want relative widths to
    track the total Neovim window size.
 
