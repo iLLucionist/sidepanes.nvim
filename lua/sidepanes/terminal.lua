@@ -1,0 +1,478 @@
+--[[
+sidepanes.terminal
+Purpose: Own pane-managed terminal sessions for tools and IPython.
+Does: Starts/reuses terminal jobs by project root, tracks active sessions and presets, sends prompts/code, switches models, and shuts jobs down.
+Architecture: Implements terminal behavior behind the public facade, using entries/util helpers and injected window/selection callbacks.
+]]
+
+local entries = require("sidepanes.entries")
+local util = require("sidepanes.util")
+
+local M = {}
+
+--- Find the pane terminal context for a buffer.
+function M.context_for_buf(state, bufnr)
+    for _, ctx in pairs(state.terminals) do
+        if ctx.bufnr == bufnr then
+            return ctx
+        end
+    end
+
+    return nil
+end
+
+--- Return whether a terminal context still has a live job and buffer.
+function M.is_running(ctx)
+    return ctx and util.valid_buf(ctx.bufnr) and util.is_running(ctx.job_id)
+end
+
+--- Return whether a tool is one of the conversational coding agents.
+function M.is_coding_agent_tool(tool_name)
+    return tool_name == "codex" or tool_name == "claude"
+end
+
+--- Remember the latest active terminal and per-tool coding-agent terminal.
+function M.remember_context(state, ctx)
+    if not ctx then
+        return
+    end
+
+    state.last_terminal_key = ctx.key
+
+    if M.is_coding_agent_tool(ctx.tool_name) then
+        state.last_coding_agent_terminal_key = ctx.key
+        state.last_tool_terminal_keys[ctx.tool_name] = ctx.key
+    end
+end
+
+--- Build a picker entry representing an already-running terminal context.
+function M.entry_for_context(state, ctx)
+    local tool = (state.config.tools or {})[ctx.tool_name] or {}
+
+    return {
+        kind = "terminal",
+        tool_name = ctx.tool_name,
+        preset_name = ctx.preset_name,
+        root = ctx.root,
+        terminal_key = ctx.key,
+        label = (tool.label or ctx.tool_label or ctx.tool_name) .. " current: " .. (ctx.preset_label or ctx.preset_name or "Default"),
+        running = true,
+        current = true,
+        active = state.active_terminal_key == ctx.key,
+    }
+end
+
+--- Find the best running terminal context for a tool and optional root.
+function M.context_for_tool(state, tool_name, root)
+    local last_key = state.last_tool_terminal_keys and state.last_tool_terminal_keys[tool_name] or nil
+    local last_ctx = last_key and state.terminals[last_key] or nil
+
+    if last_ctx and last_ctx.tool_name == tool_name and M.is_running(last_ctx) then
+        return last_ctx
+    end
+
+    local root_ctx = root and state.terminals[util.terminal_key(tool_name, root)] or nil
+
+    if root_ctx and M.is_running(root_ctx) then
+        return root_ctx
+    end
+
+    for _, ctx in pairs(state.terminals or {}) do
+        if ctx.tool_name == tool_name and M.is_running(ctx) then
+            return ctx
+        end
+    end
+
+    return nil
+end
+
+--- Find the most recently used running Codex or Claude context.
+function M.last_coding_agent_context(state, root)
+    local last_ctx = state.last_coding_agent_terminal_key and state.terminals[state.last_coding_agent_terminal_key] or nil
+
+    if last_ctx and M.is_coding_agent_tool(last_ctx.tool_name) and M.is_running(last_ctx) then
+        return last_ctx
+    end
+
+    local active_ctx = state.active_terminal_key and state.terminals[state.active_terminal_key] or nil
+
+    if active_ctx and M.is_coding_agent_tool(active_ctx.tool_name) and M.is_running(active_ctx) then
+        return active_ctx
+    end
+
+    for _, tool_name in ipairs({ "codex", "claude" }) do
+        local ctx = M.context_for_tool(state, tool_name, root)
+
+        if ctx then
+            return ctx
+        end
+    end
+
+    return nil
+end
+
+--- Start a new pane-owned terminal job for a tool and project root.
+function M.start(state, deps, tool_name, preset_name, root)
+    local tool = (state.config.tools or {})[tool_name]
+
+    if not tool then
+        vim.notify("Unknown pane tool: " .. tostring(tool_name), vim.log.levels.ERROR)
+        return nil
+    end
+
+    local preset = entries.preset_by_name(tool, preset_name)
+    local key = util.terminal_key(tool_name, root)
+    local existing = state.terminals[key]
+
+    if existing and util.valid_buf(existing.bufnr) and util.is_running(existing.job_id) then
+        return existing, false
+    end
+
+    local cmd = util.command_list(tool, preset, root)
+
+    if not util.executable_exists(cmd[1]) then
+        vim.notify("Pane tool executable not found: " .. tostring(cmd[1]), vim.log.levels.ERROR)
+        return nil
+    end
+
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    local ctx = {
+        key = key,
+        tool_name = tool_name,
+        tool_label = tool.label or tool_name,
+        preset_name = preset.name or "default",
+        preset_label = preset.label or preset.name or "Default",
+        preset = preset,
+        root = root,
+        bufnr = bufnr,
+        job_id = nil,
+        send_delay_ms = tool.send_delay_ms or 700,
+    }
+
+    pcall(vim.api.nvim_buf_set_name, bufnr, "Pane://" .. util.sanitize_name(key))
+    vim.api.nvim_set_option_value("bufhidden", "hide", { buf = bufnr })
+    deps.setup_pane_maps(bufnr)
+
+    state.active_mode = tool_name
+    state.active_terminal_key = key
+    M.remember_context(state, ctx)
+    deps.ensure_win(bufnr, "terminal", { focus = false })
+
+    vim.api.nvim_win_call(state.winid, function()
+        vim.api.nvim_set_current_buf(bufnr)
+        ctx.job_id = vim.fn.termopen(cmd, {
+            cwd = root,
+            on_exit = function()
+                deps.update_sticky_heading()
+            end,
+        })
+    end)
+
+    if not ctx.job_id or ctx.job_id <= 0 then
+        vim.notify("Could not start pane tool: " .. table.concat(cmd, " "), vim.log.levels.ERROR)
+        return nil
+    end
+
+    state.terminals[key] = ctx
+
+    return ctx, true
+end
+
+--- Open or focus a pane terminal, reusing an existing session when possible.
+function M.open(state, deps, tool_name, preset_name, opts)
+    opts = opts or {}
+
+    if state.active_mode == "markdown" then
+        deps.save_markdown_view()
+    end
+
+    local root = opts.root or deps.pane_root(opts.bufnr or vim.api.nvim_get_current_buf())
+    local tool = (state.config.tools or {})[tool_name]
+
+    if not tool then
+        vim.notify("Unknown pane tool: " .. tostring(tool_name), vim.log.levels.ERROR)
+        return nil
+    end
+
+    local preset = entries.preset_by_name(tool, preset_name)
+    local key = util.terminal_key(tool_name, root)
+    local ctx = state.terminals[key]
+    local started = false
+
+    if not M.is_running(ctx) then
+        ctx, started = M.start(state, deps, tool_name, preset.name, root)
+    end
+
+    if not ctx then
+        return nil
+    end
+
+    ctx.requested_preset = preset
+    state.active_mode = tool_name
+    state.active_terminal_key = ctx.key
+    M.remember_context(state, ctx)
+    deps.setup_pane_maps(ctx.bufnr)
+    deps.ensure_win(ctx.bufnr, "terminal", { focus = opts.focus == nil and state.config.focus_on_switch or opts.focus })
+    deps.update_sticky_heading()
+
+    return ctx, started
+end
+
+--- Show the most recently used pane terminal, falling back to Codex when needed.
+---
+--- This follows state.last_terminal_key, so the remembered terminal can be Codex, Claude,
+--- IPython, or a configured custom terminal. If that terminal is still running, it is reused.
+--- If it is not running, Sidepanes opens the remembered tool/preset when available, otherwise
+--- it opens Codex with its default preset. This is a navigation convenience, not an audit log.
+function M.show_last_agent(state, deps, opts)
+    opts = opts or {}
+
+    local ctx = state.last_terminal_key and state.terminals[state.last_terminal_key] or nil
+
+    if M.is_running(ctx) then
+        M.open(state, deps, ctx.tool_name, ctx.preset_name, {
+            root = ctx.root,
+            focus = opts.focus == nil and state.config.focus_on_switch or opts.focus,
+        })
+        return
+    end
+
+    local root = opts.root or deps.pane_root(vim.api.nvim_get_current_buf())
+    local tool_name = ctx and ctx.tool_name or "codex"
+    local preset_name = ctx and ctx.preset_name or nil
+
+    M.open(state, deps, tool_name, preset_name, {
+        root = root,
+        focus = opts.focus == nil and state.config.focus_on_switch or opts.focus,
+    })
+end
+
+--- Format the in-terminal command that switches a running tool preset.
+function M.format_switch_command(tool, preset)
+    if not tool or not preset then
+        return nil
+    end
+
+    local template = preset.switch_command or tool.switch_command
+
+    if type(template) == "function" then
+        return template(preset, tool)
+    end
+
+    if type(template) ~= "string" or template == "" then
+        return nil
+    end
+
+    local values = {
+        model = preset.model or preset.name or "",
+        effort = preset.effort or "",
+        speed = preset.speed or "normal",
+        label = preset.label or preset.name or "",
+        name = preset.name or "",
+    }
+
+    return (template:gsub("{([%w_]+)}", function(key)
+        return values[key] or ""
+    end):gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+--- Send text to a terminal job using bracketed paste.
+function M.send_to_terminal(ctx, prompt, started)
+    local delay = started and ctx.send_delay_ms or 50
+
+    vim.defer_fn(function()
+        if not util.is_running(ctx.job_id) then
+            vim.notify(ctx.tool_label .. " terminal is not running", vim.log.levels.ERROR)
+            return
+        end
+
+        vim.fn.chansend(ctx.job_id, "\27[200~" .. prompt .. "\27[201~\r")
+    end, delay)
+end
+
+--- Send an ask prompt, switching model first when needed.
+function M.send_prompt(state, ctx, entry, prompt, started)
+    local tool = (state.config.tools or {})[ctx.tool_name]
+    local preset = tool and entries.preset_by_name(tool, entry and entry.preset_name or ctx.preset_name) or ctx.preset
+    local needs_switch = not started and preset and ctx.preset_name ~= preset.name
+    local switch_command = needs_switch and M.format_switch_command(tool, preset) or nil
+
+    if switch_command and switch_command ~= "" then
+        vim.defer_fn(function()
+            if not util.is_running(ctx.job_id) then
+                vim.notify(ctx.tool_label .. " terminal is not running", vim.log.levels.ERROR)
+                return
+            end
+
+            vim.fn.chansend(ctx.job_id, switch_command .. "\r")
+        end, 50)
+    end
+
+    if preset then
+        ctx.preset = preset
+        ctx.preset_name = preset.name or "default"
+        ctx.preset_label = preset.label or preset.name or "Default"
+    end
+
+    local prompt_delay = switch_command and 350 or nil
+
+    if prompt_delay then
+        vim.defer_fn(function()
+            M.send_to_terminal(ctx, prompt, false)
+        end, prompt_delay)
+    else
+        M.send_to_terminal(ctx, prompt, started)
+    end
+end
+
+--- Resolve the project root used for IPython operations.
+function M.ipython_root(deps, opts)
+    opts = opts or {}
+
+    return opts.root or deps.pane_root(opts.bufnr or vim.api.nvim_get_current_buf())
+end
+
+--- Open or focus the IPython pane terminal.
+function M.open_ipython(state, deps, opts)
+    opts = opts or {}
+
+    return M.open(state, deps, "ipython", nil, {
+        root = M.ipython_root(deps, opts),
+        bufnr = opts.bufnr,
+        focus = opts.focus,
+    })
+end
+
+--- Send the current line or selection to IPython.
+function M.send_ipython(state, deps, opts)
+    opts = opts or {}
+
+    local context = deps.selection_context(opts)
+
+    if not context then
+        return
+    end
+
+    local ctx, started = M.open(state, deps, "ipython", nil, {
+        root = context.root,
+        bufnr = context.bufnr,
+        focus = opts.focus == true,
+    })
+
+    if ctx then
+        M.send_to_terminal(ctx, context.text, started)
+    end
+
+    if opts.visual and opts.exit_visual ~= false then
+        local esc = vim.api.nvim_replace_termcodes("<Esc>", true, false, true)
+
+        vim.api.nvim_feedkeys(esc, "n", false)
+    end
+end
+
+--- Clear the running IPython terminal screen.
+function M.clear_ipython(state, deps, opts)
+    opts = opts or {}
+
+    local root = M.ipython_root(deps, opts)
+    local ctx = state.terminals[util.terminal_key("ipython", root)]
+
+    if not M.is_running(ctx) then
+        vim.notify("No IPython pane running for " .. util.root_label(root), vim.log.levels.WARN)
+        return
+    end
+
+    vim.fn.chansend(ctx.job_id, "\12")
+end
+
+--- Restart the IPython pane terminal for the current root.
+function M.restart_ipython(state, deps, opts)
+    opts = opts or {}
+
+    local root = M.ipython_root(deps, opts)
+    local key = util.terminal_key("ipython", root)
+    local ctx = state.terminals[key]
+
+    if ctx then
+        if util.is_running(ctx.job_id) then
+            pcall(vim.fn.jobstop, ctx.job_id)
+        end
+
+        if util.valid_buf(ctx.bufnr) then
+            pcall(vim.api.nvim_buf_delete, ctx.bufnr, { force = true })
+        end
+
+        state.terminals[key] = nil
+    end
+
+    return M.open(state, deps, "ipython", nil, {
+        root = root,
+        bufnr = opts.bufnr,
+        focus = opts.focus == nil or opts.focus,
+    })
+end
+
+--- Resolve the polite shutdown command for a terminal context.
+local function shutdown_command(state, ctx)
+    local tool = (state.config.tools or {})[ctx.tool_name]
+
+    if not tool then
+        return nil
+    end
+
+    local command = tool.shutdown_command or tool.exit_command
+
+    if type(command) == "function" then
+        command = command(ctx, tool)
+    end
+
+    return command
+end
+
+--- Resolve the shutdown timeout for a terminal context.
+local function shutdown_timeout(state, ctx, opts)
+    local tool = (state.config.tools or {})[ctx.tool_name] or {}
+
+    return opts.timeout_ms or tool.shutdown_timeout_ms or state.config.shutdown_timeout_ms or 300
+end
+
+--- Gracefully stop one terminal, then force-stop if needed.
+local function shutdown_one(state, ctx, opts)
+    opts = opts or {}
+
+    if not (ctx and ctx.job_id and util.is_running(ctx.job_id)) then
+        return
+    end
+
+    local timeout = shutdown_timeout(state, ctx, opts)
+    local command = shutdown_command(state, ctx)
+
+    if command and command ~= "" then
+        pcall(vim.fn.chansend, ctx.job_id, command)
+        vim.wait(timeout, function()
+            return not util.is_running(ctx.job_id)
+        end, 20)
+    end
+
+    if util.is_running(ctx.job_id) then
+        pcall(vim.fn.jobstop, ctx.job_id)
+        vim.wait(timeout, function()
+            return not util.is_running(ctx.job_id)
+        end, 20)
+    end
+end
+
+--- Shut down all pane-owned terminal sessions.
+function M.shutdown_terminals(state, opts)
+    opts = opts or {}
+
+    for key, ctx in pairs(state.terminals or {}) do
+        shutdown_one(state, ctx, opts)
+
+        if not util.is_running(ctx.job_id) then
+            state.terminals[key] = nil
+        end
+    end
+end
+
+return M

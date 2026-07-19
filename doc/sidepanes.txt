@@ -1,0 +1,438 @@
+*sidepanes.txt*        Side panes for Markdown, terminals, and coding agents
+
+==============================================================================
+CONTENTS                                                        *sidepanes*
+
+1. Overview                                      |sidepanes-overview|
+2. Quick start                                   |sidepanes-quick-start|
+3. Commands                                      |sidepanes-commands|
+4. Mappings                                      |sidepanes-mappings|
+5. Configuration                                 |sidepanes-configuration|
+6. Width                                         |sidepanes-width|
+7. Public API                                    |sidepanes-api|
+8. Tools                                         |sidepanes-tools|
+9. Ask workflow                                  |sidepanes-ask|
+10. Health                                       |sidepanes-health|
+11. Design notes                                 |sidepanes-design|
+
+==============================================================================
+OVERVIEW                                                 *sidepanes-overview*
+
+Sidepanes is a Neovim pane system for keeping a Markdown reference view,
+Codex, Claude, and IPython in one reusable side window.
+
+It is built around four pane types:
+
+- Markdown viewer
+- Codex terminal
+- Claude terminal
+- IPython terminal
+
+The pane remembers scroll/cursor position in the Markdown viewer, reuses one
+terminal session per tool, sends selected text into coding-agent prompt editors,
+and can send lines or selections into IPython.
+
+Most behavior is exposed through one facade:
+>
+    local sidepanes = require("sidepanes")
+<
+
+For the longer reference, see:
+>
+    doc/sidepanes.md
+<
+
+==============================================================================
+QUICK START                                           *sidepanes-quick-start*
+
+Minimal setup:
+>
+    require("sidepanes").setup({
+      commands = true,
+      mappings = {
+        global = {
+          toggle = "<leader>pp",
+          pick = "<leader>mP",
+          headings = "<leader>fm",
+          markdown = "<leader>p0",
+          codex = "<leader>px",
+          claude = "<leader>pc",
+          ipython = "<leader>pi",
+          focus = "<leader>pf",
+          zoom = "<leader>pz",
+          width_previous = "<leader>p-",
+          width_next = "<leader>p+",
+          width_picker = "<leader>pw",
+          sticky_relative_width = "<leader>p%",
+          send_ipython = "<leader>pl",
+          ask = "<leader>pa",
+        },
+      },
+    })
+<
+
+Open the switcher:
+>
+    :Sidepanes
+<
+
+Open help:
+>
+    :Sidepanes help
+    :help sidepanes
+<
+
+==============================================================================
+COMMANDS                                                 *sidepanes-commands*
+
+Default commands are registered when `commands = true`.
+
+The main command is:
+>
+    :Sidepanes
+<
+
+With no arguments it opens the pane switcher. With arguments it dispatches
+subcommands:
+>
+    :Sidepanes help
+    :Sidepanes switch
+    :Sidepanes toggle [file]
+    :Sidepanes open {file}
+    :Sidepanes markdown
+    :Sidepanes pick
+    :Sidepanes headings
+    :Sidepanes codex [preset]
+    :Sidepanes claude [preset]
+    :Sidepanes tool {tool} [preset]
+    :Sidepanes ipython
+    :Sidepanes ipython-restart
+    :Sidepanes ipython-clear
+    :Sidepanes focus
+    :Sidepanes zoom
+    :Sidepanes width [value]
+    :Sidepanes width next
+    :Sidepanes width previous
+    :Sidepanes width pick
+    :Sidepanes width-pick
+    :Sidepanes ask
+    :Sidepanes ask-codex [preset]
+    :Sidepanes ask-claude [preset]
+<
+
+Standalone commands:
+>
+    :SidepanesToggle [file]
+    :SidepanesPick
+    :SidepanesHeadings
+    :SidepanesSwitch
+    :SidepanesTool {tool} [preset]
+    :SidepanesCodex [preset]
+    :SidepanesClaude [preset]
+    :SidepanesIPython
+    :SidepanesIPythonRestart
+    :SidepanesIPythonClear
+    :SidepanesFocus
+    :SidepanesZoom
+    :SidepanesWidth [value]
+    :SidepanesWidthPick
+    :SidepanesAsk
+    :SidepanesAskCodex [preset]
+    :SidepanesAskClaude [preset]
+<
+
+Width commands accept columns, percentages, fractions, numeric ratios, deltas,
+and aliases:
+>
+    :SidepanesWidth 100
+    :SidepanesWidth 50%
+    :SidepanesWidth 1/2
+    :SidepanesWidth +10
+    :SidepanesWidth -10
+    :SidepanesWidth next
+    :SidepanesWidth prev
+    :SidepanesWidth +
+    :SidepanesWidth -
+    :SidepanesWidth pick
+<
+
+Ask commands are range-aware, so they can be used with visual selections or
+explicit ranges:
+>
+    :'<,'>SidepanesAsk
+    :'<,'>SidepanesAskCodex gpt55_high_fast
+<
+
+==============================================================================
+MAPPINGS                                                 *sidepanes-mappings*
+
+Global mappings are optional and configured with `mappings.global`.
+
+Example global mappings:
+>
+    <leader>pp       toggle pane
+    <leader>mP       pick Markdown document
+    <leader>fm       pick Markdown heading
+    <leader>p0       show Markdown viewer
+    <leader>px       show Codex
+    <leader>pc       show Claude
+    <leader>pi       show IPython
+    <leader>pR       restart IPython
+    <leader>pl       send line or visual selection to IPython
+    <leader>pX       clear IPython
+    <leader>pf       toggle focus between pane and previous window
+    <leader>pz       toggle zoom
+    <leader>p-       snap width down
+    <leader>p+       snap width up
+    <leader>pw       pick width
+    <leader>p%       toggle sticky relative width
+    <leader>ps       switch pane
+    <leader>pa       ask picker from visual selection
+<
+
+Pane-local mappings are installed inside Sidepanes buffers:
+>
+    <space>0         show Markdown viewer
+    <space>x         show Codex
+    <space>c         show Claude
+    <space>i         show IPython
+    <leader>gg       toggle Markdown and last terminal
+    <C-g>            toggle Markdown and last terminal
+    <leader>gi       show IPython
+    gf               smart go-to-file in the last non-pane window
+    ll               send visual selection to IPython
+    zz               toggle pane zoom
+    aa               ask last coding agent from visual selection
+    ax               ask Codex from visual selection
+    ac               ask Claude from visual selection
+<
+
+Pane-local `gf` is implemented by `sidepanes.smart_gf`.
+
+Markdown reflow is implemented by `sidepanes.markdown_reflow`. Sidepanes uses
+that module path internally so the reflow code can be extracted later without
+changing Sidepanes render logic.
+
+==============================================================================
+CONFIGURATION                                       *sidepanes-configuration*
+
+Sidepanes accepts grouped setup options and normalizes them to the internal
+runtime config.
+>
+    require("sidepanes").setup({
+      layout = {
+        width = 100,
+        zoom_text_width = 90,
+        sticky_relative_width = false,
+      },
+      markdown = {
+        wrap = false,
+        sticky_heading = true,
+        reflow = {
+          enabled = true,
+          cmd = { "mdfmt", "--stdin", "--width", "{width}", "--wrap", "always" },
+          fallback = true,
+          protect_tables = true,
+          margin = 8,
+        },
+      },
+      lifecycle = {
+        focus_on_switch = true,
+        focus_on_ask = true,
+        shutdown_on_exit = true,
+        shutdown_timeout_ms = 300,
+      },
+      validation = {
+        enabled = true,
+      },
+      commands = true,
+    })
+<
+
+To inspect the complete grouped defaults from Lua:
+>
+    vim.print(require("sidepanes.config").default_setup())
+<
+
+Legacy flat keys are still accepted. The grouped form is preferred for new
+configuration.
+
+==============================================================================
+WIDTH                                                       *sidepanes-width*
+
+The normal pane width can be configured or changed at runtime:
+>
+    require("sidepanes").set_width(100)
+    require("sidepanes").set_width("50%")
+    require("sidepanes").set_width("1/2")
+    require("sidepanes").set_width(0.5)
+    require("sidepanes").adjust_width(10)
+    require("sidepanes").snap_width("next")
+    require("sidepanes").width_picker()
+<
+
+`layout.width` accepts the same units. The default is 100 columns.
+
+`layout.width_snap_points` controls `snap_width("next")` and
+`snap_width("previous")`.
+
+`layout.width_picker_points` controls the shorter picker shown by
+`width_picker()`.
+
+`layout.sticky_relative_width` keeps relative values such as "50%", "1/2", or
+0.5 tied to the total Neovim width. When disabled, relative inputs are resolved
+once to an absolute column width.
+
+Width changes reflow Markdown only when the Markdown viewer is active. Terminal
+panes resize without reflowing the hidden Markdown buffer.
+
+==============================================================================
+PUBLIC API                                                 *sidepanes-api*
+
+Stable public functions:
+>
+    setup(opts)
+    get_config()
+    open(path)
+    toggle(path)
+    close()
+    is_open()
+    focus_toggle()
+    toggle_zoom()
+    show_markdown()
+    get_width()
+    set_width(value)
+    adjust_width(delta)
+    snap_width(direction)
+    width_picker()
+    toggle_sticky_relative_width(enabled)
+    text_width()
+    toggle_wrap()
+    pick()
+    pick_headings()
+    switch_picker()
+    switch_to(target, opts)
+    make_switch_entry(target, opts)
+    open_terminal(tool_name, preset_name, opts)
+    open_ipython(opts)
+    send_ipython(opts)
+    clear_ipython(opts)
+    restart_ipython(opts)
+    ask(tool_name, preset_name, opts)
+    ask_picker(opts)
+    ask_last_coding_agent(opts)
+    ask_current_coding_agent(tool_name, opts)
+    shutdown_terminals(opts)
+<
+
+`switch_to()` is the stable switch API:
+>
+    require("sidepanes").switch_to("markdown")
+    require("sidepanes").switch_to("codex")
+    require("sidepanes").switch_to("claude")
+    require("sidepanes").switch_to("ipython")
+    require("sidepanes").switch_to("x")
+    require("sidepanes").switch_to({ tool = "codex", preset = "gpt55_high_fast" })
+<
+
+Advanced helpers:
+>
+    show_last_agent(opts)
+    toggle_markdown_agent()
+    make_switch_entry(target, opts)
+<
+
+Internal functions such as raw `switch(entry)` and `ask_with_entry(entry, opts)`
+are intentionally not exposed on the public facade. Treat
+`require("sidepanes.internal")` and `_state()` as private implementation hooks.
+
+==============================================================================
+TOOLS                                                       *sidepanes-tools*
+
+Built-in tools:
+
+- Codex
+- Claude
+- IPython
+
+Sidepanes keeps one terminal session per tool. Opening Codex with one preset
+starts a new Codex terminal if needed. Later asks reuse that Codex session. If a
+new preset is selected while the session is running, Sidepanes sends the tool's
+configured model-switch command before sending the prompt.
+
+Each tool can define:
+>
+    label
+    cmd
+    args
+    presets
+    send_delay_ms
+    switch_command
+    exit_command
+<
+
+Default exit commands:
+>
+    Codex    /quit
+    Claude   /exit
+    IPython  quit()
+<
+
+==============================================================================
+ASK WORKFLOW                                             *sidepanes-ask*
+
+Ask mappings and commands capture file name, project root, selected text, and a
+snippet language. Markdown code fences are detected so a Python fenced block is
+sent as Python rather than generic Markdown.
+
+Asking opens a scratch prompt buffer. The prompt is sent only after the buffer
+has been written and then quit. Quitting an unchanged prompt cancels and returns
+to the previous pane/window state.
+
+Useful calls:
+>
+    require("sidepanes").ask_picker({ visual = true })
+    require("sidepanes").ask("codex", "gpt55_high_fast", { visual = true })
+    require("sidepanes").ask_current_coding_agent("claude", { visual = true })
+    require("sidepanes").ask_last_coding_agent({ visual = true })
+<
+
+==============================================================================
+HEALTH                                                     *sidepanes-health*
+
+Run:
+>
+    :checkhealth sidepanes
+<
+
+The health check reports:
+
+- loaded plugin state
+- configured tools and presets
+- external commands such as codex, claude, ipython, uv, and mdfmt
+- optional dependencies used by enabled features
+- command registration
+- global and pane-local mappings, including expected modes
+- malformed config values
+
+Setup also performs lightweight validation by default. Disable it with:
+>
+    require("sidepanes").setup({
+      validation = { enabled = false },
+    })
+<
+
+==============================================================================
+DESIGN NOTES                                             *sidepanes-design*
+
+Sidepanes keeps mutable runtime state private. Feature modules receive explicit
+dependency callbacks from the public facade; this keeps behavior testable while
+avoiding global state leaks.
+
+The public facade is intentionally smaller than the internal runtime. Prefer the
+functions documented under |sidepanes-api|. Internal modules may change without
+notice.
+
+==============================================================================
+
+vim:tw=78:ts=8:noet:ft=help:norl:
