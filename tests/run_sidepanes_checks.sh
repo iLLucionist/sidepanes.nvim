@@ -3,13 +3,15 @@ set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 MODE="${1:-fast}"
+TMP_ROOT="${TMPDIR:-/tmp}"
+TMP_ROOT="${TMP_ROOT%/}"
 
 run_nvim() {
     name="$1"
     shift
 
-    XDG_CACHE_HOME="/private/tmp/sidepanes-nvim-cache-${name}" \
-        XDG_STATE_HOME="/private/tmp/sidepanes-nvim-state-${name}" \
+    XDG_CACHE_HOME="${TMP_ROOT}/sidepanes-nvim-cache-${name}" \
+        XDG_STATE_HOME="${TMP_ROOT}/sidepanes-nvim-state-${name}" \
         nvim --headless "$@"
 }
 

@@ -6,8 +6,9 @@ local sidepanes = require("sidepanes")
 local pane = sidepanes._state()
 local util = require("sidepanes.util")
 
-local root = "/private/tmp/sidepanes-real-cli-smoke"
+local root = helpers.tmp_path("sidepanes-real-cli-smoke")
 
+vim.fn.delete(root, "rf")
 vim.fn.mkdir(root .. "/.git", "p")
 vim.fn.writefile({ "# Real CLI smoke" }, root .. "/doc.md")
 

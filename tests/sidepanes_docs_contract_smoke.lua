@@ -16,7 +16,8 @@ local help = read("doc/sidepanes.txt")
 local markdown = read("doc/sidepanes.md")
 local readme = read("README.md")
 local changelog = read("CHANGELOG.md")
-local docs = table.concat({ help, markdown, readme, changelog }, "\n")
+local ci = read(".github/workflows/tests.yml")
+local docs = table.concat({ help, markdown, readme, changelog, ci }, "\n")
 
 local function assert_has(text, needle, label)
     assert(text:find(needle, 1, true), "missing docs contract entry for " .. (label or needle))
@@ -172,6 +173,9 @@ for _, item in ipairs({
     ":Sidepanes width prev",
     "Release Policy",
     "CHANGELOG.md",
+    "tests/run_checks.sh fast",
+    "tests/run_checks.sh full",
+    "nvim --version",
     "semantic versioning",
     "markdown-reflow.nvim",
 }) do

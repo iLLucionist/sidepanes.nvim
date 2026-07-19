@@ -1,0 +1,30 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  sidepanes:
+    name: Headless Neovim
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: Show Neovim version
+        run: nvim --version
+
+      - name: Run fast checks
+        run: tests/run_checks.sh fast
+
+      - name: Run full checks
+        run: tests/run_checks.sh full

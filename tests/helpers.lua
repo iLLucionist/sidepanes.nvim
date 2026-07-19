@@ -18,4 +18,11 @@ function M.append_repo_root(level)
     return root
 end
 
+function M.tmp_path(name)
+    local root = vim.env.SIDEPANES_TEST_TMPDIR or vim.env.TMPDIR or "/tmp"
+    root = vim.loop.fs_realpath(root) or root
+
+    return root:gsub("/+$", "") .. "/" .. name
+end
+
 return M

@@ -520,13 +520,14 @@ New code should prefer `show_last_terminal()` and `toggle_markdown_terminal()`.
 Before refactoring Sidepanes behavior, run:
 
 ```sh
-tests/run_sidepanes_checks.sh
+tests/run_checks.sh full
 ```
 
 That runs:
 
 - focused regression tests
 - standalone setup audit smoke
+- docs-contract smoke
 - `:checkhealth sidepanes` smoke
 - real Codex/Claude CLI smoke
 

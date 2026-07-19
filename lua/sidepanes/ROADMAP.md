@@ -525,10 +525,10 @@ Completed:
   dependency docs, and changelog maintained.
 - README notes that Markdown Reflow may later split into
   `markdown-reflow.nvim`.
+- Added a minimal GitHub Actions workflow for headless Neovim tests.
 
 Remaining release-readiness work:
 
-- Add a minimal GitHub Actions workflow for headless Neovim tests.
 - Decide when to create the first tag, likely `v0.1.0`.
 - Optionally add GitHub release notes when tagging.
 
@@ -556,7 +556,7 @@ Future consideration:
 Before calling roadmap work complete, run:
 
 ```sh
-tests/run_sidepanes_checks.sh
+tests/run_checks.sh full
 ```
 
 For public API or dependency work, also run or verify:
