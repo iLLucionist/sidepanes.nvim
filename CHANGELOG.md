@@ -15,7 +15,7 @@ but they should be called out clearly in this changelog.
 
 ### Added
 
-- Extracted Sidepanes from `illu.nvim` into a standalone plugin repository.
+- Extracted Sidepanes into a standalone plugin repository.
 - Added the public `sidepanes.nvim` file tree with `lua/sidepanes/**`,
   Neovim help, Markdown reference docs, README, health checks, and tests.
 - Added `tests/run_checks.sh fast|full` for standalone local verification.
@@ -29,8 +29,8 @@ but they should be called out clearly in this changelog.
 
 ### Changed
 
-- `illu.nvim` now consumes Sidepanes through lazy.nvim from GitHub instead of a
-  local `lua/sidepanes/**` source tree.
+- The README now presents Sidepanes as a normal GitHub-installed lazy.nvim
+  plugin.
 - Sidepanes documentation now treats grouped setup keys as preferred while
   keeping older flat setup keys supported.
 - Width aliases such as `:Sidepanes width prev`, `:Sidepanes width +`, and
@@ -45,8 +45,8 @@ but they should be called out clearly in this changelog.
 ### Fixed
 
 - Setup validation now recognizes `commands.width`.
-- Personal `illu.nvim` tests now target the lazy-installed plugin path through
-  `SIDEPANES_RUNTIME_PATH`.
+- Test wrappers now support explicit runtime paths for installed-plugin
+  verification without relying on any consumer config repo.
 - Kept `show_last_agent()` and `toggle_markdown_agent()` as compatibility
   aliases for existing callers.
 - Kept `toggle_agent` and `toggle_agent_alt` as compatibility aliases for

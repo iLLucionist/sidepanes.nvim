@@ -28,8 +28,7 @@ Included:
   `show_last_agent()`, `toggle_markdown_agent()`, `toggle_agent`, and
   `toggle_agent_alt`.
 - Built-in Markdown Reflow as `sidepanes.markdown_reflow`.
-- `main` as the default install target, with `illu.nvim` consuming the
-  GitHub-installed plugin instead of the extraction branch.
+- `main` as the default install target.
 
 Remaining:
 
@@ -75,4 +74,5 @@ Also verify:
 
 - `:help sidepanes` opens from the installed plugin.
 - `:checkhealth sidepanes` has no unexpected Sidepanes warnings or errors.
-- `illu.nvim` consumes the GitHub-installed plugin path, not a local fallback.
+- A real lazy.nvim install can load `sidepanes.nvim` from GitHub without a
+  local source fallback.
