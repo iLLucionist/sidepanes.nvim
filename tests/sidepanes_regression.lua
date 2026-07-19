@@ -2043,8 +2043,10 @@ test("toggle markdown terminal flips between markdown and last remembered termin
 end)
 
 test("old terminal helper names remain compatibility aliases", function()
-    assert(pane.show_last_agent == pane.show_last_terminal, "show_last_agent is not an alias")
-    assert(pane.toggle_markdown_agent == pane.toggle_markdown_terminal, "toggle_markdown_agent is not an alias")
+    assert(type(sidepanes.show_last_agent) == "function", "show_last_agent is not callable")
+    assert(type(sidepanes.toggle_markdown_agent) == "function", "toggle_markdown_agent is not callable")
+    assert(pane.show_last_agent == pane.show_last_terminal, "show_last_agent is not an internal alias")
+    assert(pane.toggle_markdown_agent == pane.toggle_markdown_terminal, "toggle_markdown_agent is not an internal alias")
 end)
 
 test("public IPython send captures current line through terminal deps", function()
