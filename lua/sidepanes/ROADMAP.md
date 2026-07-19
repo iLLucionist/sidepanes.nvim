@@ -402,13 +402,16 @@ Full checks:
 
 #### 5.6 Update `illu.nvim` To Consume GitHub Plugins
 
+Status: in progress; `illu.nvim` loads the GitHub-installed plugin path, and
+the local source remains as a deliberate fallback until a later cleanup pass.
+
 After the standalone repo works locally, update personal config to install it from GitHub.
 
 Target lazy.nvim shape:
 
 ```lua
 {
-  "yourname/sidepanes.nvim",
+  "iLLucionist/sidepanes.nvim",
   config = function()
     require("sidepanes").setup({
       -- current personal Sidepanes config
@@ -429,6 +432,15 @@ Acceptance:
 - `illu.nvim` no longer needs local `lua/sidepanes/**` source.
 - Existing mappings and commands still work from the GitHub-installed plugins.
 - Existing Sidepanes and Markdown reflow tests pass before removing local source.
+
+Current verification:
+
+- Headless `illu.nvim` startup asserts `require("sidepanes")` loads from
+  `/Users/maximl/.local/share/nvim/lazy/sidepanes.nvim/lua/sidepanes/init.lua`.
+- `:help sidepanes` resolves to the lazy-installed plugin docs.
+- Existing `illu.nvim` `tests/run_sidepanes_checks.sh` passes with the
+  GitHub-installed plugin path active.
+- Local `illu.nvim/lua/sidepanes/**` has not been removed.
 
 #### 5.7 Dependency Contract Pass
 
