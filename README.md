@@ -193,8 +193,8 @@ are available in your environment.
    tool first checks for a live pane job, then resumes the remembered or latest
    matching project session when Sidepanes can find one. Recovered terminals
    echo the session/PID details and show a `[RESUMED]` winbar badge. Sidepanes
-   cannot reattach to a lost terminal pty; if the previous PID is still alive,
-   the notification reports it so you can decide how to handle that process.
+   resumes CLI sessions, not terminal ptys; when the pane-owned job is gone,
+   recovery starts a fresh CLI process with the resume command.
 
 7. If the pane feels too wide or narrow, use `<leader>p-`, `<leader>p+`, or
    `<leader>pw` to adjust it. Use `<leader>p%` when you want relative widths to

@@ -434,10 +434,12 @@ to the latest matching project transcript in `~/.codex/sessions/**`.
 
 When a recovery candidate is launched, Claude receives
 `claude --resume <session-id>` and Codex receives `codex resume <session-id>`.
-Sidepanes checks whether any remembered previous PID is still alive, includes
-the previous/new PID and session id in the notification when available, and
-shows the recovered terminal badge. Sidepanes cannot reattach to a lost terminal
-pty; recovery starts a new CLI process with the tool's resume command.
+Sidepanes includes the previous/new PID and session id in the notification when
+available, and shows the recovered terminal badge. Sidepanes resumes CLI
+sessions, not terminal ptys; when the pane-owned job is gone, recovery starts a
+new CLI process with the tool's resume command. If a remembered PID still
+appears alive in an unusual case, Sidepanes reports it for context but still
+cannot reattach to that pty.
 
 Each tool can define:
 >

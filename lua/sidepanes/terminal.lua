@@ -13,18 +13,23 @@ local M = {}
 
 local function recovery_message(ctx)
     local tool_label = ctx.tool_label or ctx.tool_name or "Agent"
-    local active = ctx.resume_pid_running and "lost but active " or "lost "
     local details = { "session id " .. tostring(ctx.session_id) }
 
     if ctx.resume_pid then
-        table.insert(details, "previous PID " .. tostring(ctx.resume_pid))
+        local previous = "previous PID " .. tostring(ctx.resume_pid)
+
+        if ctx.resume_pid_running then
+            previous = previous .. " still appears alive"
+        end
+
+        table.insert(details, previous)
     end
 
     if ctx.pid then
         table.insert(details, "new PID " .. tostring(ctx.pid))
     end
 
-    return "Recovered/resumed a " .. active .. tool_label .. " session: " .. table.concat(details, ", ")
+    return "Recovered/resumed a lost " .. tool_label .. " session: " .. table.concat(details, ", ")
 end
 
 local function configured_resume_badge_ms(state)

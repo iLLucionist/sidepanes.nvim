@@ -545,6 +545,53 @@ test("agent sessions report remembered live process candidates", function()
     assert(resume.source == "remembered", "remembered resume source was not reported")
 end)
 
+test("agent recovery notification reports live previous pid without active wording", function()
+    reset_pane()
+
+    local bin = helpers.tmp_path("sidepanes-agent-bin-live-pid-notify")
+    local root = root_fixture("agent-session-live-pid-notify-root")
+    local args_file = helpers.tmp_path("sidepanes-agent-live-pid-notify-args.txt")
+    local fake_codex = bin .. "/codex"
+    local key = util.terminal_key("codex", root)
+
+    vim.fn.delete(bin, "rf")
+    vim.fn.delete(args_file)
+    mkdir(bin)
+    write(fake_codex, {
+        "#!/bin/sh",
+        "printf '%s\\n' \"$@\" > " .. vim.fn.shellescape(args_file),
+        "sleep 10",
+    })
+    vim.fn.setfperm(fake_codex, "rwxr-xr-x")
+
+    pane.agent_sessions[key] = {
+        tool_name = "codex",
+        root = root,
+        session_id = "live-codex-session",
+        pid = vim.fn.getpid(),
+    }
+    pane.setup({
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = fake_codex,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    local messages = capture_notify(function()
+        pane.open_terminal("codex", nil, { root = root, focus = false })
+    end)
+    local joined = table.concat(vim.tbl_map(function(item)
+        return item.message
+    end, messages), "\n")
+
+    assert(joined:find("Recovered/resumed a lost Codex session", 1, true), joined)
+    assert(joined:find("previous PID " .. tostring(vim.fn.getpid()) .. " still appears alive", 1, true), joined)
+    assert(not joined:find("lost but active", 1, true), joined)
+end)
+
 test("opening Claude resumes latest project session when no live job exists", function()
     reset_pane()
 

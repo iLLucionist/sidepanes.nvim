@@ -182,7 +182,7 @@ for _, item in ipairs({
     "[RESUMED]",
     "SidepanesResumed",
     "session_meta",
-    "lost terminal pty",
+    "resumes CLI sessions",
     "terminal-input mode",
     "CursorFG",
     ":Sidepanes width prev",

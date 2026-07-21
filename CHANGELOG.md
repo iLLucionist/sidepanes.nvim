@@ -13,13 +13,15 @@ but they should be called out clearly in this changelog.
 
 ## Unreleased
 
+## v0.2.0 - 2026-07-21
+
 ### Changed
 
 - Replaced pre-release README badge placeholders with live release and tag
   badges after publishing `v0.1.0`.
 - Markdown panes now poll the source file with a content fingerprint to detect
   source-file changes on disk, auto-reload the pane, restore the cursor near
-  the previous line, and show a temporary `[RELOADED]` winbar badge.
+  the previous line, and show a configurable `[RELOADED]` winbar badge.
 - Markdown auto-reload now exposes `markdown.reload_interval_ms`,
   `markdown.reload_badge_ms`, and `markdown.reload_badge` setup options for the
   polling interval, optional badge timeout, badge text, Markdown-interaction
@@ -28,7 +30,7 @@ but they should be called out clearly in this changelog.
   When a pane-owned agent terminal exits or its buffer is lost, reopening the
   tool resumes the last matching project session instead of silently starting a
   blank conversation, reports the previous/new PID details when available, and
-  shows a temporary `[RESUMED]` winbar badge.
+  shows a configurable `[RESUMED]` winbar badge.
 - Agent recovery now exposes `terminal.agent_resume_badge_ms` and
   `terminal.agent_resume_badge` setup options for the optional badge timeout,
   badge text, interaction clearing, and badge highlight colors.
@@ -53,9 +55,11 @@ but they should be called out clearly in this changelog.
 
 ### Notes
 
-- Sidepanes cannot reattach to a lost terminal pty. If a previous Claude or
-  Codex PID is still alive after the pane buffer is lost, recovery reports that
-  PID and starts a new CLI process with the tool's resume command.
+- Sidepanes resumes CLI sessions, not terminal ptys. In normal Neovim terminal
+  loss, the pane-owned job is gone too, so recovery starts a new CLI process
+  with the tool's resume command. If a remembered PID still appears alive in an
+  unusual case, Sidepanes reports it for context but still cannot reattach to
+  that pty.
 
 ## v0.1.0 - 2026-07-19
 
