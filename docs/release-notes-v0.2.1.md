@@ -1,6 +1,8 @@
 # sidepanes.nvim v0.2.1 Release Notes
 
-Draft notes for the next patch release.
+This release includes the project-scoped agent auto-resume hardening, Codex
+resume capture fixes, picker cancellation fixes, project-root UI visibility,
+and Markdown picker focus behavior added after `v0.2.0`.
 
 ## Agent Auto-Resume Hardening
 

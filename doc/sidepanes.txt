@@ -56,7 +56,7 @@ Minimal setup:
         global = {
           toggle = "<leader>pp",
           pick = "<leader>mP",
-          headings = "<leader>fm",
+          headings = "<leader>mf",
           markdown = "<leader>p0",
           codex = "<leader>px",
           claude = "<leader>pc",
@@ -178,7 +178,7 @@ Example global mappings:
 >
     <leader>pp       toggle pane
     <leader>mP       pick Markdown document
-    <leader>fm       pick Markdown heading
+    <leader>mf       pick Markdown heading
     <leader>p0       show Markdown viewer
     <leader>px       show Codex
     <leader>pc       show Claude

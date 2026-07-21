@@ -109,7 +109,7 @@ Sidepanes buffers.
 | --- | --- | --- |
 | `toggle` | `<leader>pp` | Toggle Sidepanes. |
 | `pick` | `<leader>mP` | Pick a Markdown document. |
-| `headings` | `<leader>fm` | Pick a Markdown heading. |
+| `headings` | `<leader>mf` | Pick a Markdown heading. |
 | `markdown` | `<leader>p0` | Show Markdown viewer. |
 | `codex` | `<leader>px` | Show Codex pane. |
 | `claude` | `<leader>pc` | Show Claude pane. |

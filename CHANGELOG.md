@@ -13,6 +13,10 @@ but they should be called out clearly in this changelog.
 
 ## Unreleased
 
+No unreleased changes yet.
+
+## v0.2.1 - 2026-07-21
+
 ### Changed
 
 - Project root detection is now configurable with `project.root_markers`,
