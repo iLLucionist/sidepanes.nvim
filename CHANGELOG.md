@@ -13,6 +13,34 @@ but they should be called out clearly in this changelog.
 
 ## Unreleased
 
+### Changed
+
+- Project root detection is now configurable with `project.root_markers`,
+  `project.fallback`, and `project.resolver`. Sidepanes uses the detected root
+  as the safety boundary for root-scoped Codex and Claude panes.
+- Agent recovery can now be made stricter or disabled with
+  `terminal.auto_resume`, `terminal.resume.enabled`,
+  `terminal.resume.infer_from_transcripts`, and
+  `terminal.resume.use_claude_pid_metadata`.
+- Agent session capture is now configurable with
+  `terminal.resume.mechanisms`, `terminal.resume.store_path`, and
+  `terminal.resume.resolver`. The default registry stores only
+  Sidepanes-captured session ids under Neovim's state directory so Codex and
+  Claude can resume after a Neovim restart without adopting unrelated external
+  sessions.
+- Claude recovery now captures session ids through a Sidepanes-injected
+  `SessionStart` hook when available. Codex embedded-terminal recovery continues
+  to use Codex `session_meta` entries for Sidepanes-owned sessions.
+
+### Fixed
+
+- Codex and Claude panes no longer auto-resume an arbitrary latest project
+  transcript on first open. Recovery now requires a Sidepanes-owned context or
+  remembered Sidepanes session id, so agent sessions created outside Sidepanes
+  are not adopted just because they share a project root.
+- Root-scoped Codex and Claude lookups now stay inside the requested project
+  root instead of falling back to a running agent pane from another project.
+
 ## v0.2.0 - 2026-07-21
 
 ### Changed

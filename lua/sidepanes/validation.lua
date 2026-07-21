@@ -196,8 +196,60 @@ local function validate_markdown(diagnostics, config)
     validate_badge(diagnostics, "reload_badge", config.reload_badge)
 end
 
+local function validate_project(diagnostics, config)
+    local markers = config.project_root_markers
+
+    if markers ~= nil and markers ~= false and type(markers) ~= "string" and type(markers) ~= "table" and type(markers) ~= "function" then
+        warn(diagnostics, "Sidepanes config project_root_markers must be a string, table, function, or false.")
+    end
+
+    if config.project_root_fallback ~= nil and config.project_root_fallback ~= "buffer_dir" and config.project_root_fallback ~= "cwd" then
+        warn(diagnostics, "Sidepanes config project_root_fallback must be 'buffer_dir' or 'cwd'.")
+    end
+
+    if config.project_root_resolver ~= nil and type(config.project_root_resolver) ~= "function" then
+        warn(diagnostics, "Sidepanes config project_root_resolver must be a function.")
+    end
+end
+
 --- Validate terminal recovery badge config shape.
 local function validate_terminal(diagnostics, config)
+    if config.agent_auto_resume ~= nil and type(config.agent_auto_resume) ~= "boolean" then
+        warn(diagnostics, "Sidepanes config agent_auto_resume must be a boolean.")
+    end
+
+    if config.agent_resume_infer_from_transcripts ~= nil and type(config.agent_resume_infer_from_transcripts) ~= "boolean" then
+        warn(diagnostics, "Sidepanes config agent_resume_infer_from_transcripts must be a boolean.")
+    end
+
+    if config.agent_resume_use_claude_pid_metadata ~= nil and type(config.agent_resume_use_claude_pid_metadata) ~= "boolean" then
+        warn(diagnostics, "Sidepanes config agent_resume_use_claude_pid_metadata must be a boolean.")
+    end
+
+    if config.agent_resume_mechanisms ~= nil and config.agent_resume_mechanisms ~= false and type(config.agent_resume_mechanisms) ~= "table" then
+        warn(diagnostics, "Sidepanes config agent_resume_mechanisms must be a table or false.")
+    elseif type(config.agent_resume_mechanisms) == "table" then
+        for tool_name, mechanisms in pairs(config.agent_resume_mechanisms) do
+            if mechanisms ~= false and type(mechanisms) ~= "table" then
+                warn(diagnostics, "Sidepanes config agent_resume_mechanisms." .. tostring(tool_name) .. " must be a table or false.")
+            elseif type(mechanisms) == "table" then
+                for index, mechanism in ipairs(mechanisms) do
+                    if type(mechanism) ~= "string" then
+                        warn(diagnostics, "Invalid Sidepanes agent_resume_mechanisms." .. tostring(tool_name) .. " entry at index " .. index .. ": use a string.")
+                    end
+                end
+            end
+        end
+    end
+
+    if config.agent_resume_store_path ~= nil and config.agent_resume_store_path ~= false and type(config.agent_resume_store_path) ~= "string" then
+        warn(diagnostics, "Sidepanes config agent_resume_store_path must be a string or false.")
+    end
+
+    if config.agent_resume_resolver ~= nil and type(config.agent_resume_resolver) ~= "function" then
+        warn(diagnostics, "Sidepanes config agent_resume_resolver must be a function.")
+    end
+
     if config.agent_resume_badge_ms ~= nil and (type(config.agent_resume_badge_ms) ~= "number" or config.agent_resume_badge_ms < 0) then
         warn(diagnostics, "Sidepanes config agent_resume_badge_ms must be a non-negative number.")
     end
@@ -264,6 +316,7 @@ function M.diagnostics(config)
     validate_surface(diagnostics, config or {})
     validate_layout(diagnostics, config or {})
     validate_markdown(diagnostics, config or {})
+    validate_project(diagnostics, config or {})
     validate_terminal(diagnostics, config or {})
     validate_tools(diagnostics, config or {})
 

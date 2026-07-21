@@ -11,6 +11,18 @@ local util = require("sidepanes.util")
 
 local M = {}
 
+local function same_root(a, b)
+    if not (a and b) then
+        return false
+    end
+
+    return util.normalize_project_root(a):gsub("/$", "") == util.normalize_project_root(b):gsub("/$", "")
+end
+
+local function context_matches_root(ctx, root)
+    return not root or (ctx and same_root(ctx.root, root))
+end
+
 local function recovery_message(ctx)
     local tool_label = ctx.tool_label or ctx.tool_name or "Agent"
     local details = { "session id " .. tostring(ctx.session_id) }
@@ -139,7 +151,7 @@ function M.context_for_tool(state, tool_name, root)
     local last_key = state.last_tool_terminal_keys and state.last_tool_terminal_keys[tool_name] or nil
     local last_ctx = last_key and state.terminals[last_key] or nil
 
-    if last_ctx and last_ctx.tool_name == tool_name and M.is_running(last_ctx) then
+    if last_ctx and last_ctx.tool_name == tool_name and M.is_running(last_ctx) and context_matches_root(last_ctx, root) then
         return last_ctx
     end
 
@@ -150,7 +162,7 @@ function M.context_for_tool(state, tool_name, root)
     end
 
     for _, ctx in pairs(state.terminals or {}) do
-        if ctx.tool_name == tool_name and M.is_running(ctx) then
+        if ctx.tool_name == tool_name and M.is_running(ctx) and context_matches_root(ctx, root) then
             return ctx
         end
     end
@@ -162,13 +174,13 @@ end
 function M.last_coding_agent_context(state, root)
     local last_ctx = state.last_coding_agent_terminal_key and state.terminals[state.last_coding_agent_terminal_key] or nil
 
-    if last_ctx and M.is_coding_agent_tool(last_ctx.tool_name) and M.is_running(last_ctx) then
+    if last_ctx and M.is_coding_agent_tool(last_ctx.tool_name) and M.is_running(last_ctx) and context_matches_root(last_ctx, root) then
         return last_ctx
     end
 
     local active_ctx = state.active_terminal_key and state.terminals[state.active_terminal_key] or nil
 
-    if active_ctx and M.is_coding_agent_tool(active_ctx.tool_name) and M.is_running(active_ctx) then
+    if active_ctx and M.is_coding_agent_tool(active_ctx.tool_name) and M.is_running(active_ctx) and context_matches_root(active_ctx, root) then
         return active_ctx
     end
 
@@ -200,7 +212,7 @@ function M.start(state, deps, tool_name, preset_name, root)
         return existing, false
     end
 
-    local initial_latest = agent_session.is_supported(tool_name) and agent_session.latest_info_for_root(tool_name, root) or nil
+    local initial_latest = agent_session.is_supported(tool_name) and agent_session.can_infer_from_transcripts(state.config) and agent_session.latest_info_for_root(tool_name, root) or nil
     local resume = agent_session.resolve_resume(state, existing, tool_name, root)
     local resume_id = resume and resume.session_id or nil
     local cmd = util.command_list(tool, preset, root)
@@ -213,12 +225,6 @@ function M.start(state, deps, tool_name, preset_name, root)
         resume_id = nil
     end
 
-    if not util.executable_exists(cmd[1]) then
-        vim.notify("Pane tool executable not found: " .. tostring(cmd[1]), vim.log.levels.ERROR)
-        return nil
-    end
-
-    local bufnr = vim.api.nvim_create_buf(false, true)
     local ctx = {
         key = key,
         tool_name = tool_name,
@@ -227,7 +233,6 @@ function M.start(state, deps, tool_name, preset_name, root)
         preset_label = preset.label or preset.name or "Default",
         preset = preset,
         root = root,
-        bufnr = bufnr,
         job_id = nil,
         pid = nil,
         started_at = os.time(),
@@ -242,6 +247,17 @@ function M.start(state, deps, tool_name, preset_name, root)
         resume_badge_token = 0,
         send_delay_ms = tool.send_delay_ms or 700,
     }
+
+    cmd = agent_session.prepare_command(state, ctx, cmd)
+
+    if not util.executable_exists(cmd[1]) then
+        vim.notify("Pane tool executable not found: " .. tostring(cmd[1]), vim.log.levels.ERROR)
+        return nil
+    end
+
+    local bufnr = vim.api.nvim_create_buf(false, true)
+
+    ctx.bufnr = bufnr
 
     pcall(vim.api.nvim_buf_set_name, bufnr, "Pane://" .. util.sanitize_name(key))
     vim.api.nvim_set_option_value("bufhidden", "hide", { buf = bufnr })

@@ -194,6 +194,18 @@ require("sidepanes").setup({
     shutdown_timeout_ms = 300,
   },
   terminal = {
+    auto_resume = true,
+    resume = {
+      enabled = true,
+      infer_from_transcripts = true,
+      use_claude_pid_metadata = true,
+      mechanisms = {
+        claude = { "hook", "pid_metadata", "transcript" },
+        codex = { "transcript" },
+      },
+      store_path = nil,
+      resolver = nil,
+    },
     agent_resume_badge_ms = 0,
     agent_resume_badge = {
       text = "[RESUMED]",
@@ -204,6 +216,11 @@ require("sidepanes").setup({
         bold = true,
       },
     },
+  },
+  project = {
+    root_markers = { ".git" },
+    fallback = "buffer_dir",
+    resolver = nil,
   },
   validation = {
     enabled = true,
@@ -261,6 +278,16 @@ Grouped options normalize to runtime keys:
 | `lifecycle.focus_on_ask` | `focus_on_ask` |
 | `lifecycle.shutdown_on_exit` | `shutdown_on_exit` |
 | `lifecycle.shutdown_timeout_ms` | `shutdown_timeout_ms` |
+| `project.root_markers` | `project_root_markers` |
+| `project.fallback` | `project_root_fallback` |
+| `project.resolver` | `project_root_resolver` |
+| `terminal.auto_resume` | `agent_auto_resume` |
+| `terminal.resume.enabled` | `agent_auto_resume` |
+| `terminal.resume.infer_from_transcripts` | `agent_resume_infer_from_transcripts` |
+| `terminal.resume.use_claude_pid_metadata` | `agent_resume_use_claude_pid_metadata` |
+| `terminal.resume.mechanisms` | `agent_resume_mechanisms` |
+| `terminal.resume.store_path` | `agent_resume_store_path` |
+| `terminal.resume.resolver` | `agent_resume_resolver` |
 | `terminal.agent_resume_badge_ms` | `agent_resume_badge_ms` |
 | `terminal.agent_resume_badge` | `agent_resume_badge` |
 | `validation.enabled` | `validate` |
@@ -362,18 +389,52 @@ Preset tables may include:
 }
 ```
 
-The running terminal session is one per tool. If Codex is already open and a
-new Codex preset is chosen, Sidepanes sends the configured `switch_command`
-before sending the prompt.
+Running terminal sessions are tracked per tool and project root. If Codex is
+already open for the current root and a new Codex preset is chosen, Sidepanes
+sends the configured `switch_command` before sending the prompt. Root-scoped
+agent lookups stay inside the requested project root, so a running Codex or
+Claude pane from another project is not reused for the current one.
+
+Project roots use Neovim-style root markers. By default, Sidepanes finds the
+nearest parent containing `.git`; if no marker is found, it uses the current
+file's directory. Configure `project.root_markers` to use marker files or
+directories such as `pyproject.toml` or `package.json`, set `project.fallback`
+to `"cwd"` when markerless files should share the current working directory, or
+provide `project.resolver = function(source, opts) return root end` to delegate
+root detection to your own logic. The resolver receives a buffer number or path
+as `source` and an `opts.kind` of `"buffer"` or `"path"`.
 
 Codex and Claude panes also track the agent process id and resumable session id
 when the CLI exposes one. Opening Codex or Claude first reuses a live pane-owned
 terminal buffer and Neovim job. If that live check fails because the terminal
 exited, crashed, or its buffer was lost, Sidepanes builds a recovery candidate
-from the current context, the remembered session record, or the latest matching
-project transcript. Claude uses `~/.claude/sessions/<pid>.json` first and falls
-back to the latest `~/.claude/projects/<project>/` transcript. Codex falls back
-to the latest matching project transcript in `~/.codex/sessions/**`.
+from the current Sidepanes context or a Sidepanes-owned session record persisted
+under Neovim's state directory. Sidepanes does not resume arbitrary latest
+project transcripts on first open.
+
+Claude session capture uses a Sidepanes-injected `SessionStart` hook by default.
+Sidepanes passes a temporary `--settings` file for the pane process only, records
+the hook's `session_id`, `transcript_path`, and `cwd`, and stores the matching
+session id in the Sidepanes registry. If hook capture is unavailable, the default
+Claude mechanism list can still use `~/.claude/sessions/<pid>.json` and, when
+transcript inference is enabled, a matching project transcript.
+
+Codex embedded-terminal capture uses the `session_meta` entry that Codex writes
+to `~/.codex/sessions/**` for the pane's project root. Codex also exposes richer
+thread ids through the app-server/SDK surfaces, but Sidepanes' built-in terminal
+integration does not switch to that separate API surface. Users who have a
+stricter local Codex capture mechanism can provide `terminal.resume.resolver`.
+
+Set `terminal.auto_resume = false` or `terminal.resume.enabled = false` to
+disable automatic resume command rewriting. Set
+`terminal.resume.infer_from_transcripts = false` for stricter recovery that does
+not infer a session id from the latest matching transcript. Set
+`terminal.resume.use_claude_pid_metadata = false` to skip Claude's
+`~/.claude/sessions/<pid>.json` lookup. Set `terminal.resume.mechanisms` to
+replace the ordered built-in mechanism lists, `terminal.resume.store_path` to
+change or disable the persistent Sidepanes registry, or
+`terminal.resume.resolver = function(tool_name, ctx, opts) return session_id end`
+to provide a custom capture source.
 
 When a recovery candidate is launched, Claude receives
 `claude --resume <session-id>` and Codex receives `codex resume <session-id>`.
@@ -439,9 +500,8 @@ users should prefer `switch_to()`.
 `show_last_terminal(opts)` and `toggle_markdown_terminal()` are advanced workflow
 helpers. They may show Codex, Claude, IPython, or a configured custom pane
 terminal. For Codex and Claude, reopening after a dead pane-owned terminal uses
-Sidepanes' remembered session id or the tool's latest matching project
-transcript when available, then reports the recovered session and shows the
-resume badge.
+Sidepanes' remembered session id when available, then reports the recovered
+session and shows the resume badge.
 
 `show_last_agent(opts)` and `toggle_markdown_agent()` remain compatibility
 aliases for older callers.

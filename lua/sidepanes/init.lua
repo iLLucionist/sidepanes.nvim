@@ -11,6 +11,7 @@ Architecture: Uses an internal state table for focused submodules and returns a 
 
 
 local defaults = require("sidepanes.defaults")
+local agent_session = require("sidepanes.agent_session")
 local api_helpers = require("sidepanes.api")
 local commands = require("sidepanes.commands")
 local context = require("sidepanes.context")
@@ -447,6 +448,7 @@ function M.setup(opts)
         refresh_width = M.refresh_width,
         shutdown_terminals = M.shutdown_terminals,
     }, opts)
+    agent_session.load_store(M)
     commands.setup(M, M.config.commands)
     global_maps.setup(M, M.config.mappings and M.config.mappings.global)
 end

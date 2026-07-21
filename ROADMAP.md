@@ -51,7 +51,7 @@ Candidate work:
 
 - Consider adding an explicit fresh-vs-resume choice for Codex and Claude pane
   recovery. For now, if no live pane job exists, opening a supported agent tool
-  prefers resuming the remembered or latest matching project session.
+  resumes only a Sidepanes-owned remembered session.
 - Decide whether Markdown Reflow should remain bundled or split into a separate
   `markdown-reflow.nvim` plugin.
 - Revisit compatibility aliases only when there is a clear reason to deprecate

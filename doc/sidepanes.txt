@@ -261,6 +261,18 @@ runtime config.
         shutdown_timeout_ms = 300,
       },
       terminal = {
+        auto_resume = true,
+        resume = {
+          enabled = true,
+          infer_from_transcripts = true,
+          use_claude_pid_metadata = true,
+          mechanisms = {
+            claude = { "hook", "pid_metadata", "transcript" },
+            codex = { "transcript" },
+          },
+          store_path = nil,
+          resolver = nil,
+        },
         agent_resume_badge_ms = 0,
         agent_resume_badge = {
           text = "[RESUMED]",
@@ -271,6 +283,11 @@ runtime config.
             bold = true,
           },
         },
+      },
+      project = {
+        root_markers = { ".git" },
+        fallback = "buffer_dir",
+        resolver = nil,
       },
       validation = {
         enabled = true,
@@ -418,19 +435,54 @@ Built-in tools:
 - Claude
 - IPython
 
-Sidepanes keeps one terminal session per tool. Opening Codex with one preset
-starts a new Codex terminal if needed. Later asks reuse that Codex session. If a
-new preset is selected while the session is running, Sidepanes sends the tool's
-configured model-switch command before sending the prompt.
+Sidepanes keeps one terminal session per tool and project root. Opening Codex
+with one preset starts a new Codex terminal for the current root if needed.
+Later asks for that root reuse that Codex session. If a new preset is selected
+while the session is running, Sidepanes sends the tool's configured model-switch
+command before sending the prompt. Root-scoped agent lookups stay inside the
+requested project root, so a running Codex or Claude pane from another project
+is not reused for the current one.
+
+Project roots use Neovim-style root markers. By default, Sidepanes finds the
+nearest parent containing `.git`; if no marker is found, it uses the current
+file's directory. Configure `project.root_markers` to use marker files or
+directories such as `pyproject.toml` or `package.json`, set `project.fallback`
+to `"cwd"` when markerless files should share the current working directory, or
+provide `project.resolver = function(source, opts) return root end` to delegate
+root detection to your own logic. The resolver receives a buffer number or path
+as `source` and an `opts.kind` of `"buffer"` or `"path"`.
 
 Codex and Claude panes also track the agent process id and resumable session id
 when the CLI exposes one. Opening Codex or Claude first reuses a live pane-owned
 terminal buffer and Neovim job. If that live check fails because the terminal
 exited, crashed, or its buffer was lost, Sidepanes builds a recovery candidate
-from the current context, the remembered session record, or the latest matching
-project transcript. Claude uses `~/.claude/sessions/<pid>.json` first and falls
-back to the latest `~/.claude/projects/<project>/` transcript. Codex falls back
-to the latest matching project transcript in `~/.codex/sessions/**`.
+from the current Sidepanes context or a Sidepanes-owned session record persisted
+under Neovim's state directory. Sidepanes does not resume arbitrary latest
+project transcripts on first open.
+
+Claude session capture uses a Sidepanes-injected `SessionStart` hook by default.
+Sidepanes passes a temporary `--settings` file for the pane process only,
+records the hook's `session_id`, `transcript_path`, and `cwd`, and stores the
+matching session id in the Sidepanes registry. If hook capture is unavailable,
+the default Claude mechanism list can still use `~/.claude/sessions/<pid>.json`
+and, when transcript inference is enabled, a matching project transcript.
+
+Codex embedded-terminal capture uses the `session_meta` entry that Codex writes
+to `~/.codex/sessions/**` for the pane's project root. Codex also exposes richer
+thread ids through the app-server/SDK surfaces, but Sidepanes' built-in terminal
+integration does not switch to that separate API surface. Users who have a
+stricter local Codex capture mechanism can provide `terminal.resume.resolver`.
+
+Set `terminal.auto_resume = false` or `terminal.resume.enabled = false` to
+disable automatic resume command rewriting. Set
+`terminal.resume.infer_from_transcripts = false` for stricter recovery that does
+not infer a session id from the latest matching transcript. Set
+`terminal.resume.use_claude_pid_metadata = false` to skip Claude's
+`~/.claude/sessions/<pid>.json` lookup. Set `terminal.resume.mechanisms` to
+replace the ordered built-in mechanism lists, `terminal.resume.store_path` to
+change or disable the persistent Sidepanes registry, or
+`terminal.resume.resolver = function(tool_name, ctx, opts) return session_id end`
+to provide a custom capture source.
 
 When a recovery candidate is launched, Claude receives
 `claude --resume <session-id>` and Codex receives `codex resume <session-id>`.

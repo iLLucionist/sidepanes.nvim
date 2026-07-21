@@ -263,6 +263,64 @@ local function root_fixture(name)
     return root
 end
 
+test("project root detection uses configurable markers fallback and resolver", function()
+    reset_pane()
+
+    local root = helpers.tmp_path("sidepanes-project-marker-root")
+    local outside = helpers.tmp_path("sidepanes-project-marker-outside")
+
+    vim.fn.delete(root, "rf")
+    vim.fn.delete(outside, "rf")
+    mkdir(root .. "/docs")
+    mkdir(outside .. "/docs")
+    write(root .. "/pyproject.toml", { "[project]", "name = 'sidepanes-test'" })
+    write(root .. "/docs/doc.md", { "# Doc" })
+    write(outside .. "/docs/doc.md", { "# Outside" })
+
+    assert(util.project_root_for_path(root .. "/docs/doc.md", {
+        project_root_markers = { "pyproject.toml" },
+    }) == root, "custom project marker did not resolve root")
+
+    assert(util.project_root_for_path(outside .. "/docs/doc.md", {
+        project_root_markers = { "pyproject.toml" },
+        project_root_fallback = "buffer_dir",
+    }) == vim.fn.fnamemodify(outside .. "/docs", ":p"), "buffer_dir fallback did not resolve file directory")
+
+    assert(util.project_root_for_path(outside .. "/docs/doc.md", {
+        project_root_markers = { "pyproject.toml" },
+        project_root_fallback = "cwd",
+    }) == vim.fn.fnamemodify(vim.fn.getcwd(), ":p"), "cwd fallback did not resolve current directory")
+
+    assert(util.project_root_for_path(root .. "/docs/doc.md", {
+        project_root_resolver = function(path, opts)
+            assert(path:find("doc.md", 1, true), "resolver did not receive path")
+            assert(opts.kind == "path", "resolver did not receive path kind")
+            return outside
+        end,
+    }) == vim.fn.fnamemodify(outside, ":p"), "custom project resolver did not override root")
+
+    local old_root = vim.fs and vim.fs.root or nil
+
+    if vim.fs then
+        vim.fs.root = nil
+    end
+
+    local ok, fallback_root = pcall(function()
+        local bufnr = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_buf_set_name(bufnr, root .. "/docs/doc.md")
+        return util.project_root(bufnr, {
+            project_root_markers = { "pyproject.toml" },
+        })
+    end)
+
+    if vim.fs then
+        vim.fs.root = old_root
+    end
+
+    assert(ok, fallback_root)
+    assert(fallback_root == root, "vim.fs.find fallback resolved marker file instead of root")
+end)
+
 test("public facade hides mutable state and exposes config copy", function()
     reset_pane()
 
@@ -375,6 +433,67 @@ test("agent session resume commands use native tool forms", function()
     assert(vim.deep_equal(codex_cmd, { "codex", "resume", "--cd", "/repo", "--model", "gpt-5.5", "codex-session" }), "Codex resume command was wrong")
     assert(sh_resumed == false, "non-Claude command was marked resumed")
     assert(vim.deep_equal(sh_cmd, { "sh", "-c", "sleep 10" }), "non-Claude command was rewritten")
+end)
+
+test("Claude hook capture records Sidepanes-owned session ids", function()
+    reset_pane()
+
+    local root = root_fixture("agent-session-claude-hook-root")
+    local state = {
+        config = vim.deepcopy(defaults.config),
+        agent_sessions = {},
+    }
+    local ctx = {
+        key = util.terminal_key("claude", root),
+        tool_name = "claude",
+        root = root,
+    }
+
+    local cmd = agent_session.prepare_command(state, ctx, { "claude", "--model", "sonnet" })
+
+    assert(cmd[1] == "claude" and cmd[2] == "--settings", "Claude hook capture did not inject --settings")
+    assert(ctx.session_capture and vim.fn.filereadable(ctx.session_capture.settings_path) == 1, "Claude hook settings file was not written")
+
+    local settings = read_file(ctx.session_capture.settings_path)
+    local hook_command = settings:match('"command"%s*:%s*"([^"]+)"')
+
+    assert(hook_command, settings)
+
+    vim.fn.system(hook_command, vim.json.encode({
+        session_id = "claude-hook-session",
+        transcript_path = "/tmp/claude-hook-session.jsonl",
+        cwd = root,
+        hook_event_name = "SessionStart",
+    }))
+
+    assert(agent_session.refresh_context(state, ctx) == "claude-hook-session", "Claude hook capture did not refresh context")
+    assert(state.agent_sessions[ctx.key].session_id == "claude-hook-session", "Claude hook session was not remembered")
+    assert(state.agent_sessions[ctx.key].source == "capture", "Claude hook session source was not recorded")
+end)
+
+test("Claude hook capture paths are unique per terminal start", function()
+    reset_pane()
+
+    local root = root_fixture("agent-session-claude-hook-unique-root")
+    local state = {
+        config = vim.deepcopy(defaults.config),
+        agent_sessions = {},
+    }
+    local first = {
+        key = util.terminal_key("claude", root),
+        tool_name = "claude",
+        root = root,
+    }
+    local second = {
+        key = util.terminal_key("claude", root),
+        tool_name = "claude",
+        root = root,
+    }
+
+    agent_session.prepare_command(state, first, { "claude" })
+    agent_session.prepare_command(state, second, { "claude" })
+
+    assert(first.session_capture.path ~= second.session_capture.path, "Claude hook capture path was reused across starts")
 end)
 
 test("agent sessions discover Claude pid metadata and project fallback", function()
@@ -545,6 +664,97 @@ test("agent sessions report remembered live process candidates", function()
     assert(resume.source == "remembered", "remembered resume source was not reported")
 end)
 
+test("agent auto resume can be disabled even when a session is remembered", function()
+    reset_pane()
+
+    local root = root_fixture("agent-session-auto-resume-disabled-root")
+    local key = util.terminal_key("codex", root)
+    local state = {
+        config = {
+            agent_auto_resume = false,
+        },
+        agent_sessions = {
+            [key] = {
+                tool_name = "codex",
+                root = root,
+                session_id = "remembered-codex-session",
+            },
+        },
+    }
+
+    assert(agent_session.resolve_resume(state, nil, "codex", root) == nil, "auto_resume=false still resolved a remembered session")
+end)
+
+test("agent transcript inference can be disabled while preserving Claude pid metadata", function()
+    reset_pane()
+
+    local home = helpers.tmp_path("sidepanes-agent-home-inference-disabled")
+    local root = root_fixture("agent-session-inference-disabled-root")
+    local project_dir = util.normalize_project_root(root):gsub("/$", ""):gsub("/", "-")
+    local state = {
+        config = {
+            agent_resume_infer_from_transcripts = false,
+        },
+        agent_sessions = {},
+    }
+
+    vim.fn.delete(home, "rf")
+    mkdir(home .. "/.claude/sessions")
+    mkdir(home .. "/.claude/projects/" .. project_dir)
+
+    with_home(home, function()
+        local ctx = {
+            key = util.terminal_key("claude", root),
+            tool_name = "claude",
+            root = root,
+            pid = 4242,
+        }
+
+        write(home .. "/.claude/projects/" .. project_dir .. "/transcript-session.jsonl", {
+            vim.json.encode({ sessionId = "transcript-session" }),
+        })
+
+        assert(agent_session.refresh_context(state, ctx) == nil, "transcript inference disabled still adopted transcript session")
+
+        write(home .. "/.claude/sessions/4242.json", {
+            vim.json.encode({
+                pid = 4242,
+                sessionId = "pid-session",
+                cwd = root,
+            }),
+        })
+
+        assert(agent_session.refresh_context(state, ctx) == "pid-session", "Claude PID metadata did not work with transcript inference disabled")
+    end)
+end)
+
+test("agent resume supports custom resolver mechanisms", function()
+    reset_pane()
+
+    local root = root_fixture("agent-session-custom-resolver-root")
+    local state = {
+        config = vim.tbl_deep_extend("force", vim.deepcopy(defaults.config), {
+            agent_resume_mechanisms = false,
+            agent_resume_resolver = function(tool_name, ctx, opts)
+                assert(tool_name == "codex", "resolver received wrong tool")
+                assert(ctx.root == root, "resolver received wrong root")
+                assert(opts.key == ctx.key, "resolver received wrong key")
+                return "custom-resolver-session"
+            end,
+        }),
+        agent_sessions = {},
+    }
+    local ctx = {
+        key = util.terminal_key("codex", root),
+        tool_name = "codex",
+        root = root,
+    }
+
+    assert(agent_session.refresh_context(state, ctx) == "custom-resolver-session", "custom resolver did not provide a session id")
+    assert(state.agent_sessions[ctx.key].session_id == "custom-resolver-session", "custom resolver session was not remembered")
+    assert(state.agent_sessions[ctx.key].source == "resolver", "custom resolver source was not recorded")
+end)
+
 test("agent recovery notification reports live previous pid without active wording", function()
     reset_pane()
 
@@ -592,7 +802,7 @@ test("agent recovery notification reports live previous pid without active wordi
     assert(not joined:find("lost but active", 1, true), joined)
 end)
 
-test("opening Claude resumes latest project session when no live job exists", function()
+test("opening Claude starts fresh when only an external latest project session exists", function()
     reset_pane()
 
     local home = helpers.tmp_path("sidepanes-agent-home-open-claude")
@@ -642,17 +852,164 @@ test("opening Claude resumes latest project session when no live job exists", fu
         end, 20)
 
         assert(ctx and ctx.tool_name == "claude", "Claude terminal did not open")
-        assert(ctx.resumed == true, "Claude terminal did not mark resumed startup")
-        assert(ctx.session_id == "resume-session", "Claude terminal did not keep resume session id")
-        assert(ctx.resume_source == "latest", "Claude terminal did not record resume source")
-        assert(ctx.resume_badge_visible == true, "Claude terminal did not mark resume badge visible")
-        assert(has_notify(messages, "Recovered/resumed a lost Claude session: session id resume-session"), "Claude recovery notification was not emitted")
+        assert(ctx.resumed == false, "Claude terminal resumed an external latest project session")
+        assert(ctx.session_id == nil, "Claude terminal stored an external latest project session id")
+        assert(ctx.resume_source == nil, "Claude terminal recorded an external latest project session source")
+        assert(ctx.resume_badge_visible == false, "Claude terminal showed a resume badge for an external latest session")
+        assert(not has_notify(messages, "Recovered/resumed a lost Claude session"), "Claude recovery notification was emitted for an external latest session")
         assert(wrote_args, "fake Claude did not record argv")
-        assert(read_file(args_file):find("--resume\nresume%-session", 1, false), "Claude terminal did not launch with --resume session")
+        assert(not read_file(args_file):find("--resume", 1, true), "Claude terminal launched with --resume for an external latest session")
 
         local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
 
-        assert(winbar:find("%#SidepanesResumed# [RECOVERED] ", 1, true), winbar)
+        assert(not winbar:find("%#SidepanesResumed# [RECOVERED] ", 1, true), winbar)
+    end)
+end)
+
+test("opening Codex resumes the same Sidepanes-owned session after terminal loss", function()
+    reset_pane()
+
+    local home = helpers.tmp_path("sidepanes-agent-home-codex-owned-reopen")
+    local bin = helpers.tmp_path("sidepanes-agent-bin-codex-owned-reopen")
+    local root = root_fixture("agent-session-codex-owned-reopen-root")
+    local args_file = helpers.tmp_path("sidepanes-agent-codex-owned-reopen-args.txt")
+    local fake_codex = bin .. "/codex"
+    local session_id = "codex-owned-reopen-session"
+
+    vim.fn.delete(home, "rf")
+    vim.fn.delete(bin, "rf")
+    vim.fn.delete(args_file)
+    mkdir(home .. "/.codex/sessions/2026/07/21")
+    mkdir(bin)
+    write(fake_codex, {
+        "#!/bin/sh",
+        "printf '%s\\n' \"$@\" >> " .. vim.fn.shellescape(args_file),
+        "mkdir -p \"$HOME/.codex/sessions/2026/07/21\"",
+        "printf '%s\\n' " .. vim.fn.shellescape(vim.json.encode({
+            type = "session_meta",
+            payload = {
+                session_id = session_id,
+                cwd = root,
+            },
+        })) .. " > \"$HOME/.codex/sessions/2026/07/21/rollout-codex-owned-reopen.jsonl\"",
+        "sleep 10",
+    })
+    vim.fn.setfperm(fake_codex, "rwxr-xr-x")
+
+    with_home(home, function()
+        pane.setup({
+            tools = {
+                codex = {
+                    label = "Codex",
+                    cmd = fake_codex,
+                    include_cd_arg = true,
+                    presets = { { name = "default", label = "Default", args = {} } },
+                },
+            },
+        })
+
+        local first = pane.open_terminal("codex", nil, { root = root, focus = false })
+        local remembered = vim.wait(2500, function()
+            agent_session.refresh_context(pane, first)
+            return pane.agent_sessions[first.key] and pane.agent_sessions[first.key].session_id == session_id
+        end, 50)
+
+        assert(remembered, "Codex session id was not captured from Sidepanes-owned startup")
+
+        vim.fn.jobstop(first.job_id)
+        vim.wait(1000, function()
+            return not util.is_running(first.job_id)
+        end, 20)
+
+        vim.fn.delete(args_file)
+
+        local second = pane.open_terminal("codex", nil, { root = root, focus = false })
+        local wrote_args = vim.wait(1000, function()
+            return vim.fn.filereadable(args_file) == 1
+        end, 20)
+
+        assert(second and second.resumed == true, "Codex terminal did not mark resumed reopen")
+        assert(second.session_id == session_id, "Codex reopened with wrong session id")
+        assert(wrote_args, "fake Codex did not record reopened argv")
+        assert(read_file(args_file):find("resume", 1, true), "Codex reopened without resume subcommand")
+        assert(read_file(args_file):find(session_id, 1, true), "Codex reopened without captured session id")
+    end)
+end)
+
+test("opening Claude resumes the same hook-captured session after terminal loss", function()
+    reset_pane()
+
+    local home = helpers.tmp_path("sidepanes-agent-home-claude-hook-reopen")
+    local bin = helpers.tmp_path("sidepanes-agent-bin-claude-hook-reopen")
+    local root = root_fixture("agent-session-claude-hook-reopen-root")
+    local args_file = helpers.tmp_path("sidepanes-agent-claude-hook-reopen-args.txt")
+    local fake_claude = bin .. "/claude"
+    local session_id = "claude-hook-reopen-session"
+
+    vim.fn.delete(home, "rf")
+    vim.fn.delete(bin, "rf")
+    vim.fn.delete(args_file)
+    mkdir(bin)
+    write(fake_claude, {
+        "#!/bin/sh",
+        "printf '%s\\n' \"$@\" >> " .. vim.fn.shellescape(args_file),
+        "settings=''",
+        "prev=''",
+        "for arg in \"$@\"; do",
+        "  if [ \"$prev\" = '--settings' ]; then settings=\"$arg\"; fi",
+        "  prev=\"$arg\"",
+        "done",
+        "if [ -n \"$settings\" ]; then",
+        "  command=$(sed -n 's/.*\"command\":\"\\([^\"]*\\)\".*/\\1/p' \"$settings\")",
+        "  if [ -n \"$command\" ]; then",
+        "    printf '%s\\n' " .. vim.fn.shellescape(vim.json.encode({
+            session_id = session_id,
+            transcript_path = home .. "/.claude/projects/project/" .. session_id .. ".jsonl",
+            cwd = root,
+            hook_event_name = "SessionStart",
+        })) .. " | sh -c \"$command\"",
+        "  fi",
+        "fi",
+        "sleep 10",
+    })
+    vim.fn.setfperm(fake_claude, "rwxr-xr-x")
+
+    with_home(home, function()
+        pane.setup({
+            tools = {
+                claude = {
+                    label = "Claude",
+                    cmd = fake_claude,
+                    presets = { { name = "default", label = "Default", args = {} } },
+                },
+            },
+        })
+
+        local first = pane.open_terminal("claude", nil, { root = root, focus = false })
+        local remembered = vim.wait(2500, function()
+            agent_session.refresh_context(pane, first)
+            return pane.agent_sessions[first.key] and pane.agent_sessions[first.key].session_id == session_id
+        end, 50)
+
+        assert(remembered, "Claude session id was not captured from SessionStart hook")
+
+        vim.fn.jobstop(first.job_id)
+        vim.wait(1000, function()
+            return not util.is_running(first.job_id)
+        end, 20)
+
+        vim.fn.delete(args_file)
+
+        local second = pane.open_terminal("claude", nil, { root = root, focus = false })
+        local wrote_args = vim.wait(1000, function()
+            return vim.fn.filereadable(args_file) == 1
+        end, 20)
+
+        assert(second and second.resumed == true, "Claude terminal did not mark resumed reopen")
+        assert(second.session_id == session_id, "Claude reopened with wrong session id")
+        assert(wrote_args, "fake Claude did not record reopened argv")
+        assert(read_file(args_file):find("--resume", 1, true), "Claude reopened without --resume")
+        assert(read_file(args_file):find(session_id, 1, true), "Claude reopened without hook-captured session id")
     end)
 end)
 
@@ -1626,6 +1983,19 @@ test("config normalizes ergonomic markdown and tool setup", function()
             shutdown_timeout_ms = 123,
         },
         terminal = {
+            auto_resume = false,
+            resume = {
+                infer_from_transcripts = false,
+                use_claude_pid_metadata = false,
+                mechanisms = {
+                    claude = { "hook" },
+                    codex = false,
+                },
+                store_path = helpers.tmp_path("sidepanes-agent-config-store.json"),
+                resolver = function()
+                    return "configured-session"
+                end,
+            },
             agent_resume_badge_ms = 2500,
             agent_resume_badge = {
                 text = "[RECOVERED]",
@@ -1637,6 +2007,13 @@ test("config normalizes ergonomic markdown and tool setup", function()
                 },
             },
         },
+        project = {
+            root_markers = { ".git", "pyproject.toml" },
+            fallback = "cwd",
+            resolver = function()
+                return root_fixture("setup-project-resolver-root")
+            end,
+        },
         validation = {
             enabled = false,
         },
@@ -1646,6 +2023,7 @@ test("config normalizes ergonomic markdown and tool setup", function()
     assert(pane.config.markdown == nil, "ergonomic markdown table leaked into runtime config")
     assert(pane.config.lifecycle == nil, "ergonomic lifecycle table leaked into runtime config")
     assert(pane.config.terminal == nil, "ergonomic terminal table leaked into runtime config")
+    assert(pane.config.project == nil, "ergonomic project table leaked into runtime config")
     assert(pane.config.validation == nil, "ergonomic validation table leaked into runtime config")
     assert(pane.config.width == 88, "layout.width did not map to width")
     assert(pane.config.zoom_text_width == 77, "layout.zoom_text_width did not map to zoom_text_width")
@@ -1674,6 +2052,16 @@ test("config normalizes ergonomic markdown and tool setup", function()
     assert(pane.config.agent_resume_badge.text == "[RECOVERED]", "terminal.agent_resume_badge.text did not map")
     assert(pane.config.agent_resume_badge.clear_on_interaction == false, "terminal.agent_resume_badge.clear_on_interaction did not map")
     assert(pane.config.agent_resume_badge.hl.bg == "#abcdef", "terminal.agent_resume_badge.hl did not map")
+    assert(pane.config.agent_auto_resume == false, "terminal.auto_resume did not map")
+    assert(pane.config.agent_resume_infer_from_transcripts == false, "terminal.resume.infer_from_transcripts did not map")
+    assert(pane.config.agent_resume_use_claude_pid_metadata == false, "terminal.resume.use_claude_pid_metadata did not map")
+    assert(pane.config.agent_resume_mechanisms.claude[1] == "hook", "terminal.resume.mechanisms did not map")
+    assert(pane.config.agent_resume_mechanisms.codex == false, "terminal.resume.mechanisms false tool did not map")
+    assert(pane.config.agent_resume_store_path:find("sidepanes%-agent%-config%-store%.json"), "terminal.resume.store_path did not map")
+    assert(type(pane.config.agent_resume_resolver) == "function", "terminal.resume.resolver did not map")
+    assert(pane.config.project_root_markers[2] == "pyproject.toml", "project.root_markers did not map")
+    assert(pane.config.project_root_fallback == "cwd", "project.fallback did not map")
+    assert(type(pane.config.project_root_resolver) == "function", "project.resolver did not map")
     assert(pane.config.validate == false, "validation.enabled did not map to validate")
     assert(pane.config.tools.claude == nil, "disabled tool was still present")
     assert(pane.config.tools.codex.cmd[1] == "sh", "generated tool lost explicit command override")
@@ -1738,6 +2126,12 @@ test("canonical default setup normalizes to runtime defaults", function()
     assert(vim.deep_equal(setup.markdown.reload_badge, defaults.config.reload_badge), "default setup reload badge was wrong")
     assert(setup.markdown.reflow.enabled == defaults.config.auto_reflow, "default setup reflow enabled was wrong")
     assert(setup.lifecycle.shutdown_on_exit == defaults.config.shutdown_on_exit, "default setup lifecycle was wrong")
+    assert(setup.project.root_markers[1] == ".git", "default setup project root marker was wrong")
+    assert(setup.project.fallback == defaults.config.project_root_fallback, "default setup project fallback was wrong")
+    assert(setup.terminal.auto_resume == defaults.config.agent_auto_resume, "default setup auto resume was wrong")
+    assert(setup.terminal.resume.infer_from_transcripts == defaults.config.agent_resume_infer_from_transcripts, "default setup transcript inference was wrong")
+    assert(setup.terminal.resume.use_claude_pid_metadata == defaults.config.agent_resume_use_claude_pid_metadata, "default setup Claude PID metadata was wrong")
+    assert(vim.deep_equal(setup.terminal.resume.mechanisms, defaults.config.agent_resume_mechanisms), "default setup resume mechanisms were wrong")
     assert(setup.terminal.agent_resume_badge_ms == defaults.config.agent_resume_badge_ms, "default setup resume badge timeout was wrong")
     assert(vim.deep_equal(setup.terminal.agent_resume_badge, defaults.config.agent_resume_badge), "default setup resume badge was wrong")
     assert(setup.validation.enabled == defaults.config.validate, "default setup validation was wrong")
@@ -1775,6 +2169,17 @@ test("runtime config converts to canonical setup shape", function()
         focus_on_ask = false,
         shutdown_on_exit = false,
         shutdown_timeout_ms = 99,
+        agent_auto_resume = false,
+        agent_resume_infer_from_transcripts = false,
+        agent_resume_use_claude_pid_metadata = false,
+        agent_resume_mechanisms = {
+            claude = { "hook" },
+            codex = { "transcript" },
+        },
+        agent_resume_store_path = "/tmp/sidepanes-agent-store.json",
+        agent_resume_resolver = function()
+            return "runtime-session"
+        end,
         agent_resume_badge_ms = 3000,
         agent_resume_badge = {
             text = "[RECOVERED]",
@@ -1785,6 +2190,11 @@ test("runtime config converts to canonical setup shape", function()
                 bold = true,
             },
         },
+        project_root_markers = { ".git", "package.json" },
+        project_root_fallback = "cwd",
+        project_root_resolver = function()
+            return "/tmp/sidepanes-project-root"
+        end,
         validate = false,
     })
     local setup = config.to_setup(runtime)
@@ -1811,8 +2221,17 @@ test("runtime config converts to canonical setup shape", function()
     assert(setup.lifecycle.focus_on_ask == false, "to_setup lost focus_on_ask")
     assert(setup.lifecycle.shutdown_on_exit == false, "to_setup lost shutdown_on_exit")
     assert(setup.lifecycle.shutdown_timeout_ms == 99, "to_setup lost shutdown timeout")
+    assert(setup.terminal.auto_resume == false, "to_setup lost auto resume")
+    assert(setup.terminal.resume.infer_from_transcripts == false, "to_setup lost transcript inference")
+    assert(setup.terminal.resume.use_claude_pid_metadata == false, "to_setup lost Claude PID metadata")
+    assert(setup.terminal.resume.mechanisms.claude[1] == "hook", "to_setup lost resume mechanisms")
+    assert(setup.terminal.resume.store_path == "/tmp/sidepanes-agent-store.json", "to_setup lost resume store path")
+    assert(type(setup.terminal.resume.resolver) == "function", "to_setup lost resume resolver")
     assert(setup.terminal.agent_resume_badge_ms == 3000, "to_setup lost resume badge timeout")
     assert(setup.terminal.agent_resume_badge.text == "[RECOVERED]", "to_setup lost resume badge")
+    assert(setup.project.root_markers[2] == "package.json", "to_setup lost project root markers")
+    assert(setup.project.fallback == "cwd", "to_setup lost project fallback")
+    assert(type(setup.project.resolver) == "function", "to_setup lost project resolver")
     assert(setup.validation.enabled == false, "to_setup lost validation flag")
     assert(vim.deep_equal(normalized, runtime), "canonical setup did not round-trip custom runtime config")
 end)
@@ -2089,6 +2508,18 @@ test("setup validation reports malformed config and implied dependency gaps", fu
             clear_on_interaction = "yes",
             hl = "WarningMsg",
         },
+        project_root_markers = 42,
+        project_root_fallback = "never",
+        project_root_resolver = "rooter",
+        agent_auto_resume = "yes",
+        agent_resume_infer_from_transcripts = "no",
+        agent_resume_use_claude_pid_metadata = "maybe",
+        agent_resume_mechanisms = {
+            codex = { "transcript", false },
+            claude = "hook",
+        },
+        agent_resume_store_path = 42,
+        agent_resume_resolver = "resolver",
         agent_resume_badge_ms = -1,
         agent_resume_badge = {
             text = true,
@@ -2124,6 +2555,16 @@ test("setup validation reports malformed config and implied dependency gaps", fu
     assert(joined:find("Sidepanes config reload_badge.text must be a string.", 1, true), joined)
     assert(joined:find("Sidepanes config reload_badge.clear_on_interaction must be a boolean.", 1, true), joined)
     assert(joined:find("Sidepanes config reload_badge.hl must be a table.", 1, true), joined)
+    assert(joined:find("Sidepanes config project_root_markers must be a string, table, function, or false.", 1, true), joined)
+    assert(joined:find("Sidepanes config project_root_fallback must be 'buffer_dir' or 'cwd'.", 1, true), joined)
+    assert(joined:find("Sidepanes config project_root_resolver must be a function.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_auto_resume must be a boolean.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_infer_from_transcripts must be a boolean.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_use_claude_pid_metadata must be a boolean.", 1, true), joined)
+    assert(joined:find("Invalid Sidepanes agent_resume_mechanisms.codex entry at index 2", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_mechanisms.claude must be a table or false.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_store_path must be a string or false.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_resolver must be a function.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_badge_ms must be a non-negative number.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_badge.text must be a string.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_badge.clear_on_interaction must be a boolean.", 1, true), joined)
@@ -2491,6 +2932,37 @@ test("show last terminal falls back to Codex when no terminal was remembered", f
 
     assert(pane.active_mode == "codex", "show_last_terminal did not fall back to Codex")
     assert(vim.api.nvim_get_current_win() == pane.winid, "show_last_terminal focus option did not focus pane")
+end)
+
+test("agent context lookups stay within the requested project root", function()
+    reset_pane()
+
+    local first_root = root_fixture("agent-context-first-root")
+    local second_root = root_fixture("agent-context-second-root")
+
+    pane.setup({
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    local first = pane.open_terminal("codex", nil, { root = first_root, focus = false })
+    local second = pane.open_terminal("codex", nil, { root = second_root, focus = false })
+
+    assert(first and second and first ~= second, "test did not create two running Codex panes")
+    assert(pane.last_tool_terminal_keys.codex == second.key, "second Codex pane was not remembered as latest")
+
+    local first_lookup = terminal_module.context_for_tool(pane, "codex", first_root)
+    local first_agent = terminal_module.last_coding_agent_context(pane, first_root)
+    local unscoped = terminal_module.context_for_tool(pane, "codex")
+
+    assert(first_lookup == first, "root-scoped Codex lookup returned a different project context")
+    assert(first_agent == first, "root-scoped last agent lookup returned a different project context")
+    assert(unscoped == second, "unscoped Codex lookup did not keep latest-agent behavior")
 end)
 
 test("toggle markdown terminal flips between markdown and last remembered terminal", function()

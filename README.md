@@ -74,6 +74,18 @@ reflow.
         },
       },
       terminal = {
+        auto_resume = true,
+        resume = {
+          enabled = true,
+          infer_from_transcripts = true,
+          use_claude_pid_metadata = true,
+          mechanisms = {
+            claude = { "hook", "pid_metadata", "transcript" },
+            codex = { "transcript" },
+          },
+          store_path = nil,
+          resolver = nil,
+        },
         agent_resume_badge_ms = 0,
         agent_resume_badge = {
           text = "[RESUMED]",
@@ -84,6 +96,11 @@ reflow.
             bold = true,
           },
         },
+      },
+      project = {
+        root_markers = { ".git" },
+        fallback = "buffer_dir",
+        resolver = nil,
       },
       commands = true,
       mappings = {
@@ -190,11 +207,29 @@ are available in your environment.
    are also installed in terminal-input mode, so pressing `<C-g>` while typing
    in Claude or Codex is handled by Sidepanes instead of being sent to the agent.
    If a pane-owned Codex or Claude terminal exits unexpectedly, reopening that
-   tool first checks for a live pane job, then resumes the remembered or latest
-   matching project session when Sidepanes can find one. Recovered terminals
-   echo the session/PID details and show a `[RESUMED]` winbar badge. Sidepanes
-   resumes CLI sessions, not terminal ptys; when the pane-owned job is gone,
-   recovery starts a fresh CLI process with the resume command.
+   tool for the same project root first checks for a live pane job, then resumes
+   a Sidepanes-owned remembered session when one is available. Recovered
+   terminals echo the session/PID details and show a `[RESUMED]` winbar badge.
+   Sidepanes resumes CLI sessions, not terminal ptys; when the pane-owned job
+   is gone, recovery starts a fresh CLI process with the resume command.
+
+   Sidepanes scopes Codex and Claude panes by tool plus detected project root.
+   By default, the root is the nearest parent containing `.git`; if no marker is
+   found, Sidepanes uses the current file's directory. Configure
+   `project.root_markers`, `project.fallback`, or `project.resolver` if your
+   project boundaries are defined by files such as `pyproject.toml`,
+   `package.json`, or an existing root plugin.
+
+   Auto-resume is configurable because session discovery depends on CLI-owned
+   metadata. Sidepanes persists only Sidepanes-captured session ids in its
+   Neovim state directory, so a later Neovim process can resume a pane-owned
+   session without adopting arbitrary external sessions. Claude uses a
+   Sidepanes-injected `SessionStart` hook by default; Codex in embedded-terminal
+   mode uses the `session_meta` entry written to `~/.codex/sessions/**`. Set
+   `terminal.auto_resume = false` or `terminal.resume.enabled = false` to always
+   start fresh. Set `terminal.resume.infer_from_transcripts = false` when you
+   only want hook/custom/persisted ids, and use `terminal.resume.resolver` or
+   `terminal.resume.mechanisms` to provide a stricter site-specific mechanism.
 
 7. If the pane feels too wide or narrow, use `<leader>p-`, `<leader>p+`, or
    `<leader>pw` to adjust it. Use `<leader>p%` when you want relative widths to

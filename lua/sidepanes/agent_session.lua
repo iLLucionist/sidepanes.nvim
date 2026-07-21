@@ -1,7 +1,7 @@
 --[[
 sidepanes.agent_session
 Purpose: Recover pane-owned coding-agent sessions after terminal jobs exit.
-Does: Tracks OS pids and resumable session ids for Codex and Claude, discovers recent project sessions, and rewrites restart commands to resume.
+Does: Tracks OS pids and resumable session ids for Codex and Claude, refreshes pane-owned contexts from tool metadata, and rewrites restart commands to resume.
 Architecture: Keeps tool-specific persistence details out of terminal.lua while exposing small pure helpers for command construction and state updates.
 ]]
 
@@ -32,6 +32,24 @@ local function read_json(path)
     end
 
     return nil
+end
+
+local function write_json(path, value)
+    if not path then
+        return false
+    end
+
+    local dir = vim.fn.fnamemodify(path, ":p:h")
+
+    vim.fn.mkdir(dir, "p")
+
+    local ok, encoded = pcall(vim.json.encode, value)
+
+    if not ok then
+        return false
+    end
+
+    return vim.fn.writefile({ encoded }, path) == 0
 end
 
 local function read_jsonl_head(path)
@@ -157,6 +175,85 @@ local function command_matches_tool(tool_name, cmd)
     return type(executable) == "string" and vim.fn.fnamemodify(executable, ":t") == tool_name
 end
 
+local function resume_options(config)
+    config = config or {}
+
+    return {
+        auto_resume = config.agent_auto_resume ~= false,
+        infer_from_transcripts = config.agent_resume_infer_from_transcripts ~= false,
+        use_claude_pid_metadata = config.agent_resume_use_claude_pid_metadata ~= false,
+        mechanisms = config.agent_resume_mechanisms,
+        store_path = config.agent_resume_store_path,
+        resolver = config.agent_resume_resolver,
+    }
+end
+
+local function mechanism_enabled(config, tool_name, mechanism)
+    local mechanisms = resume_options(config).mechanisms
+
+    if mechanisms == false then
+        return false
+    end
+
+    local tool_mechanisms = type(mechanisms) == "table" and mechanisms[tool_name] or nil
+
+    if tool_mechanisms == false then
+        return false
+    elseif tool_mechanisms == nil then
+        if tool_name == "claude" then
+            tool_mechanisms = { "hook", "pid_metadata", "transcript" }
+        elseif tool_name == "codex" then
+            tool_mechanisms = { "transcript" }
+        else
+            tool_mechanisms = {}
+        end
+    end
+
+    for _, candidate in ipairs(tool_mechanisms) do
+        if candidate == mechanism then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function state_dir()
+    return vim.fn.stdpath("state") .. "/sidepanes"
+end
+
+local function store_path(config)
+    local configured = resume_options(config).store_path
+
+    if configured == false then
+        return nil
+    elseif type(configured) == "string" and configured ~= "" then
+        return vim.fn.fnamemodify(configured, ":p")
+    end
+
+    return state_dir() .. "/agent_sessions.json"
+end
+
+local function capture_dir()
+    return state_dir() .. "/agent-capture"
+end
+
+local function capture_paths(ctx)
+    local uv = vim.uv or vim.loop
+    local token = ctx.capture_token or tostring(uv and uv.hrtime and uv.hrtime() or os.time())
+
+    ctx.capture_token = token
+
+    local name = vim.fn.sha256((ctx.key or (ctx.tool_name .. "::" .. tostring(ctx.root))) .. "::" .. token)
+    local dir = capture_dir()
+
+    return {
+        data = dir .. "/" .. name .. ".json",
+        settings = dir .. "/" .. name .. "-settings.json",
+        script = dir .. "/" .. name .. "-capture.sh",
+    }
+end
+
 local function copy_tail(cmd, start_index)
     local result = {}
 
@@ -187,6 +284,147 @@ function M.latest_info_for_root(tool_name, root)
     return nil
 end
 
+function M.can_infer_from_transcripts(config)
+    return resume_options(config).infer_from_transcripts
+end
+
+function M.load_store(state)
+    local path = store_path(state and state.config or nil)
+    local decoded = read_json(path)
+
+    if type(decoded) ~= "table" then
+        return false
+    end
+
+    local sessions = type(decoded.sessions) == "table" and decoded.sessions or decoded
+
+    state.agent_sessions = state.agent_sessions or {}
+
+    for key, session in pairs(sessions) do
+        if type(session) == "table" and session.session_id and session.root and session.tool_name then
+            state.agent_sessions[key] = session
+        end
+    end
+
+    return true
+end
+
+function M.save_store(state)
+    local path = store_path(state and state.config or nil)
+
+    if not path then
+        return false
+    end
+
+    return write_json(path, {
+        version = 1,
+        sessions = state.agent_sessions or {},
+    })
+end
+
+local function remember_session(state, ctx, session_id, source)
+    ctx.session_id = session_id
+    state.agent_sessions = state.agent_sessions or {}
+    state.agent_sessions[ctx.key] = {
+        tool_name = ctx.tool_name,
+        root = ctx.root,
+        session_id = session_id,
+        pid = ctx.pid,
+        pid_running = util.pid_running(ctx.pid),
+        source = source,
+        updated_at = os.time(),
+    }
+    M.save_store(state)
+end
+
+local function session_from_capture(ctx)
+    local capture = ctx and ctx.session_capture or nil
+    local data = capture and read_json(capture.path) or nil
+
+    if type(data) ~= "table" then
+        return nil
+    end
+
+    local session_id = data.session_id or data.sessionId
+    local root = data.cwd or data.root or (data.workspace and (data.workspace.project_dir or data.workspace.current_dir))
+
+    if session_id and (not root or same_root(root, ctx.root)) then
+        return session_id
+    end
+
+    return nil
+end
+
+local function session_from_custom_resolver(state, ctx)
+    local resolver = resume_options(state and state.config or nil).resolver
+
+    if type(resolver) ~= "function" then
+        return nil
+    end
+
+    local ok, session_id = pcall(resolver, ctx.tool_name, ctx, {
+        state = state,
+        root = ctx.root,
+        key = ctx.key,
+    })
+
+    if ok and type(session_id) == "string" and session_id ~= "" then
+        return session_id
+    end
+
+    return nil
+end
+
+function M.prepare_command(state, ctx, cmd)
+    if not (ctx and ctx.tool_name == "claude" and mechanism_enabled(state and state.config or nil, "claude", "hook")) then
+        return cmd
+    end
+
+    if not command_matches_tool("claude", cmd) or contains_flag(cmd, { ["--settings"] = true }) then
+        return cmd
+    end
+
+    local paths = capture_paths(ctx)
+    local script = {
+        "#!/bin/sh",
+        "set -eu",
+        "tmp=" .. vim.fn.shellescape(paths.data .. ".tmp"),
+        "cat > \"$tmp\"",
+        "mv \"$tmp\" " .. vim.fn.shellescape(paths.data),
+    }
+
+    vim.fn.mkdir(vim.fn.fnamemodify(paths.script, ":p:h"), "p")
+    vim.fn.writefile(script, paths.script)
+    vim.fn.setfperm(paths.script, "rwx------")
+    write_json(paths.settings, {
+        hooks = {
+            SessionStart = {
+                {
+                    hooks = {
+                        {
+                            type = "command",
+                            command = vim.fn.shellescape(paths.script),
+                        },
+                    },
+                },
+            },
+        },
+    })
+
+    ctx.session_capture = {
+        type = "claude_hook",
+        path = paths.data,
+        settings_path = paths.settings,
+        script_path = paths.script,
+    }
+
+    local result = { cmd[1], "--settings", paths.settings }
+
+    vim.list_extend(result, copy_tail(cmd, 2))
+
+    return result
+end
+
 local function can_use_latest_for_context(ctx, latest)
     if not latest then
         return false
@@ -208,17 +446,31 @@ function M.refresh_context(state, ctx)
         return nil
     end
 
+    local options = resume_options(state and state.config or nil)
     local session_id = ctx.session_id
+    local source = ctx.session_id and "context" or nil
 
-    if ctx.tool_name == "claude" then
-        session_id = claude_session_from_pid(ctx.pid, ctx.root) or session_id
+    if not session_id then
+        session_id = session_from_capture(ctx)
+        source = session_id and "capture" or nil
     end
 
     if not session_id then
+        session_id = session_from_custom_resolver(state, ctx)
+        source = session_id and "resolver" or nil
+    end
+
+    if options.use_claude_pid_metadata and not session_id and ctx.tool_name == "claude" and mechanism_enabled(state and state.config or nil, "claude", "pid_metadata") then
+        session_id = claude_session_from_pid(ctx.pid, ctx.root)
+        source = session_id and "pid_metadata" or nil
+    end
+
+    if options.infer_from_transcripts and not session_id and mechanism_enabled(state and state.config or nil, ctx.tool_name, "transcript") then
         local latest = M.latest_info_for_root(ctx.tool_name, ctx.root)
 
         if can_use_latest_for_context(ctx, latest) then
             session_id = latest.session_id
+            source = "transcript"
         end
     end
 
@@ -226,22 +478,17 @@ function M.refresh_context(state, ctx)
         return nil
     end
 
-    ctx.session_id = session_id
-    state.agent_sessions = state.agent_sessions or {}
-    state.agent_sessions[ctx.key] = {
-        tool_name = ctx.tool_name,
-        root = ctx.root,
-        session_id = session_id,
-        pid = ctx.pid,
-        pid_running = util.pid_running(ctx.pid),
-        updated_at = os.time(),
-    }
+    remember_session(state, ctx, session_id, source)
 
     return session_id
 end
 
 function M.resolve_resume(state, ctx, tool_name, root)
     if not M.is_supported(tool_name) then
+        return nil
+    end
+
+    if not resume_options(state and state.config or nil).auto_resume then
         return nil
     end
 
@@ -267,17 +514,6 @@ function M.resolve_resume(state, ctx, tool_name, root)
             pid = remembered.pid,
             pid_running = util.pid_running(remembered.pid),
             source = "remembered",
-        }
-    end
-
-    local latest = M.latest_info_for_root(tool_name, root)
-
-    if latest then
-        return {
-            session_id = latest.session_id,
-            pid = nil,
-            pid_running = false,
-            source = "latest",
         }
     end
 
