@@ -52,8 +52,10 @@ but they should be called out clearly in this changelog.
   `terminal.resume.failure_timeout_ms` and
   `terminal.resume.failure_action`.
 - Claude recovery now captures session ids through a Sidepanes-injected
-  `SessionStart` hook when available. Codex embedded-terminal recovery continues
-  to use unambiguous Codex `session_meta` entries for Sidepanes-owned sessions;
+  `SessionStart` hook when available. Codex embedded-terminal recovery now
+  captures the explicit `codex resume <session-id>` command that Codex prints on
+  exit, including wrapped terminal-buffer output, and still falls back to
+  unambiguous Codex `session_meta` entries for Sidepanes-owned sessions;
   ambiguous same-root transcript candidates are ignored rather than guessed.
 - Agent auto-resume is more finicky than originally expected because Codex and
   Claude expose different terminal-session metadata surfaces. Sidepanes now
@@ -82,6 +84,9 @@ but they should be called out clearly in this changelog.
   resolver before reuse instead of being trusted indefinitely.
 - Codex transcript inference now refuses ambiguous same-root candidates instead
   of guessing which newly written transcript belongs to the Sidepanes pane.
+- Codex panes now resume after manual `/exit` when Codex prints
+  `To continue this session, run codex resume <session-id>` but no usable
+  `session_meta` transcript has been captured.
 - Resumed Codex and Claude processes that exit immediately with a non-zero code
   now clear the stale remembered session and start fresh once.
 

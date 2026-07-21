@@ -198,6 +198,8 @@ for _, item in ipairs({
     "[RESUMED]",
     "SidepanesResumed",
     "SessionStart",
+    "terminal_output",
+    "codex resume <session-id>",
     "session_meta",
     "Sidepanes-owned",
     "tool name + detected project root",

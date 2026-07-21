@@ -81,7 +81,7 @@ reflow.
           use_claude_pid_metadata = true,
           mechanisms = {
             claude = { "hook", "pid_metadata", "transcript" },
-            codex = { "transcript" },
+            codex = { "terminal_output", "transcript" },
           },
           store_path = nil,
           store_lock_timeout_ms = 1000,
@@ -272,9 +272,10 @@ When Codex or Claude is opened, Sidepanes:
 
 Built-in capture differs by agent. Claude uses a temporary pane-local
 `SessionStart` hook first, can fall back to Claude PID metadata, and can infer a
-matching transcript when enabled. Codex uses unambiguous `session_meta` entries
-from `~/.codex/sessions/**` for the pane's project root; ambiguous candidates
-are ignored instead of guessed.
+matching transcript when enabled. Codex first reads the pane terminal output for
+the explicit `codex resume <session-id>` command that Codex prints on exit, then
+falls back to unambiguous `session_meta` entries from `~/.codex/sessions/**` for
+the pane's project root. Sidepanes does not guess between ambiguous candidates.
 
 Remembered sessions are stored under Neovim's state directory by default. The
 registry writes with an atomic rename and a lock directory, merges existing
@@ -289,7 +290,7 @@ Public tuning and extension points:
 | `terminal.auto_resume` / `terminal.resume.enabled` | Turn auto-resume off entirely. |
 | `terminal.resume.infer_from_transcripts` | Disable transcript inference for stricter behavior. |
 | `terminal.resume.use_claude_pid_metadata` | Disable Claude PID metadata lookup. |
-| `terminal.resume.mechanisms` | Enable, disable, or reorder built-in mechanism names: `"hook"`, `"pid_metadata"`, `"transcript"`. |
+| `terminal.resume.mechanisms` | Enable, disable, or reorder built-in mechanism names: `"hook"`, `"pid_metadata"`, `"terminal_output"`, `"transcript"`. |
 | `terminal.resume.resolver` | Provide custom session-id discovery and validation. |
 | `terminal.resume.store_path` | Change or disable the persisted registry. |
 | `terminal.resume.store_lock_timeout_ms` | Tune how long a registry save waits for another writer. |

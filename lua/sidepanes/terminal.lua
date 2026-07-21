@@ -78,6 +78,19 @@ local function resume_failure_action(state)
     return "fresh"
 end
 
+local function refresh_agent_context(state, deps, ctx)
+    agent_session.refresh_context(state, ctx)
+    deps.update_sticky_heading()
+end
+
+local function defer_refresh_agent_context(state, deps, key, ctx, delay_ms)
+    vim.defer_fn(function()
+        if state.terminals[key] == ctx then
+            refresh_agent_context(state, deps, ctx)
+        end
+    end, delay_ms)
+end
+
 local function clear_resume_badge_for_context(ctx, deps)
     if not (ctx and ctx.resume_badge_visible) then
         return false
@@ -324,8 +337,9 @@ function M.start(state, deps, tool_name, preset_name, root)
                     return
                 end
 
-                agent_session.refresh_context(state, ctx)
-                deps.update_sticky_heading()
+                refresh_agent_context(state, deps, ctx)
+                defer_refresh_agent_context(state, deps, key, ctx, 100)
+                defer_refresh_agent_context(state, deps, key, ctx, 500)
             end,
         })
     end)
@@ -344,11 +358,10 @@ function M.start(state, deps, tool_name, preset_name, root)
     end
 
     if agent_session.is_supported(tool_name) then
-        agent_session.refresh_context(state, ctx)
+        refresh_agent_context(state, deps, ctx)
         vim.defer_fn(function()
             if state.terminals[key] == ctx then
-                agent_session.refresh_context(state, ctx)
-                deps.update_sticky_heading()
+                refresh_agent_context(state, deps, ctx)
             end
         end, 1000)
     end

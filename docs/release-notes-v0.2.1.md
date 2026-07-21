@@ -27,6 +27,8 @@ Changes:
 - Codex and Claude no longer adopt arbitrary latest project transcripts on first
   open.
 - Remembered sessions are scoped by canonical project root.
+- Codex now captures the explicit `codex resume <session-id>` command printed in
+  the terminal on exit, including when Neovim wraps the long line.
 - Project root detection uses Neovim `vim.fs.root()` semantics for buffers and
   paths, including string markers, function markers, and nested equal-priority
   marker groups.
@@ -36,8 +38,8 @@ Changes:
   rules.
 - The Sidepanes agent-session registry uses atomic writes, a stale-recovering
   writer lock, and merge-before-save behavior.
-- Remembered sessions validate hook, PID metadata, or transcript evidence before
-  resume.
+- Remembered sessions validate hook, PID metadata, terminal-output capture, or
+  transcript evidence before resume.
 - Custom resolver records are revalidated before reuse, and resolver callbacks
   receive a stable context copy rather than mutable Sidepanes internals.
 - Ambiguous same-root Codex transcript candidates are ignored instead of guessed.

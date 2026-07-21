@@ -201,7 +201,7 @@ require("sidepanes").setup({
       use_claude_pid_metadata = true,
       mechanisms = {
         claude = { "hook", "pid_metadata", "transcript" },
-        codex = { "transcript" },
+        codex = { "terminal_output", "transcript" },
       },
       store_path = nil,
       store_lock_timeout_ms = 1000,
@@ -451,13 +451,18 @@ capture is unavailable, the default Claude mechanism list can still use
 `~/.claude/sessions/<pid>.json` and, when transcript inference is enabled, a
 matching project transcript.
 
-Codex embedded-terminal capture uses an unambiguous `session_meta` entry that
-Codex writes to `~/.codex/sessions/**` for the pane's project root. If multiple
-same-root transcript candidates appear for a fresh Sidepanes context, Sidepanes
-does not guess. Codex also exposes richer thread ids through the app-server/SDK
-surfaces, but Sidepanes' built-in terminal integration does not switch to that
-separate API surface. Users who have a stricter local Codex capture mechanism
-can provide `terminal.resume.resolver`.
+Codex embedded-terminal capture first reads the pane terminal output for the
+explicit `codex resume <session-id>` command that Codex prints on exit. Because
+terminal buffers can wrap long lines, Sidepanes also scans a de-wrapped tail of
+the buffer before storing that Sidepanes-observed session id as capture
+evidence. If terminal-output capture is unavailable, Sidepanes can fall back to
+an unambiguous `session_meta` entry that Codex writes to
+`~/.codex/sessions/**` for the pane's project root. If multiple same-root
+transcript candidates appear for a fresh Sidepanes context, Sidepanes does not
+guess. Codex also exposes richer thread ids through the app-server/SDK surfaces,
+but Sidepanes' built-in terminal integration does not switch to that separate
+API surface. Users who have a stricter local Codex capture mechanism can provide
+`terminal.resume.resolver`.
 
 Remembered sessions are stored under Neovim's state directory by default. The
 registry writes with an atomic rename and a lock directory, merges existing
@@ -478,7 +483,7 @@ Public tuning and extension points:
 | `terminal.auto_resume` / `terminal.resume.enabled` | Turn auto-resume off entirely. |
 | `terminal.resume.infer_from_transcripts` | Disable transcript inference for stricter behavior. |
 | `terminal.resume.use_claude_pid_metadata` | Disable Claude PID metadata lookup. |
-| `terminal.resume.mechanisms` | Enable, disable, or reorder built-in mechanism names: `"hook"`, `"pid_metadata"`, `"transcript"`. |
+| `terminal.resume.mechanisms` | Enable, disable, or reorder built-in mechanism names: `"hook"`, `"pid_metadata"`, `"terminal_output"`, `"transcript"`. |
 | `terminal.resume.resolver` | Provide custom session-id discovery and validation. |
 | `terminal.resume.store_path` | Change or disable the persisted registry. |
 | `terminal.resume.store_lock_timeout_ms` | Tune how long a registry save waits for another writer. |

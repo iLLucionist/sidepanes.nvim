@@ -1335,6 +1335,121 @@ test("opening Codex resumes the same Sidepanes-owned session after terminal loss
     end)
 end)
 
+test("opening Codex captures resume id from terminal output after exit", function()
+    reset_pane()
+
+    local home = helpers.tmp_path("sidepanes-agent-home-codex-output-reopen")
+    local bin = helpers.tmp_path("sidepanes-agent-bin-codex-output-reopen")
+    local root = root_fixture("agent-session-codex-output-reopen-root")
+    local args_file = helpers.tmp_path("sidepanes-agent-codex-output-reopen-args.txt")
+    local fake_codex = bin .. "/codex"
+    local session_id = "019f84ba-6493-7ca3-b390-77bd025962e6"
+
+    vim.fn.delete(home, "rf")
+    vim.fn.delete(bin, "rf")
+    vim.fn.delete(args_file)
+    mkdir(bin)
+    write(fake_codex, {
+        "#!/bin/sh",
+        "printf 'run:%s\\n' \"$*\" >> " .. vim.fn.shellescape(args_file),
+        "if [ \"$1\" = \"resume\" ]; then",
+        "  sleep 10",
+        "else",
+        "  printf '%s\\n' 'To continue this session, run codex resume " .. session_id .. "'",
+        "fi",
+    })
+    vim.fn.setfperm(fake_codex, "rwxr-xr-x")
+
+    with_home(home, function()
+        pane.setup({
+            tools = {
+                codex = {
+                    label = "Codex",
+                    cmd = fake_codex,
+                    include_cd_arg = true,
+                    presets = { { name = "default", label = "Default", args = {} } },
+                },
+            },
+        })
+
+        local first = pane.open_terminal("codex", nil, { root = root, focus = false })
+        local remembered = vim.wait(2500, function()
+            return first and not util.is_running(first.job_id) and pane.agent_sessions[first.key] and pane.agent_sessions[first.key].session_id == session_id
+        end, 50)
+
+        assert(remembered, "Codex resume id was not captured from terminal output:\n" .. table.concat(vim.api.nvim_buf_get_lines(first.bufnr, 0, -1, false), "\n"))
+        assert(pane.agent_sessions[first.key].source == "terminal_output", "Codex terminal output source was not recorded")
+        assert(vim.fn.filereadable(pane.agent_sessions[first.key].capture_path or "") == 1, "Codex terminal output capture file was not written")
+
+        local loaded = {
+            config = pane.config,
+            agent_sessions = {},
+        }
+
+        assert(agent_session.load_store(loaded), "Codex terminal output session was not persisted")
+        assert(agent_session.resolve_resume(loaded, nil, "codex", root).session_id == session_id, "persisted Codex terminal output session did not validate")
+
+        vim.fn.delete(args_file)
+
+        local second = pane.open_terminal("codex", nil, { root = root, focus = false })
+        local wrote_args = vim.wait(1000, function()
+            return vim.fn.filereadable(args_file) == 1
+        end, 20)
+
+        assert(second and second.resumed == true, "Codex terminal did not mark terminal-output reopen as resumed")
+        assert(second.session_id == session_id, "Codex terminal-output reopen used the wrong session id")
+        assert(wrote_args, "fake Codex did not record terminal-output reopen argv")
+        assert(read_file(args_file):find("resume", 1, true), "Codex terminal-output reopen omitted resume subcommand")
+        assert(read_file(args_file):find(session_id, 1, true), "Codex terminal-output reopen omitted captured session id")
+    end)
+end)
+
+test("Codex terminal output capture respects resume mechanisms config", function()
+    reset_pane()
+
+    local home = helpers.tmp_path("sidepanes-agent-home-codex-output-disabled")
+    local bin = helpers.tmp_path("sidepanes-agent-bin-codex-output-disabled")
+    local root = root_fixture("agent-session-codex-output-disabled-root")
+    local fake_codex = bin .. "/codex"
+
+    vim.fn.delete(home, "rf")
+    vim.fn.delete(bin, "rf")
+    mkdir(bin)
+    write(fake_codex, {
+        "#!/bin/sh",
+        "printf '%s\\n' 'To continue this session, run codex resume disabled-output-session'",
+    })
+    vim.fn.setfperm(fake_codex, "rwxr-xr-x")
+
+    with_home(home, function()
+        pane.setup({
+            terminal = {
+                resume = {
+                    mechanisms = {
+                        codex = { "transcript" },
+                    },
+                },
+            },
+            tools = {
+                codex = {
+                    label = "Codex",
+                    cmd = fake_codex,
+                    include_cd_arg = true,
+                    presets = { { name = "default", label = "Default", args = {} } },
+                },
+            },
+        })
+
+        local ctx = pane.open_terminal("codex", nil, { root = root, focus = false })
+        local stopped = vim.wait(1000, function()
+            return ctx and not util.is_running(ctx.job_id)
+        end, 20)
+
+        assert(stopped, "fake Codex did not exit")
+        assert(not pane.agent_sessions[ctx.key], "Codex terminal output was captured despite disabled terminal_output mechanism")
+    end)
+end)
+
 test("failed remembered Codex resume clears stale session and starts fresh", function()
     reset_pane()
 

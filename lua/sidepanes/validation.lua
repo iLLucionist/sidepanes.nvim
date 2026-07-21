@@ -236,6 +236,7 @@ local function validate_terminal(diagnostics, config)
     local known_resume_mechanisms = {
         hook = true,
         pid_metadata = true,
+        terminal_output = true,
         transcript = true,
     }
 

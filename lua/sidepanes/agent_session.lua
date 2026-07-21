@@ -247,7 +247,7 @@ local function mechanism_enabled(config, tool_name, mechanism)
         if tool_name == "claude" then
             tool_mechanisms = { "hook", "pid_metadata", "transcript" }
         elseif tool_name == "codex" then
-            tool_mechanisms = { "transcript" }
+            tool_mechanisms = { "terminal_output", "transcript" }
         else
             tool_mechanisms = {}
         end
@@ -553,6 +553,84 @@ local function session_from_capture(ctx)
     return nil
 end
 
+local function strip_ansi(text)
+    text = text or ""
+
+    return text:gsub("\27%[[%d;?]*[ -/]*[@-~]", "")
+end
+
+local function codex_resume_id_from_lines(lines)
+    local cleaned = {}
+
+    for index = #lines, 1, -1 do
+        cleaned[index] = strip_ansi(lines[index])
+    end
+
+    for _, text in ipairs({
+        table.concat(cleaned, ""),
+        table.concat(cleaned, " "),
+    }) do
+        local session_id = text:match("codex%s+resume%s+([%w%-%._:]+)")
+
+        if session_id and session_id ~= "" then
+            return session_id
+        end
+    end
+
+    for index = #cleaned, 1, -1 do
+        local line = cleaned[index]
+        local session_id = line:match("codex%s+resume%s+([%w%-%._:]+)")
+
+        if session_id and session_id ~= "" then
+            return session_id
+        end
+    end
+
+    return nil
+end
+
+local function terminal_lines(ctx)
+    if not (ctx and util.valid_buf(ctx.bufnr)) then
+        return {}
+    end
+
+    local count = vim.api.nvim_buf_line_count(ctx.bufnr)
+    local start = math.max(0, count - 200)
+    local ok, lines = pcall(vim.api.nvim_buf_get_lines, ctx.bufnr, start, -1, false)
+
+    return ok and lines or {}
+end
+
+local function session_from_terminal_output(ctx)
+    if not (ctx and ctx.tool_name == "codex") then
+        return nil
+    end
+
+    local session_id = codex_resume_id_from_lines(terminal_lines(ctx))
+
+    if not session_id then
+        return nil
+    end
+
+    local paths = capture_paths(ctx)
+
+    if not write_json(paths.data, {
+        type = "codex_terminal_output",
+        session_id = session_id,
+        cwd = ctx.root,
+        captured_at = os.time(),
+    }) then
+        return session_id, {
+            captured_cwd = ctx.root,
+        }
+    end
+
+    return session_id, {
+        capture_path = paths.data,
+        captured_cwd = ctx.root,
+    }
+end
+
 local function resolver_session_id(result)
     if type(result) == "string" then
         return result
@@ -823,6 +901,11 @@ function M.refresh_context(state, ctx)
     if not session_id then
         session_id, evidence = session_from_capture(ctx)
         source = session_id and "capture" or nil
+    end
+
+    if not session_id and mechanism_enabled(state and state.config or nil, ctx.tool_name, "terminal_output") then
+        session_id, evidence = session_from_terminal_output(ctx)
+        source = session_id and "terminal_output" or nil
     end
 
     if not session_id then
