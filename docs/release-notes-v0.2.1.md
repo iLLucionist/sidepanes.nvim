@@ -72,6 +72,10 @@ Picker behavior:
 - Sidepanes' built-in numeric/letter pickers now treat `Esc`, `q`, and `<C-c>`
   as cancellation. Pressing `<C-c>` in the pane switcher closes the picker
   instead of surfacing Neovim's `Keyboard interrupt` error.
+- The Markdown document picker now focuses the selected Sidepanes Markdown pane
+  by default. Set `lifecycle.focus_on_pick = false` to keep focus in the
+  previous window after `<leader>mP`, `:Sidepanes pick`, or `pick()`. Direct
+  `open(path)` calls remain non-focusing.
 
 Extension boundary:
 

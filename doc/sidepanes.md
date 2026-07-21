@@ -189,6 +189,7 @@ require("sidepanes").setup({
   },
   lifecycle = {
     focus_on_switch = true,
+    focus_on_pick = true,
     focus_on_ask = true,
     shutdown_on_exit = true,
     shutdown_timeout_ms = 300,
@@ -280,6 +281,7 @@ Grouped options normalize to runtime keys:
 | `markdown.reflow.protect_tables` | `external_reflow_protect_tables` |
 | `markdown.reflow.margin` | `reflow_margin` |
 | `lifecycle.focus_on_switch` | `focus_on_switch` |
+| `lifecycle.focus_on_pick` | `focus_on_pick` |
 | `lifecycle.focus_on_ask` | `focus_on_ask` |
 | `lifecycle.shutdown_on_exit` | `shutdown_on_exit` |
 | `lifecycle.shutdown_timeout_ms` | `shutdown_timeout_ms` |
@@ -336,6 +338,11 @@ sidepanes.toggle_sticky_relative_width()
 
 Sidepanes' built-in numeric/letter pickers accept one-key choices without
 Enter. Press `Esc`, `q`, or `<C-c>` to cancel without changing panes or width.
+
+The Markdown document picker focuses the Sidepanes Markdown pane after a
+selection by default. Configure `lifecycle.focus_on_pick = false` to keep focus
+in the previous window after `pick()`, `:Sidepanes pick`, or
+`:SidepanesPick`. Direct `open(path)` calls remain non-focusing.
 
 When `layout.sticky_relative_width` is false, relative values are resolved once
 to columns. When it is true, relative values keep their ratio as Neovim columns

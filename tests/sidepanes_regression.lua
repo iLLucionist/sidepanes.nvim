@@ -2044,6 +2044,101 @@ test("document picker entries preserve display and resolve absolute values", fun
     assert(glob_entry.ordinal == absolute, "glob entry ordinal changed")
 end)
 
+test("document picker can focus selected markdown pane", function()
+    reset_pane()
+
+    local root = root_fixture("document-picker-focus-test")
+    local doc = root .. "/docs/doc.md"
+    local selected = nil
+    local previous_modules = {
+        telescope = package.loaded.telescope,
+        pickers = package.loaded["telescope.pickers"],
+        finders = package.loaded["telescope.finders"],
+        config = package.loaded["telescope.config"],
+        actions = package.loaded["telescope.actions"],
+        action_state = package.loaded["telescope.actions.state"],
+    }
+
+    write(doc, { "# Doc" })
+
+    package.loaded.telescope = {}
+    package.loaded["telescope.finders"] = {
+        new_oneshot_job = function()
+            return {}
+        end,
+        new_table = function()
+            return {}
+        end,
+    }
+    package.loaded["telescope.config"] = {
+        values = {
+            file_sorter = function()
+                return {}
+            end,
+        },
+    }
+    package.loaded["telescope.actions.state"] = {
+        get_selected_entry = function()
+            return { value = selected }
+        end,
+    }
+    package.loaded["telescope.actions"] = {
+        close = function() end,
+        select_default = {
+            replace = function(_, fn)
+                package.loaded["telescope.actions"]._select_default = fn
+            end,
+        },
+    }
+    package.loaded["telescope.pickers"] = {
+        new = function(_, opts)
+            return {
+                find = function()
+                    opts.attach_mappings(1)
+                    package.loaded["telescope.actions"]._select_default()
+                end,
+            }
+        end,
+    }
+
+    local ok, err = xpcall(function()
+        local origin = vim.api.nvim_get_current_win()
+
+        selected = doc
+        pane.setup({
+            lifecycle = {
+                focus_on_pick = true,
+            },
+        })
+        pane.pick()
+        assert(vim.api.nvim_get_current_win() == pane.winid, "document picker did not focus selected markdown pane")
+        assert(pane.last_focus_win == origin, "document picker did not remember previous focus window")
+
+        pane.focus_toggle()
+        assert(vim.api.nvim_get_current_win() == origin, "focus toggle did not return after focused pick")
+
+        selected = doc
+        pane.setup({
+            lifecycle = {
+                focus_on_pick = false,
+            },
+        })
+        pane.pick()
+        assert(vim.api.nvim_get_current_win() == origin, "document picker focused pane despite focus_on_pick=false")
+    end, debug.traceback)
+
+    package.loaded.telescope = previous_modules.telescope
+    package.loaded["telescope.pickers"] = previous_modules.pickers
+    package.loaded["telescope.finders"] = previous_modules.finders
+    package.loaded["telescope.config"] = previous_modules.config
+    package.loaded["telescope.actions"] = previous_modules.actions
+    package.loaded["telescope.actions.state"] = previous_modules.action_state
+
+    if not ok then
+        error(err)
+    end
+end)
+
 test("heading picker collects markdown headings with levels and cleaned titles", function()
     local bufnr = vim.api.nvim_create_buf(false, true)
 
@@ -2704,6 +2799,7 @@ test("config normalizes ergonomic markdown and tool setup", function()
         },
         lifecycle = {
             focus_on_switch = false,
+            focus_on_pick = false,
             focus_on_ask = false,
             shutdown_on_exit = false,
             shutdown_timeout_ms = 123,
@@ -2775,6 +2871,7 @@ test("config normalizes ergonomic markdown and tool setup", function()
     assert(pane.config.external_reflow_protect_tables == false, "markdown.reflow.protect_tables did not map to external_reflow_protect_tables")
     assert(pane.config.reflow_margin == 12, "markdown.reflow.margin did not map to reflow_margin")
     assert(pane.config.focus_on_switch == false, "lifecycle.focus_on_switch did not map to focus_on_switch")
+    assert(pane.config.focus_on_pick == false, "lifecycle.focus_on_pick did not map to focus_on_pick")
     assert(pane.config.focus_on_ask == false, "lifecycle.focus_on_ask did not map to focus_on_ask")
     assert(pane.config.shutdown_on_exit == false, "lifecycle.shutdown_on_exit did not map to shutdown_on_exit")
     assert(pane.config.shutdown_timeout_ms == 123, "lifecycle.shutdown_timeout_ms did not map to shutdown_timeout_ms")
@@ -2859,6 +2956,7 @@ test("canonical default setup normalizes to runtime defaults", function()
     assert(setup.markdown.reload_badge_ms == defaults.config.reload_badge_ms, "default setup reload badge timeout was wrong")
     assert(vim.deep_equal(setup.markdown.reload_badge, defaults.config.reload_badge), "default setup reload badge was wrong")
     assert(setup.markdown.reflow.enabled == defaults.config.auto_reflow, "default setup reflow enabled was wrong")
+    assert(setup.lifecycle.focus_on_pick == defaults.config.focus_on_pick, "default setup focus-on-pick was wrong")
     assert(setup.lifecycle.shutdown_on_exit == defaults.config.shutdown_on_exit, "default setup lifecycle was wrong")
     assert(setup.project.root_markers[1] == ".git", "default setup project root marker was wrong")
     assert(setup.project.fallback == defaults.config.project_root_fallback, "default setup project fallback was wrong")
@@ -2904,6 +3002,7 @@ test("runtime config converts to canonical setup shape", function()
         external_reflow_protect_tables = false,
         reflow_margin = 5,
         focus_on_switch = false,
+        focus_on_pick = false,
         focus_on_ask = false,
         shutdown_on_exit = false,
         shutdown_timeout_ms = 99,
@@ -2960,6 +3059,7 @@ test("runtime config converts to canonical setup shape", function()
     assert(setup.markdown.reflow.protect_tables == false, "to_setup lost table protection")
     assert(setup.markdown.reflow.margin == 5, "to_setup lost reflow margin")
     assert(setup.lifecycle.focus_on_switch == false, "to_setup lost focus_on_switch")
+    assert(setup.lifecycle.focus_on_pick == false, "to_setup lost focus_on_pick")
     assert(setup.lifecycle.focus_on_ask == false, "to_setup lost focus_on_ask")
     assert(setup.lifecycle.shutdown_on_exit == false, "to_setup lost shutdown_on_exit")
     assert(setup.lifecycle.shutdown_timeout_ms == 99, "to_setup lost shutdown timeout")

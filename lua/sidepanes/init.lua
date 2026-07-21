@@ -27,6 +27,7 @@ local question = require("sidepanes.question")
 local render = require("sidepanes.render")
 local switcher = require("sidepanes.switcher")
 local terminal = require("sidepanes.terminal")
+local util = require("sidepanes.util")
 local pane_window = require("sidepanes.window")
 local viewer = require("sidepanes.viewer")
 local width = require("sidepanes.width")
@@ -704,7 +705,19 @@ end
 
 --- Pick a markdown document and open it in the pane.
 function M.pick()
-    document_picker.pick(M.open)
+    document_picker.pick(function(path)
+        M.open(path)
+
+        if M.config.focus_on_pick and util.valid_win(M.winid) then
+            local previous = vim.api.nvim_get_current_win()
+
+            if previous ~= M.winid and util.valid_win(previous) then
+                M.last_focus_win = previous
+            end
+
+            vim.api.nvim_set_current_win(M.winid)
+        end
+    end)
 end
 
 --- Pick a markdown heading in the current buffer or Sidepanes viewer.

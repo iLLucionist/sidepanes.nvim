@@ -69,6 +69,10 @@ but they should be called out clearly in this changelog.
 - The pane switcher title now includes the detected project name, making the
   current root scope visible while switching between Markdown and terminal
   panes.
+- Markdown document picking now focuses the selected Sidepanes Markdown pane by
+  default. Set `lifecycle.focus_on_pick = false` to keep focus in the previous
+  window after `<leader>mP`, `:Sidepanes pick`, or `pick()`. Direct `open(path)`
+  calls remain non-focusing.
 
 ### Fixed
 
