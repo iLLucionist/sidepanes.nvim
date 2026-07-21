@@ -291,6 +291,7 @@ runtime config.
       project = {
         root_markers = { ".git" },
         fallback = "buffer_dir",
+        -- Override this for wildcard, glob, monorepo, or non-file project logic.
         resolver = nil,
       },
       validation = {
@@ -459,12 +460,19 @@ or Claude session just because one exists. The resume key is always:
 Project roots use Neovim's `vim.fs.root()` marker model when available. By
 default, Sidepanes finds the nearest parent containing `.git`; if no marker is
 found, it uses the current file's directory. Configure `project.root_markers`
-with strings, functions, or nested equal-priority marker groups such as
+with the same marker shapes Neovim accepts: strings, functions, or nested
+equal-priority marker groups such as
 `{ { "pyproject.toml", "package.json" }, ".git" }`. Set `project.fallback` to
-`"cwd"` when markerless files should share the current working directory, or
-provide `project.resolver = function(source, opts) return root end` to delegate
-root detection to your own logic. The resolver receives a buffer number or path
-as `source` and an `opts.kind` of `"buffer"` or `"path"`.
+`"cwd"` when markerless files should share the current working directory.
+
+Sidepanes intentionally does not clone the older
+`lspconfig.util.root_pattern()` wildcard/glob semantics. For unusual boundaries
+such as `*.sln`, generated worktrees, monorepo package rules, or tool-specific
+project files, provide `project.resolver = function(source, opts) return root
+end`. The resolver runs before marker lookup, receives a buffer number or path
+as `source` and an `opts.kind` of `"buffer"` or `"path"`, and should return the
+root directory Sidepanes should use as the pane/restart/resume boundary. Return
+`nil` to let Sidepanes continue with `vim.fs.root()`.
 
 When Codex or Claude is opened, Sidepanes:
 

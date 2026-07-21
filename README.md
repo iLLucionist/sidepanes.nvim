@@ -104,6 +104,7 @@ reflow.
       project = {
         root_markers = { ".git" },
         fallback = "buffer_dir",
+        -- Override this for wildcard, glob, monorepo, or non-file project logic.
         resolver = nil,
       },
       commands = true,
@@ -233,10 +234,29 @@ tool name + detected project root
 
 Project root detection uses Neovim's `vim.fs.root()` marker model when
 available. It defaults to the nearest `.git` parent, falling back to the current
-file's directory. Configure `project.root_markers` with strings, functions, or
-nested equal-priority marker groups such as
-`{ { "pyproject.toml", "package.json" }, ".git" }`. Use `project.fallback` or
-`project.resolver` when your real project boundary needs different behavior.
+file's directory. Configure `project.root_markers` with the same marker shapes
+Neovim accepts: strings, functions, or nested equal-priority marker groups such
+as `{ { "pyproject.toml", "package.json" }, ".git" }`.
+
+Sidepanes intentionally does not clone the older
+`lspconfig.util.root_pattern()` wildcard/glob semantics. For unusual boundaries
+such as `*.sln`, generated worktrees, monorepo package rules, or tool-specific
+project files, use `project.resolver`. The resolver runs before marker lookup,
+receives either a buffer number or path plus `opts.kind`, and should return the
+root directory Sidepanes should use as the resume boundary:
+
+```lua
+require("sidepanes").setup({
+  project = {
+    root_markers = { { "pyproject.toml", "package.json" }, ".git" },
+    fallback = "buffer_dir",
+    resolver = function(source, opts)
+      -- Return nil to let Sidepanes continue with vim.fs.root().
+      -- Return a path to take full control for this buffer/path.
+    end,
+  },
+})
+```
 
 When Codex or Claude is opened, Sidepanes:
 

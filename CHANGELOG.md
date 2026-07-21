@@ -20,6 +20,10 @@ but they should be called out clearly in this changelog.
   as the safety boundary for root-scoped Codex and Claude panes. On modern
   Neovim it uses `vim.fs.root()` semantics for both buffers and paths, including
   string markers, function markers, and nested equal-priority marker groups.
+  Sidepanes intentionally does not clone older
+  `lspconfig.util.root_pattern()` wildcard/glob semantics; users with glob,
+  monorepo, generated-worktree, or tool-specific boundaries should implement
+  those rules in `project.resolver`, which runs before marker lookup.
 - Agent recovery can now be made stricter or disabled with
   `terminal.auto_resume`, `terminal.resume.enabled`,
   `terminal.resume.infer_from_transcripts`, and

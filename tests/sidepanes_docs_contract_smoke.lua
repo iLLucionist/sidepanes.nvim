@@ -193,6 +193,8 @@ for _, item in ipairs({
     "project.resolver",
     "vim.fs.root()",
     "nested equal-priority marker groups",
+    "lspconfig.util.root_pattern()",
+    "wildcard/glob",
     "[RESUMED]",
     "SidepanesResumed",
     "SessionStart",

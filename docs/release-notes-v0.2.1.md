@@ -30,6 +30,10 @@ Changes:
 - Project root detection uses Neovim `vim.fs.root()` semantics for buffers and
   paths, including string markers, function markers, and nested equal-priority
   marker groups.
+- Wildcard/glob project boundaries are handled through `project.resolver`
+  instead of a Sidepanes clone of `lspconfig.util.root_pattern()`. Use this for
+  monorepos, generated worktrees, `*.sln`-style roots, or tool-specific project
+  rules.
 - The Sidepanes agent-session registry uses atomic writes, a stale-recovering
   writer lock, and merge-before-save behavior.
 - Remembered sessions validate hook, PID metadata, or transcript evidence before
@@ -56,6 +60,9 @@ Configuration:
   crash recovery.
 - `terminal.resume.failure_timeout_ms` and `terminal.resume.failure_action`
   tune what happens when a stale resume id fails after launch.
+- `project.root_markers`, `project.fallback`, and `project.resolver` control
+  the root Sidepanes uses as the pane/restart/resume boundary. The resolver runs
+  before marker lookup and can return `nil` to continue with `vim.fs.root()`.
 
 Extension boundary:
 
