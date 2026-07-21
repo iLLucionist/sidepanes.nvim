@@ -24,10 +24,17 @@ but they should be called out clearly in this changelog.
   `terminal.resume.use_claude_pid_metadata`.
 - Agent session capture is now configurable with
   `terminal.resume.mechanisms`, `terminal.resume.store_path`, and
-  `terminal.resume.resolver`. The default registry stores only
-  Sidepanes-captured session ids under Neovim's state directory so Codex and
-  Claude can resume after a Neovim restart without adopting unrelated external
-  sessions.
+  `terminal.resume.resolver`. Custom resolvers can now return evidence and are
+  revalidated before Sidepanes reuses resolver-sourced records. The default
+  registry stores only Sidepanes-captured session ids under Neovim's state
+  directory so Codex and Claude can resume after a Neovim restart without
+  adopting unrelated external sessions.
+- Agent resume registry contention and crash recovery are configurable with
+  `terminal.resume.store_lock_timeout_ms` and
+  `terminal.resume.store_lock_stale_ms`.
+- Stale resume failure handling is configurable with
+  `terminal.resume.failure_timeout_ms` and
+  `terminal.resume.failure_action`.
 - Claude recovery now captures session ids through a Sidepanes-injected
   `SessionStart` hook when available. Codex embedded-terminal recovery continues
   to use Codex `session_meta` entries for Sidepanes-owned sessions.
@@ -36,8 +43,9 @@ but they should be called out clearly in this changelog.
   treats recovery as best-effort, project-scoped CLI session resume rather than
   terminal pty reattachment.
 - The persisted agent-session registry now uses canonical project-root keys,
-  atomic writes, and merge-before-save behavior so independent Neovim instances
-  are less likely to clobber each other's remembered Sidepanes sessions.
+  atomic writes, a stale-recovering writer lock, and merge-before-save behavior
+  so independent Neovim instances are less likely to clobber each other's
+  remembered Sidepanes sessions.
 
 ### Fixed
 
@@ -50,6 +58,8 @@ but they should be called out clearly in this changelog.
 - Remembered agent sessions now validate their source evidence before resume.
   Missing or mismatched hook captures, PID metadata, or transcripts are cleared
   instead of being used.
+- Resolver-sourced remembered sessions are now revalidated through the custom
+  resolver before reuse instead of being trusted indefinitely.
 - Codex transcript inference now refuses ambiguous same-root candidates instead
   of guessing which newly written transcript belongs to the Sidepanes pane.
 - Resumed Codex and Claude processes that exit immediately with a non-zero code

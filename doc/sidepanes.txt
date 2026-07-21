@@ -271,7 +271,11 @@ runtime config.
             codex = { "transcript" },
           },
           store_path = nil,
+          store_lock_timeout_ms = 1000,
+          store_lock_stale_ms = 10000,
           resolver = nil,
+          failure_timeout_ms = 750,
+          failure_action = "fresh",
         },
         agent_resume_badge_ms = 0,
         agent_resume_badge = {
@@ -457,10 +461,14 @@ when the CLI exposes one. Opening Codex or Claude first reuses a live pane-owned
 terminal buffer and Neovim job. If that live check fails because the terminal
 exited, crashed, or its buffer was lost, Sidepanes builds a recovery candidate
 from the current Sidepanes context or a Sidepanes-owned session record persisted
-under Neovim's state directory. Registry writes are atomic and merge with any
-existing registry entries so independent Neovim instances do not casually
-clobber each other. Sidepanes does not resume arbitrary latest project
-transcripts on first open.
+under Neovim's state directory. Registry writes use an atomic rename plus a
+lock directory and merge with any existing registry entries so independent
+Neovim instances do not casually clobber each other. If Neovim or the plugin
+crashes while holding the write lock, Sidepanes treats the lock as stale after
+`terminal.resume.store_lock_stale_ms` and recovers it. Reads stay lock-free
+because a registry reader sees either the previous complete file or the next
+complete file. Sidepanes does not resume arbitrary latest project transcripts
+on first open.
 
 Claude session capture uses a Sidepanes-injected `SessionStart` hook by default.
 Sidepanes passes a temporary `--settings` file for the pane process only,
@@ -477,12 +485,20 @@ surfaces, but Sidepanes' built-in terminal integration does not switch to that
 separate API surface. Users who have a stricter local Codex capture mechanism
 can provide `terminal.resume.resolver`.
 
+Custom resolvers receive `resolver(tool_name, ctx, opts)`. During capture,
+`opts.purpose` is `"capture"` and the resolver can return a session id string or
+a table such as `{ session_id = "...", evidence = { resolver_state = ... } }`.
+For resolver-sourced remembered records, Sidepanes calls the resolver again
+with `opts.purpose = "validate"` and `opts.remembered` before reuse. Return the
+same session id, `true`, or `{ valid = true }` to keep the record; return
+`false`, `nil`, or a different id to make Sidepanes clear it and start fresh.
+
 Remembered sessions validate their source evidence before resume. Hook captures,
 Claude PID metadata, and Codex/Claude transcript paths must still exist and
 match the requested tool, root, and session id. Stale or mismatched registry
 entries are cleared and treated as fresh starts. If a resumed Codex or Claude
-process exits immediately with a non-zero status, Sidepanes clears the stale
-resume id and starts the tool fresh once.
+process exits quickly with a non-zero status, Sidepanes clears the stale resume
+id and starts the tool fresh once by default.
 
 Set `terminal.auto_resume = false` or `terminal.resume.enabled = false` to
 disable automatic resume command rewriting. Set
@@ -493,7 +509,15 @@ not infer a session id from the latest matching transcript. Set
 replace the ordered built-in mechanism lists, `terminal.resume.store_path` to
 change or disable the persistent Sidepanes registry, or
 `terminal.resume.resolver = function(tool_name, ctx, opts) return session_id end`
-to provide a custom capture source.
+to provide a custom capture source. Set
+`terminal.resume.store_lock_timeout_ms` if you want registry saves to wait
+longer or fail faster under multi-Neovim contention. Set
+`terminal.resume.store_lock_stale_ms` if your environment regularly suspends
+Neovim for long periods or if you want crash recovery to happen sooner. Set
+`terminal.resume.failure_timeout_ms` for CLIs that reject stale resume ids more
+slowly, and set `terminal.resume.failure_action` to `"notify"` or `"ignore"` if
+you do not want Sidepanes to automatically start fresh after a quick failed
+resume.
 
 When a recovery candidate is launched, Claude receives
 `claude --resume <session-id>` and Codex receives `codex resume <session-id>`.

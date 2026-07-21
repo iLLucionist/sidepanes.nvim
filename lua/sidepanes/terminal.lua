@@ -56,6 +56,28 @@ local function now_ms()
     return uv and uv.now and uv.now() or (os.time() * 1000)
 end
 
+local function resume_failure_timeout_ms(state)
+    local config = state and state.config or {}
+    local timeout = tonumber(config.agent_resume_failure_timeout_ms)
+
+    if timeout == nil then
+        timeout = 750
+    end
+
+    return math.max(0, math.floor(timeout))
+end
+
+local function resume_failure_action(state)
+    local config = state and state.config or {}
+    local action = config.agent_resume_failure_action
+
+    if action == "notify" or action == "ignore" then
+        return action
+    end
+
+    return "fresh"
+end
+
 local function clear_resume_badge_for_context(ctx, deps)
     if not (ctx and ctx.resume_badge_visible) then
         return false
@@ -280,7 +302,10 @@ function M.start(state, deps, tool_name, preset_name, root)
         ctx.job_id = vim.fn.termopen(cmd, {
             cwd = root,
             on_exit = function(_, exit_code)
-                if ctx.resumed and not ctx.shutdown_requested and exit_code ~= 0 and not ctx.resume_retry_attempted and now_ms() - (ctx.started_at_ms or 0) <= 750 then
+                local failure_action = resume_failure_action(state)
+                local failure_timeout = resume_failure_timeout_ms(state)
+
+                if ctx.resumed and failure_action ~= "ignore" and not ctx.shutdown_requested and exit_code ~= 0 and not ctx.resume_retry_attempted and now_ms() - (ctx.started_at_ms or 0) <= failure_timeout then
                     ctx.resume_retry_attempted = true
                     agent_session.forget_session(state, ctx.tool_name, ctx.root)
                     vim.schedule(function()
@@ -288,8 +313,13 @@ function M.start(state, deps, tool_name, preset_name, root)
                             state.terminals[key] = nil
                         end
 
-                        vim.notify("Recovered " .. (ctx.tool_label or ctx.tool_name or "agent") .. " session exited quickly; cleared stale resume id and starting fresh.", vim.log.levels.WARN)
-                        M.start(state, deps, tool_name, preset_name, root)
+                        if failure_action == "fresh" then
+                            vim.notify("Recovered " .. (ctx.tool_label or ctx.tool_name or "agent") .. " session exited quickly; cleared stale resume id and starting fresh.", vim.log.levels.WARN)
+                            M.start(state, deps, tool_name, preset_name, root)
+                        else
+                            vim.notify("Recovered " .. (ctx.tool_label or ctx.tool_name or "agent") .. " session exited quickly; cleared stale resume id.", vim.log.levels.WARN)
+                            deps.update_sticky_heading()
+                        end
                     end)
                     return
                 end

@@ -84,7 +84,11 @@ reflow.
             codex = { "transcript" },
           },
           store_path = nil,
+          store_lock_timeout_ms = 1000,
+          store_lock_stale_ms = 10000,
           resolver = nil,
+          failure_timeout_ms = 750,
+          failure_action = "fresh",
         },
         agent_resume_badge_ms = 0,
         agent_resume_badge = {
@@ -224,16 +228,25 @@ are available in your environment.
    metadata. Sidepanes persists only Sidepanes-captured session ids in its
    Neovim state directory using canonical project-root keys, so a later Neovim
    process can resume a pane-owned session without adopting arbitrary external
-   sessions. Remembered sessions validate their hook, PID metadata, or
-   transcript evidence before resume; stale evidence is cleared and an
-   immediately failing resumed CLI starts fresh once. Claude uses a
-   Sidepanes-injected `SessionStart` hook by default; Codex in embedded-terminal
-   mode uses unambiguous `session_meta` entries written to
-   `~/.codex/sessions/**`. Set `terminal.auto_resume = false` or
-   `terminal.resume.enabled = false` to always start fresh. Set
-   `terminal.resume.infer_from_transcripts = false` when you only want
-   hook/custom/persisted ids, and use `terminal.resume.resolver` or
+  sessions. Registry writes use an atomic rename plus a lock directory, and a
+  stale lock is recovered after `terminal.resume.store_lock_stale_ms` so a
+  crashed Neovim/plugin instance does not permanently block future saves.
+  Remembered sessions validate their hook, PID metadata, transcript, or custom
+  resolver evidence before resume; stale evidence is cleared and an immediately
+  failing resumed CLI starts fresh once. Claude uses a
+  Sidepanes-injected `SessionStart` hook by default; Codex in embedded-terminal
+  mode uses unambiguous `session_meta` entries written to
+  `~/.codex/sessions/**`. Set `terminal.auto_resume = false` or
+  `terminal.resume.enabled = false` to always start fresh. Set
+  `terminal.resume.infer_from_transcripts = false` when you only want
+  hook/custom/persisted ids, and use `terminal.resume.resolver` or
    `terminal.resume.mechanisms` to provide a stricter site-specific mechanism.
+   Custom resolvers can return either a session id string or a table such as
+   `{ session_id = "...", evidence = { resolver_state = ... } }`; Sidepanes
+   later calls the resolver with `opts.purpose = "validate"` before reusing that
+   resolver-sourced record. Tune `terminal.resume.failure_timeout_ms` and
+   `terminal.resume.failure_action` when a local CLI needs more time to reject a
+   stale resume id, or when you prefer notification over automatic fresh retry.
 
 7. If the pane feels too wide or narrow, use `<leader>p-`, `<leader>p+`, or
    `<leader>pw` to adjust it. Use `<leader>p%` when you want relative widths to

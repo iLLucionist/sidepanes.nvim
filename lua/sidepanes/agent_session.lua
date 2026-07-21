@@ -34,6 +34,12 @@ local function read_json(path)
     return nil
 end
 
+local function now_ms()
+    local uv = vim.uv or vim.loop
+
+    return uv and uv.now and uv.now() or (os.time() * 1000)
+end
+
 local function write_json(path, value)
     if not path then
         return false
@@ -220,6 +226,8 @@ local function resume_options(config)
         use_claude_pid_metadata = config.agent_resume_use_claude_pid_metadata ~= false,
         mechanisms = config.agent_resume_mechanisms,
         store_path = config.agent_resume_store_path,
+        store_lock_timeout_ms = config.agent_resume_store_lock_timeout_ms,
+        store_lock_stale_ms = config.agent_resume_store_lock_stale_ms,
         resolver = config.agent_resume_resolver,
     }
 end
@@ -268,6 +276,65 @@ local function store_path(config)
     end
 
     return state_dir() .. "/agent_sessions.json"
+end
+
+local function lock_path(path)
+    return path .. ".lock"
+end
+
+local function lock_age_ms(path)
+    local owner = read_json(path .. "/owner.json")
+
+    if type(owner) == "table" and type(owner.created_at_ms) == "number" then
+        return now_ms() - owner.created_at_ms
+    end
+
+    local mtime = vim.fn.getftime(path)
+
+    if mtime > 0 then
+        return now_ms() - (mtime * 1000)
+    end
+
+    return 0
+end
+
+local function acquire_store_lock(path, config)
+    local options = resume_options(config)
+    local timeout_ms = math.max(0, tonumber(options.store_lock_timeout_ms) or 1000)
+    local stale_ms = math.max(0, tonumber(options.store_lock_stale_ms) or 10000)
+    local lock = lock_path(path)
+    local deadline = now_ms() + timeout_ms
+
+    vim.fn.mkdir(vim.fn.fnamemodify(path, ":p:h"), "p")
+
+    while true do
+        local ok, created = pcall(vim.fn.mkdir, lock)
+
+        if ok and created == 1 then
+            write_json(lock .. "/owner.json", {
+                pid = vim.fn.getpid(),
+                created_at_ms = now_ms(),
+            })
+
+            return lock
+        end
+
+        if stale_ms > 0 and vim.fn.isdirectory(lock) == 1 and lock_age_ms(lock) > stale_ms then
+            pcall(vim.fn.delete, lock, "rf")
+        elseif now_ms() >= deadline then
+            return nil
+        else
+            vim.wait(math.min(25, math.max(1, deadline - now_ms())), function()
+                return false
+            end)
+        end
+    end
+end
+
+local function release_store_lock(lock)
+    if lock then
+        pcall(vim.fn.delete, lock, "rf")
+    end
 end
 
 local function registry_sessions(decoded)
@@ -399,21 +466,33 @@ function M.save_store(state)
         return false
     end
 
-    local existing = registry_sessions(read_json(path))
-    local sessions = merge_sessions(existing, state.agent_sessions or {})
+    local lock = acquire_store_lock(path, state and state.config or nil)
 
-    for key, deleted_at in pairs(state.agent_session_tombstones or {}) do
-        if not sessions[key] or session_updated_at(sessions[key]) <= deleted_at then
-            sessions[key] = nil
-        end
+    if not lock then
+        return false
     end
 
-    state.agent_sessions = sessions
+    local ok, result = pcall(function()
+        local existing = registry_sessions(read_json(path))
+        local sessions = merge_sessions(existing, state.agent_sessions or {})
 
-    return write_json(path, {
-        version = 1,
-        sessions = sessions,
-    })
+        for key, deleted_at in pairs(state.agent_session_tombstones or {}) do
+            if not sessions[key] or session_updated_at(sessions[key]) <= deleted_at then
+                sessions[key] = nil
+            end
+        end
+
+        state.agent_sessions = sessions
+
+        return write_json(path, {
+            version = 1,
+            sessions = sessions,
+        })
+    end)
+
+    release_store_lock(lock)
+
+    return ok and result == true
 end
 
 local function remember_session(state, ctx, session_id, source, evidence)
@@ -437,11 +516,13 @@ local function remember_session(state, ctx, session_id, source, evidence)
         record.metadata_path = evidence.metadata_path
         record.capture_path = evidence.capture_path
         record.captured_cwd = evidence.captured_cwd
+        record.resolver_state = evidence.resolver_state
     elseif previous and previous.session_id == session_id then
         record.transcript_path = previous.transcript_path
         record.metadata_path = previous.metadata_path
         record.capture_path = previous.capture_path
         record.captured_cwd = previous.captured_cwd
+        record.resolver_state = previous.resolver_state
         record.source = previous.source or source
     end
 
@@ -472,7 +553,33 @@ local function session_from_capture(ctx)
     return nil
 end
 
-local function session_from_custom_resolver(state, ctx)
+local function resolver_session_id(result)
+    if type(result) == "string" then
+        return result
+    elseif type(result) == "table" then
+        return result.session_id or result.sessionId or result.id
+    end
+
+    return nil
+end
+
+local function resolver_evidence(result)
+    if type(result) ~= "table" then
+        return nil
+    end
+
+    local evidence = type(result.evidence) == "table" and vim.deepcopy(result.evidence) or {}
+
+    evidence.transcript_path = evidence.transcript_path or result.transcript_path
+    evidence.metadata_path = evidence.metadata_path or result.metadata_path
+    evidence.capture_path = evidence.capture_path or result.capture_path
+    evidence.captured_cwd = evidence.captured_cwd or result.cwd or result.root
+    evidence.resolver_state = evidence.resolver_state or result.resolver_state
+
+    return evidence
+end
+
+local function call_custom_resolver(state, ctx, purpose, record)
     local resolver = resume_options(state and state.config or nil).resolver
 
     if type(resolver) ~= "function" then
@@ -483,10 +590,23 @@ local function session_from_custom_resolver(state, ctx)
         state = state,
         root = ctx.root,
         key = ctx.key,
+        purpose = purpose,
+        remembered = record,
     })
 
-    if ok and type(session_id) == "string" and session_id ~= "" then
+    if ok then
         return session_id
+    end
+
+    return nil
+end
+
+local function session_from_custom_resolver(state, ctx)
+    local result = call_custom_resolver(state, ctx, "capture")
+    local session_id = resolver_session_id(result)
+
+    if type(session_id) == "string" and session_id ~= "" then
+        return session_id, resolver_evidence(result)
     end
 
     return nil
@@ -611,8 +731,34 @@ local function codex_transcript_matches(record, root)
     return false
 end
 
-local function remembered_session_valid(record, root)
+local function resolver_matches(state, record, root)
+    local ctx = {
+        key = util.terminal_key(record.tool_name, root),
+        tool_name = record.tool_name,
+        root = normalize_root(root),
+        session_id = record.session_id,
+    }
+    local result = call_custom_resolver(state, ctx, "validate", record)
+
+    if result == true then
+        return true
+    elseif type(result) == "table" and result.valid ~= nil then
+        return result.valid == true
+    end
+
+    local session_id = resolver_session_id(result)
+
+    return type(session_id) == "string" and session_id == record.session_id
+end
+
+local function remembered_session_valid(state, record, root)
     if not (valid_session_record(record) and same_root(record.root, root)) then
+        return false
+    end
+
+    local resolver_record = record.source == "resolver"
+
+    if resolver_record and not resolver_matches(state, record, root) then
         return false
     end
 
@@ -630,7 +776,7 @@ local function remembered_session_valid(record, root)
         return codex_transcript_matches(record, root)
     end
 
-    return record.source == "resolver"
+    return resolver_record
 end
 
 function M.forget_session(state, tool_name, root)
@@ -664,7 +810,7 @@ function M.refresh_context(state, ctx)
     end
 
     if not session_id then
-        session_id = session_from_custom_resolver(state, ctx)
+        session_id, evidence = session_from_custom_resolver(state, ctx)
         source = session_id and "resolver" or nil
     end
 
@@ -723,7 +869,7 @@ function M.resolve_resume(state, ctx, tool_name, root)
     local key = util.terminal_key(tool_name, root)
     local remembered = state.agent_sessions and state.agent_sessions[key] or nil
 
-    if remembered and remembered_session_valid(remembered, root) then
+    if remembered and remembered_session_valid(state, remembered, root) then
         return {
             session_id = remembered.session_id,
             pid = remembered.pid,

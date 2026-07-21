@@ -15,13 +15,14 @@ Changes:
 - Codex and Claude no longer adopt arbitrary latest project transcripts on first
   open.
 - Remembered sessions are scoped by canonical project root.
-- The Sidepanes agent-session registry uses atomic writes and merge-before-save
-  behavior.
+- The Sidepanes agent-session registry uses atomic writes, a stale-recovering
+  writer lock, and merge-before-save behavior.
 - Remembered sessions validate hook, PID metadata, or transcript evidence before
   resume.
+- Custom resolver records are revalidated before reuse.
 - Ambiguous same-root Codex transcript candidates are ignored instead of guessed.
-- Immediately failing resumed CLIs clear the stale resume id and start fresh
-  once.
+- Quickly failing resumed CLIs clear the stale resume id and start fresh once by
+  default.
 
 Configuration:
 
@@ -31,3 +32,8 @@ Configuration:
   inference.
 - `terminal.resume.mechanisms` and `terminal.resume.resolver` let users replace
   the built-in mechanisms with a stricter local strategy.
+- `terminal.resume.store_lock_timeout_ms` and
+  `terminal.resume.store_lock_stale_ms` tune shared-registry contention and
+  crash recovery.
+- `terminal.resume.failure_timeout_ms` and `terminal.resume.failure_action`
+  tune what happens when a stale resume id fails after launch.

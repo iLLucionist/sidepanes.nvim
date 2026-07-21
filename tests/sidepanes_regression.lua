@@ -348,6 +348,11 @@ test("agent terminal keys canonicalize equivalent project roots", function()
     assert(key == link_key, "symlinked project root produced a different terminal key")
 
     local state = {
+        config = {
+            agent_resume_resolver = function(_, _, opts)
+                return opts.remembered and opts.remembered.session_id
+            end,
+        },
         agent_sessions = {
             [key] = {
                 key = key,
@@ -737,6 +742,11 @@ test("agent sessions report remembered live process candidates", function()
     local root = root_fixture("agent-session-live-pid-root")
     local key = util.terminal_key("codex", root)
     local state = {
+        config = {
+            agent_resume_resolver = function(_, _, opts)
+                return opts.remembered and opts.remembered.session_id
+            end,
+        },
         agent_sessions = {
             [key] = {
                 tool_name = "codex",
@@ -811,6 +821,46 @@ test("agent session registry saves atomically and merges independent writers", f
     assert(vim.fn.glob(store .. ".tmp.*") == "", "atomic registry save left temp files behind")
 end)
 
+test("agent session registry recovers a stale writer lock", function()
+    reset_pane()
+
+    local store = helpers.tmp_path("sidepanes-agent-session-stale-lock-store.json")
+    local root = root_fixture("agent-session-stale-lock-root")
+    local key = util.terminal_key("codex", root)
+    local lock = store .. ".lock"
+    local state = {
+        config = {
+            agent_resume_store_path = store,
+            agent_resume_store_lock_timeout_ms = 500,
+            agent_resume_store_lock_stale_ms = 1,
+        },
+        agent_sessions = {
+            [key] = {
+                key = key,
+                tool_name = "codex",
+                root = root,
+                session_id = "stale-lock-session",
+                source = "resolver",
+                updated_at = 100,
+            },
+        },
+    }
+
+    vim.fn.delete(store, "rf")
+    vim.fn.delete(lock, "rf")
+    mkdir(lock)
+    write(lock .. "/owner.json", {
+        vim.json.encode({
+            pid = 0,
+            created_at_ms = 0,
+        }),
+    })
+
+    assert(agent_session.save_store(state), "registry did not recover stale writer lock")
+    assert(vim.fn.isdirectory(lock) == 0, "registry lock directory was left behind")
+    assert(read_file(store):find("stale%-lock%-session"), "registry store was not written after stale lock recovery")
+end)
+
 test("remembered sessions require valid source evidence", function()
     reset_pane()
 
@@ -839,6 +889,85 @@ test("remembered sessions require valid source evidence", function()
 
     assert(agent_session.resolve_resume(state, nil, "codex", root) == nil, "remembered session with missing evidence was resumed")
     assert(state.agent_sessions[key] == nil, "invalid remembered session was not cleared")
+end)
+
+test("remembered sessions reject malformed but existing evidence", function()
+    reset_pane()
+
+    local root = root_fixture("agent-session-malformed-evidence-root")
+    local other_root = root_fixture("agent-session-malformed-evidence-other-root")
+    local key = util.terminal_key("codex", root)
+    local capture_path = helpers.tmp_path("sidepanes-agent-malformed-capture.json")
+    local metadata_path = helpers.tmp_path("sidepanes-agent-malformed-metadata.json")
+    local transcript_path = helpers.tmp_path("sidepanes-agent-malformed-transcript.jsonl")
+
+    local function stale_record(extra)
+        return vim.tbl_extend("force", {
+            key = key,
+            tool_name = "codex",
+            root = root,
+            session_id = "expected-session",
+            source = "transcript",
+            updated_at = os.time(),
+        }, extra or {})
+    end
+
+    write(capture_path, {
+        vim.json.encode({
+            session_id = "different-session",
+            cwd = root,
+        }),
+    })
+    local capture_state = {
+        agent_sessions = {
+            [key] = stale_record({
+                source = "capture",
+                capture_path = capture_path,
+            }),
+        },
+    }
+
+    assert(agent_session.resolve_resume(capture_state, nil, "codex", root) == nil, "mismatched capture evidence was trusted")
+    assert(capture_state.agent_sessions[key] == nil, "mismatched capture record was not cleared")
+
+    write(metadata_path, {
+        vim.json.encode({
+            session_id = "expected-session",
+            cwd = other_root,
+        }),
+    })
+    local metadata_state = {
+        agent_sessions = {
+            [key] = stale_record({
+                source = "pid_metadata",
+                metadata_path = metadata_path,
+            }),
+        },
+    }
+
+    assert(agent_session.resolve_resume(metadata_state, nil, "codex", root) == nil, "wrong-root metadata evidence was trusted")
+    assert(metadata_state.agent_sessions[key] == nil, "wrong-root metadata record was not cleared")
+
+    write(transcript_path, {
+        vim.json.encode({
+            type = "session_meta",
+            payload = {
+                session_id = "expected-session",
+                cwd = other_root,
+            },
+        }),
+    })
+    local transcript_state = {
+        agent_sessions = {
+            [key] = stale_record({
+                source = "transcript",
+                transcript_path = transcript_path,
+            }),
+        },
+    }
+
+    assert(agent_session.resolve_resume(transcript_state, nil, "codex", root) == nil, "wrong-root transcript evidence was trusted")
+    assert(transcript_state.agent_sessions[key] == nil, "wrong-root transcript record was not cleared")
 end)
 
 test("agent auto resume can be disabled even when a session is remembered", function()
@@ -932,6 +1061,62 @@ test("agent resume supports custom resolver mechanisms", function()
     assert(state.agent_sessions[ctx.key].source == "resolver", "custom resolver source was not recorded")
 end)
 
+test("agent resume revalidates custom resolver records before reuse", function()
+    reset_pane()
+
+    local root = root_fixture("agent-session-custom-resolver-validate-root")
+    local key = util.terminal_key("codex", root)
+    local calls = {}
+    local state = {
+        config = vim.tbl_deep_extend("force", vim.deepcopy(defaults.config), {
+            agent_resume_mechanisms = false,
+            agent_resume_resolver = function(tool_name, ctx, opts)
+                table.insert(calls, {
+                    tool_name = tool_name,
+                    purpose = opts.purpose,
+                    remembered = opts.remembered,
+                })
+
+                if opts.purpose == "capture" then
+                    return {
+                        session_id = "resolver-session",
+                        evidence = {
+                            resolver_state = {
+                                marker = "owned-by-sidepanes-test",
+                            },
+                        },
+                    }
+                elseif opts.purpose == "validate" and opts.remembered and opts.remembered.resolver_state and opts.remembered.resolver_state.marker == "owned-by-sidepanes-test" then
+                    return {
+                        session_id = opts.remembered.session_id,
+                    }
+                end
+
+                return false
+            end,
+        }),
+        agent_sessions = {},
+    }
+    local ctx = {
+        key = key,
+        tool_name = "codex",
+        root = root,
+    }
+
+    assert(agent_session.refresh_context(state, ctx) == "resolver-session", "custom resolver did not capture a table result")
+    assert(state.agent_sessions[key].resolver_state.marker == "owned-by-sidepanes-test", "custom resolver state was not stored")
+
+    local resume = agent_session.resolve_resume(state, nil, "codex", root)
+
+    assert(resume and resume.session_id == "resolver-session", "custom resolver record did not revalidate")
+    assert(calls[#calls].purpose == "validate", "custom resolver was not called for validation")
+
+    state.agent_sessions[key].resolver_state.marker = "tampered"
+
+    assert(agent_session.resolve_resume(state, nil, "codex", root) == nil, "invalid custom resolver record was reused")
+    assert(state.agent_sessions[key] == nil, "invalid custom resolver record was not cleared")
+end)
+
 test("agent recovery notification reports live previous pid without active wording", function()
     reset_pane()
 
@@ -959,6 +1144,13 @@ test("agent recovery notification reports live previous pid without active wordi
         source = "resolver",
     }
     pane.setup({
+        terminal = {
+            resume = {
+                resolver = function(_, _, opts)
+                    return opts.remembered and opts.remembered.session_id
+                end,
+            },
+        },
         tools = {
             codex = {
                 label = "Codex",
@@ -1025,7 +1217,7 @@ test("opening Claude starts fresh when only an external latest project session e
         local messages = capture_notify(function()
             ctx = pane.open_terminal("claude", nil, { root = root, focus = false })
         end)
-        local wrote_args = vim.wait(1000, function()
+        local wrote_args = vim.wait(2500, function()
             return vim.fn.filereadable(args_file) == 1
         end, 20)
 
@@ -1143,6 +1335,13 @@ test("failed remembered Codex resume clears stale session and starts fresh", fun
         updated_at = os.time(),
     }
     pane.setup({
+        terminal = {
+            resume = {
+                resolver = function(_, _, opts)
+                    return opts.remembered and opts.remembered.session_id
+                end,
+            },
+        },
         tools = {
             codex = {
                 label = "Codex",
@@ -1174,6 +1373,149 @@ test("failed remembered Codex resume clears stale session and starts fresh", fun
     assert(current and current.resumed == false, "fresh Codex retry was marked resumed")
     assert(pane.agent_sessions[key] == nil, "stale Codex session was not cleared")
     assert(has_notify(messages, "cleared stale resume id and starting fresh"), "stale resume notification was not emitted")
+end)
+
+test("failed remembered Codex resume respects timeout and action config", function()
+    reset_pane()
+
+    local bin = helpers.tmp_path("sidepanes-agent-bin-codex-failed-resume-config")
+    local root = root_fixture("agent-session-codex-failed-resume-config-root")
+    local args_file = helpers.tmp_path("sidepanes-agent-codex-failed-resume-config-args.txt")
+    local fake_codex = bin .. "/codex"
+    local key = util.terminal_key("codex", root)
+
+    vim.fn.delete(bin, "rf")
+    vim.fn.delete(args_file)
+    mkdir(bin)
+    write(fake_codex, {
+        "#!/bin/sh",
+        "printf 'run:%s\\n' \"$*\" >> " .. vim.fn.shellescape(args_file),
+        "if [ \"${1:-}\" = 'resume' ]; then sleep 1; exit 7; fi",
+        "sleep 10",
+    })
+    vim.fn.setfperm(fake_codex, "rwxr-xr-x")
+
+    pane.agent_sessions[key] = {
+        key = key,
+        tool_name = "codex",
+        root = root,
+        session_id = "slow-stale-session",
+        source = "resolver",
+        updated_at = os.time(),
+    }
+    pane.setup({
+        terminal = {
+            resume = {
+                resolver = function(_, _, opts)
+                    return opts.remembered and opts.remembered.session_id
+                end,
+                failure_timeout_ms = 100,
+                failure_action = "fresh",
+            },
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = fake_codex,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    local initial = pane.open_terminal("codex", nil, { root = root, focus = false })
+    local exited = vim.wait(2500, function()
+        return initial and not util.is_running(initial.job_id)
+    end, 50)
+
+    assert(exited, "slow failing resume did not exit")
+    assert(read_file(args_file):find("slow%-stale%-session"), read_file(args_file))
+    assert(select(2, read_file(args_file):gsub("run:", "")) == 1, "slow failing resume unexpectedly started fresh")
+    assert(pane.agent_sessions[key], "slow failing resume cleared session after timeout")
+
+    reset_pane()
+    vim.fn.delete(args_file)
+
+    pane.agent_sessions[key] = {
+        key = key,
+        tool_name = "codex",
+        root = root,
+        session_id = "notify-stale-session",
+        source = "resolver",
+        updated_at = os.time(),
+    }
+    pane.setup({
+        terminal = {
+            resume = {
+                resolver = function(_, _, opts)
+                    return opts.remembered and opts.remembered.session_id
+                end,
+                failure_timeout_ms = 1500,
+                failure_action = "notify",
+            },
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = fake_codex,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    local messages = capture_notify(function()
+        local notify_initial = pane.open_terminal("codex", nil, { root = root, focus = false })
+        local notify_exited = vim.wait(2500, function()
+            return notify_initial and not util.is_running(notify_initial.job_id)
+        end, 50)
+
+        assert(notify_exited, "notify-mode failing resume did not exit")
+        vim.wait(200, function()
+            return false
+        end)
+    end)
+
+    assert(select(2, read_file(args_file):gsub("run:", "")) == 1, "notify failure action unexpectedly started fresh")
+    assert(pane.agent_sessions[key] == nil, "notify failure action did not clear stale session")
+    assert(has_notify(messages, "cleared stale resume id."), "notify failure action did not report stale session")
+
+    reset_pane()
+    vim.fn.delete(args_file)
+
+    pane.agent_sessions[key] = {
+        key = key,
+        tool_name = "codex",
+        root = root,
+        session_id = "ignore-stale-session",
+        source = "resolver",
+        updated_at = os.time(),
+    }
+    pane.setup({
+        terminal = {
+            resume = {
+                resolver = function(_, _, opts)
+                    return opts.remembered and opts.remembered.session_id
+                end,
+                failure_timeout_ms = 1500,
+                failure_action = "ignore",
+            },
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = fake_codex,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    local ignore_initial = pane.open_terminal("codex", nil, { root = root, focus = false })
+    local ignore_exited = vim.wait(2500, function()
+        return ignore_initial and not util.is_running(ignore_initial.job_id)
+    end, 50)
+
+    assert(ignore_exited, "ignore-mode failing resume did not exit")
+    assert(select(2, read_file(args_file):gsub("run:", "")) == 1, "ignore failure action unexpectedly started fresh")
+    assert(pane.agent_sessions[key].session_id == "ignore-stale-session", "ignore failure action cleared stale session")
 end)
 
 test("opening Claude resumes the same hook-captured session after terminal loss", function()
@@ -2232,9 +2574,13 @@ test("config normalizes ergonomic markdown and tool setup", function()
                     codex = false,
                 },
                 store_path = helpers.tmp_path("sidepanes-agent-config-store.json"),
+                store_lock_timeout_ms = 222,
+                store_lock_stale_ms = 333,
                 resolver = function()
                     return "configured-session"
                 end,
+                failure_timeout_ms = 444,
+                failure_action = "notify",
             },
             agent_resume_badge_ms = 2500,
             agent_resume_badge = {
@@ -2298,7 +2644,11 @@ test("config normalizes ergonomic markdown and tool setup", function()
     assert(pane.config.agent_resume_mechanisms.claude[1] == "hook", "terminal.resume.mechanisms did not map")
     assert(pane.config.agent_resume_mechanisms.codex == false, "terminal.resume.mechanisms false tool did not map")
     assert(pane.config.agent_resume_store_path:find("sidepanes%-agent%-config%-store%.json"), "terminal.resume.store_path did not map")
+    assert(pane.config.agent_resume_store_lock_timeout_ms == 222, "terminal.resume.store_lock_timeout_ms did not map")
+    assert(pane.config.agent_resume_store_lock_stale_ms == 333, "terminal.resume.store_lock_stale_ms did not map")
     assert(type(pane.config.agent_resume_resolver) == "function", "terminal.resume.resolver did not map")
+    assert(pane.config.agent_resume_failure_timeout_ms == 444, "terminal.resume.failure_timeout_ms did not map")
+    assert(pane.config.agent_resume_failure_action == "notify", "terminal.resume.failure_action did not map")
     assert(pane.config.project_root_markers[2] == "pyproject.toml", "project.root_markers did not map")
     assert(pane.config.project_root_fallback == "cwd", "project.fallback did not map")
     assert(type(pane.config.project_root_resolver) == "function", "project.resolver did not map")
@@ -2372,6 +2722,10 @@ test("canonical default setup normalizes to runtime defaults", function()
     assert(setup.terminal.resume.infer_from_transcripts == defaults.config.agent_resume_infer_from_transcripts, "default setup transcript inference was wrong")
     assert(setup.terminal.resume.use_claude_pid_metadata == defaults.config.agent_resume_use_claude_pid_metadata, "default setup Claude PID metadata was wrong")
     assert(vim.deep_equal(setup.terminal.resume.mechanisms, defaults.config.agent_resume_mechanisms), "default setup resume mechanisms were wrong")
+    assert(setup.terminal.resume.store_lock_timeout_ms == defaults.config.agent_resume_store_lock_timeout_ms, "default setup store lock timeout was wrong")
+    assert(setup.terminal.resume.store_lock_stale_ms == defaults.config.agent_resume_store_lock_stale_ms, "default setup stale lock timeout was wrong")
+    assert(setup.terminal.resume.failure_timeout_ms == defaults.config.agent_resume_failure_timeout_ms, "default setup resume failure timeout was wrong")
+    assert(setup.terminal.resume.failure_action == defaults.config.agent_resume_failure_action, "default setup resume failure action was wrong")
     assert(setup.terminal.agent_resume_badge_ms == defaults.config.agent_resume_badge_ms, "default setup resume badge timeout was wrong")
     assert(vim.deep_equal(setup.terminal.agent_resume_badge, defaults.config.agent_resume_badge), "default setup resume badge was wrong")
     assert(setup.validation.enabled == defaults.config.validate, "default setup validation was wrong")
@@ -2417,9 +2771,13 @@ test("runtime config converts to canonical setup shape", function()
             codex = { "transcript" },
         },
         agent_resume_store_path = "/tmp/sidepanes-agent-store.json",
+        agent_resume_store_lock_timeout_ms = 1200,
+        agent_resume_store_lock_stale_ms = 9000,
         agent_resume_resolver = function()
             return "runtime-session"
         end,
+        agent_resume_failure_timeout_ms = 800,
+        agent_resume_failure_action = "notify",
         agent_resume_badge_ms = 3000,
         agent_resume_badge = {
             text = "[RECOVERED]",
@@ -2466,7 +2824,11 @@ test("runtime config converts to canonical setup shape", function()
     assert(setup.terminal.resume.use_claude_pid_metadata == false, "to_setup lost Claude PID metadata")
     assert(setup.terminal.resume.mechanisms.claude[1] == "hook", "to_setup lost resume mechanisms")
     assert(setup.terminal.resume.store_path == "/tmp/sidepanes-agent-store.json", "to_setup lost resume store path")
+    assert(setup.terminal.resume.store_lock_timeout_ms == 1200, "to_setup lost resume store lock timeout")
+    assert(setup.terminal.resume.store_lock_stale_ms == 9000, "to_setup lost resume stale lock timeout")
     assert(type(setup.terminal.resume.resolver) == "function", "to_setup lost resume resolver")
+    assert(setup.terminal.resume.failure_timeout_ms == 800, "to_setup lost resume failure timeout")
+    assert(setup.terminal.resume.failure_action == "notify", "to_setup lost resume failure action")
     assert(setup.terminal.agent_resume_badge_ms == 3000, "to_setup lost resume badge timeout")
     assert(setup.terminal.agent_resume_badge.text == "[RECOVERED]", "to_setup lost resume badge")
     assert(setup.project.root_markers[2] == "package.json", "to_setup lost project root markers")
@@ -2759,7 +3121,11 @@ test("setup validation reports malformed config and implied dependency gaps", fu
             claude = "hook",
         },
         agent_resume_store_path = 42,
+        agent_resume_store_lock_timeout_ms = -1,
+        agent_resume_store_lock_stale_ms = "old",
         agent_resume_resolver = "resolver",
+        agent_resume_failure_timeout_ms = -2,
+        agent_resume_failure_action = "restart",
         agent_resume_badge_ms = -1,
         agent_resume_badge = {
             text = true,
@@ -2804,7 +3170,11 @@ test("setup validation reports malformed config and implied dependency gaps", fu
     assert(joined:find("Invalid Sidepanes agent_resume_mechanisms.codex entry at index 2", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_mechanisms.claude must be a table or false.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_store_path must be a string or false.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_store_lock_timeout_ms must be a non-negative number.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_store_lock_stale_ms must be a non-negative number.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_resolver must be a function.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_failure_timeout_ms must be a non-negative number.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_failure_action must be 'fresh', 'notify', or 'ignore'.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_badge_ms must be a non-negative number.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_badge.text must be a string.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_badge.clear_on_interaction must be a boolean.", 1, true), joined)

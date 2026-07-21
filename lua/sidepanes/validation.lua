@@ -246,8 +246,24 @@ local function validate_terminal(diagnostics, config)
         warn(diagnostics, "Sidepanes config agent_resume_store_path must be a string or false.")
     end
 
+    if config.agent_resume_store_lock_timeout_ms ~= nil and (type(config.agent_resume_store_lock_timeout_ms) ~= "number" or config.agent_resume_store_lock_timeout_ms < 0) then
+        warn(diagnostics, "Sidepanes config agent_resume_store_lock_timeout_ms must be a non-negative number.")
+    end
+
+    if config.agent_resume_store_lock_stale_ms ~= nil and (type(config.agent_resume_store_lock_stale_ms) ~= "number" or config.agent_resume_store_lock_stale_ms < 0) then
+        warn(diagnostics, "Sidepanes config agent_resume_store_lock_stale_ms must be a non-negative number.")
+    end
+
     if config.agent_resume_resolver ~= nil and type(config.agent_resume_resolver) ~= "function" then
         warn(diagnostics, "Sidepanes config agent_resume_resolver must be a function.")
+    end
+
+    if config.agent_resume_failure_timeout_ms ~= nil and (type(config.agent_resume_failure_timeout_ms) ~= "number" or config.agent_resume_failure_timeout_ms < 0) then
+        warn(diagnostics, "Sidepanes config agent_resume_failure_timeout_ms must be a non-negative number.")
+    end
+
+    if config.agent_resume_failure_action ~= nil and config.agent_resume_failure_action ~= "fresh" and config.agent_resume_failure_action ~= "notify" and config.agent_resume_failure_action ~= "ignore" then
+        warn(diagnostics, "Sidepanes config agent_resume_failure_action must be 'fresh', 'notify', or 'ignore'.")
     end
 
     if config.agent_resume_badge_ms ~= nil and (type(config.agent_resume_badge_ms) ~= "number" or config.agent_resume_badge_ms < 0) then
