@@ -17,6 +17,45 @@ but they should be called out clearly in this changelog.
 
 - Replaced pre-release README badge placeholders with live release and tag
   badges after publishing `v0.1.0`.
+- Markdown panes now poll the source file with a content fingerprint to detect
+  source-file changes on disk, auto-reload the pane, restore the cursor near
+  the previous line, and show a temporary `[RELOADED]` winbar badge.
+- Markdown auto-reload now exposes `markdown.reload_interval_ms`,
+  `markdown.reload_badge_ms`, and `markdown.reload_badge` setup options for the
+  polling interval, optional badge timeout, badge text, Markdown-interaction
+  clearing, and badge highlight colors.
+- Codex and Claude pane terminals now track OS pids and resumable session ids.
+  When a pane-owned agent terminal exits or its buffer is lost, reopening the
+  tool resumes the last matching project session instead of silently starting a
+  blank conversation, reports the previous/new PID details when available, and
+  shows a temporary `[RESUMED]` winbar badge.
+- Agent recovery now exposes `terminal.agent_resume_badge_ms` and
+  `terminal.agent_resume_badge` setup options for the optional badge timeout,
+  badge text, interaction clearing, and badge highlight colors.
+
+### Fixed
+
+- Improved pane-local smart `gf` path resolution for terminal output where long
+  absolute paths wrap and Neovim detects only a trailing path suffix.
+- Pane-local terminal toggles are now installed in terminal-input mode as
+  `nowait` mappings, so `<C-g>` and `<leader>gg` are intercepted by Sidepanes
+  before they can be sent through to Codex or Claude.
+- Agent session tracking now avoids adopting stale transcript fallbacks for
+  freshly started or just-stopped terminals before the CLI writes new session
+  metadata.
+- Codex session discovery now requires `session_meta` JSONL entries and scans
+  the transcript head instead of trusting any matching payload or only the first
+  line.
+- Resumed-terminal badge timers now clear the recovered terminal's badge even
+  if another terminal becomes active before the timeout fires.
+- Pane terminal shutdown now refreshes remembered Codex/Claude session metadata
+  before removing stopped terminal contexts.
+
+### Notes
+
+- Sidepanes cannot reattach to a lost terminal pty. If a previous Claude or
+  Codex PID is still alive after the pane buffer is lost, recovery reports that
+  PID and starts a new CLI process with the tool's resume command.
 
 ## v0.1.0 - 2026-07-19
 

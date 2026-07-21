@@ -40,6 +40,10 @@ local function expand_markdown(opts)
     local reflow = markdown.reflow or {}
 
     set_if_present(expanded, "wrap", markdown.wrap)
+    set_if_present(expanded, "auto_reload", markdown.auto_reload)
+    set_if_present(expanded, "reload_interval_ms", markdown.reload_interval_ms)
+    set_if_present(expanded, "reload_badge_ms", markdown.reload_badge_ms)
+    set_if_present(expanded, "reload_badge", markdown.reload_badge)
     set_if_present(expanded, "wrap_toggle_key", markdown.wrap_toggle_key)
     set_if_present(expanded, "sticky_heading", markdown.sticky_heading)
     set_if_present(expanded, "auto_reflow", reflow.enabled)
@@ -62,6 +66,18 @@ local function expand_lifecycle(opts)
     set_if_present(expanded, "shutdown_on_exit", lifecycle.shutdown_on_exit)
     set_if_present(expanded, "shutdown_timeout_ms", lifecycle.shutdown_timeout_ms)
     expanded.lifecycle = nil
+
+    return expanded
+end
+
+--- Expand nested terminal options to the internal flat config keys.
+local function expand_terminal(opts)
+    local expanded = vim.deepcopy(opts or {})
+    local terminal = expanded.terminal or {}
+
+    set_if_present(expanded, "agent_resume_badge_ms", terminal.agent_resume_badge_ms)
+    set_if_present(expanded, "agent_resume_badge", terminal.agent_resume_badge)
+    expanded.terminal = nil
 
     return expanded
 end
@@ -195,6 +211,10 @@ function M.to_setup(runtime_config)
         },
         markdown = {
             wrap = config.wrap,
+            auto_reload = config.auto_reload,
+            reload_interval_ms = config.reload_interval_ms,
+            reload_badge_ms = config.reload_badge_ms,
+            reload_badge = vim.deepcopy(config.reload_badge),
             wrap_toggle_key = config.wrap_toggle_key,
             sticky_heading = config.sticky_heading,
             reflow = {
@@ -211,6 +231,10 @@ function M.to_setup(runtime_config)
             shutdown_on_exit = config.shutdown_on_exit,
             shutdown_timeout_ms = config.shutdown_timeout_ms,
         },
+        terminal = {
+            agent_resume_badge_ms = config.agent_resume_badge_ms,
+            agent_resume_badge = vim.deepcopy(config.agent_resume_badge),
+        },
         validation = {
             enabled = config.validate,
         },
@@ -222,7 +246,7 @@ end
 
 --- Expand ergonomic setup options without merging them into a base config.
 function M.expand(opts)
-    return expand_tools(expand_validation(expand_lifecycle(expand_markdown(expand_layout(opts or {})))))
+    return expand_tools(expand_validation(expand_terminal(expand_lifecycle(expand_markdown(expand_layout(opts or {}))))))
 end
 
 --- Merge setup options into a base config after expanding ergonomic options.

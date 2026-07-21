@@ -27,6 +27,40 @@ function M.is_running(job_id)
     return job_id and vim.fn.jobwait({ job_id }, 0)[1] == -1
 end
 
+--- Return the OS pid for a Neovim job id when available.
+function M.job_pid(job_id)
+    if not job_id then
+        return nil
+    end
+
+    local ok, pid = pcall(vim.fn.jobpid, job_id)
+
+    if ok and type(pid) == "number" and pid > 0 then
+        return pid
+    end
+
+    return nil
+end
+
+--- Return whether an OS process id appears to still be alive.
+function M.pid_running(pid)
+    pid = tonumber(pid)
+
+    if not pid or pid <= 0 then
+        return false
+    end
+
+    local uv = vim.uv or vim.loop
+
+    if not (uv and uv.kill) then
+        return false
+    end
+
+    local ok, result = pcall(uv.kill, pid, 0)
+
+    return ok and result == 0
+end
+
 --- Expand a path-like value into an absolute path.
 function M.resolve_path(path)
     if not path or path == "" then

@@ -10,6 +10,28 @@ local M = {}
 M.config = {
     width = 100,
     wrap = false,
+    auto_reload = true,
+    reload_interval_ms = 1000,
+    reload_badge_ms = 0,
+    reload_badge = {
+        text = "[RELOADED]",
+        clear_on_interaction = true,
+        hl = {
+            fg = "CursorFG",
+            bg = "WarningMsg",
+            bold = true,
+        },
+    },
+    agent_resume_badge_ms = 0,
+    agent_resume_badge = {
+        text = "[RESUMED]",
+        clear_on_interaction = true,
+        hl = {
+            fg = "CursorFG",
+            bg = "DiagnosticInfo",
+            bold = true,
+        },
+    },
     auto_reflow = true,
     external_reflow_cmd = nil,
     external_reflow_fallback = true,

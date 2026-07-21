@@ -60,6 +60,21 @@ local function toggle_markdown_terminal(deps)
     end
 end
 
+--- Install terminal-mode toggle mappings that are safe to use while typing in a terminal.
+local function setup_terminal_maps(bufnr, deps, mappings)
+    if bufnr == deps.markdown_bufnr() then
+        return
+    end
+
+    map(bufnr, "t", mapping(mappings, "toggle_terminal", "toggle_agent"), function()
+        toggle_markdown_terminal(deps)
+    end, "Toggle markdown/terminal pane", { nowait = true })
+
+    map(bufnr, "t", mapping(mappings, "toggle_terminal_alt", "toggle_agent_alt"), function()
+        toggle_markdown_terminal(deps)
+    end, "Toggle markdown/terminal pane", { nowait = true })
+end
+
 --- Install pane-local normal and visual mappings for one pane buffer.
 function M.setup(bufnr, deps)
     deps = deps or {}
@@ -122,6 +137,8 @@ function M.setup(bufnr, deps)
             deps.toggle_wrap()
         end, "Toggle sidepanes wrap")
     end
+
+    setup_terminal_maps(bufnr, deps, mappings)
 end
 
 return M

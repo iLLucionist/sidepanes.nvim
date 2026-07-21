@@ -6,9 +6,76 @@ Architecture: Implements terminal behavior behind the public facade, using entri
 ]]
 
 local entries = require("sidepanes.entries")
+local agent_session = require("sidepanes.agent_session")
 local util = require("sidepanes.util")
 
 local M = {}
+
+local function recovery_message(ctx)
+    local tool_label = ctx.tool_label or ctx.tool_name or "Agent"
+    local active = ctx.resume_pid_running and "lost but active " or "lost "
+    local details = { "session id " .. tostring(ctx.session_id) }
+
+    if ctx.resume_pid then
+        table.insert(details, "previous PID " .. tostring(ctx.resume_pid))
+    end
+
+    if ctx.pid then
+        table.insert(details, "new PID " .. tostring(ctx.pid))
+    end
+
+    return "Recovered/resumed a " .. active .. tool_label .. " session: " .. table.concat(details, ", ")
+end
+
+local function configured_resume_badge_ms(state)
+    local timeout = tonumber(state.config.agent_resume_badge_ms) or 0
+
+    return math.max(0, math.floor(timeout))
+end
+
+local function clear_resume_badge_for_context(ctx, deps)
+    if not (ctx and ctx.resume_badge_visible) then
+        return false
+    end
+
+    ctx.resume_badge_visible = false
+    ctx.resume_badge_armed = false
+    ctx.resume_badge_token = (ctx.resume_badge_token or 0) + 1
+    deps.update_sticky_heading()
+
+    return true
+end
+
+--- Clear the temporary recovered/resumed marker in the pane winbar.
+function M.clear_resume_badge(state, deps, ctx)
+    ctx = ctx or (state.active_terminal_key and state.terminals[state.active_terminal_key] or nil)
+
+    return clear_resume_badge_for_context(ctx, deps)
+end
+
+local function mark_recovered(ctx, state, deps)
+    ctx.resume_badge_visible = true
+    ctx.resume_badge_armed = false
+    ctx.resume_badge_token = (ctx.resume_badge_token or 0) + 1
+
+    local token = ctx.resume_badge_token
+    local badge_ms = configured_resume_badge_ms(state)
+
+    deps.update_sticky_heading()
+    vim.defer_fn(function()
+        if ctx.resume_badge_token == token then
+            ctx.resume_badge_armed = true
+        end
+    end, 100)
+
+    if badge_ms > 0 then
+        vim.defer_fn(function()
+            if ctx.resume_badge_token == token and state.terminals[ctx.key] == ctx then
+                M.clear_resume_badge(state, deps, ctx)
+            end
+        end, badge_ms)
+    end
+end
 
 --- Find the pane terminal context for a buffer.
 function M.context_for_buf(state, bufnr)
@@ -128,7 +195,18 @@ function M.start(state, deps, tool_name, preset_name, root)
         return existing, false
     end
 
+    local initial_latest = agent_session.is_supported(tool_name) and agent_session.latest_info_for_root(tool_name, root) or nil
+    local resume = agent_session.resolve_resume(state, existing, tool_name, root)
+    local resume_id = resume and resume.session_id or nil
     local cmd = util.command_list(tool, preset, root)
+    local resuming = false
+
+    cmd, resuming = agent_session.resume_command(tool_name, cmd, resume_id)
+
+    if not resuming then
+        resume = nil
+        resume_id = nil
+    end
 
     if not util.executable_exists(cmd[1]) then
         vim.notify("Pane tool executable not found: " .. tostring(cmd[1]), vim.log.levels.ERROR)
@@ -146,6 +224,17 @@ function M.start(state, deps, tool_name, preset_name, root)
         root = root,
         bufnr = bufnr,
         job_id = nil,
+        pid = nil,
+        started_at = os.time(),
+        initial_latest_session_id = initial_latest and initial_latest.session_id or nil,
+        session_id = resume_id,
+        resumed = resuming,
+        resume_source = resume and resume.source or nil,
+        resume_pid = resume and resume.pid or nil,
+        resume_pid_running = resume and resume.pid_running or false,
+        resume_badge_visible = false,
+        resume_badge_armed = false,
+        resume_badge_token = 0,
         send_delay_ms = tool.send_delay_ms or 700,
     }
 
@@ -163,6 +252,7 @@ function M.start(state, deps, tool_name, preset_name, root)
         ctx.job_id = vim.fn.termopen(cmd, {
             cwd = root,
             on_exit = function()
+                agent_session.refresh_context(state, ctx)
                 deps.update_sticky_heading()
             end,
         })
@@ -173,7 +263,23 @@ function M.start(state, deps, tool_name, preset_name, root)
         return nil
     end
 
+    ctx.pid = util.job_pid(ctx.job_id)
     state.terminals[key] = ctx
+
+    if resuming then
+        mark_recovered(ctx, state, deps)
+        vim.notify(recovery_message(ctx), vim.log.levels.INFO)
+    end
+
+    if agent_session.is_supported(tool_name) then
+        agent_session.refresh_context(state, ctx)
+        vim.defer_fn(function()
+            if state.terminals[key] == ctx then
+                agent_session.refresh_context(state, ctx)
+                deps.update_sticky_heading()
+            end
+        end, 1000)
+    end
 
     return ctx, true
 end
@@ -212,7 +318,14 @@ function M.open(state, deps, tool_name, preset_name, opts)
     state.active_terminal_key = ctx.key
     M.remember_context(state, ctx)
     deps.setup_pane_maps(ctx.bufnr)
-    deps.ensure_win(ctx.bufnr, "terminal", { focus = opts.focus == nil and state.config.focus_on_switch or opts.focus })
+    local focus = opts.focus == nil and state.config.focus_on_switch or opts.focus
+
+    deps.ensure_win(ctx.bufnr, "terminal", { focus = focus })
+
+    if focus and util.valid_win(state.winid) and vim.api.nvim_get_current_win() == state.winid and vim.api.nvim_win_get_buf(state.winid) == ctx.bufnr then
+        pcall(vim.cmd, "startinsert")
+    end
+
     deps.update_sticky_heading()
 
     return ctx, started
@@ -470,6 +583,7 @@ function M.shutdown_terminals(state, opts)
         shutdown_one(state, ctx, opts)
 
         if not util.is_running(ctx.job_id) then
+            agent_session.refresh_context(state, ctx)
             state.terminals[key] = nil
         end
     end

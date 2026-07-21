@@ -174,7 +174,8 @@ end
 
 local function candidate_score(path, target, ctx)
     local basename = vim.fn.fnamemodify(path, ":t")
-    local relative = vim.fn.fnamemodify(path, ":p"):sub(#ctx.root + 1)
+    local absolute = vim.fn.fnamemodify(path, ":p")
+    local relative = absolute:sub(#ctx.root + 1)
     local score = 0
     local matched = false
 
@@ -185,6 +186,11 @@ local function candidate_score(path, target, ctx)
 
     if relative:sub(-#target) == target then
         score = score + 6000
+        matched = true
+    end
+
+    if absolute:sub(-#target) == target then
+        score = score + 5500
         matched = true
     end
 

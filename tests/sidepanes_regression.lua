@@ -2,6 +2,7 @@ local helpers = dofile(vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), "
 helpers.append_repo_root(1)
 
 local defaults = require("sidepanes.defaults")
+local agent_session = require("sidepanes.agent_session")
 local api_helpers = require("sidepanes.api")
 local commands = require("sidepanes.commands")
 local config = require("sidepanes.config")
@@ -15,6 +16,7 @@ local heading_picker = require("sidepanes.heading_picker")
 local local_maps = require("sidepanes.maps")
 local nvim_tree_integration = require("sidepanes.integrations.nvim_tree")
 local presets = require("sidepanes.presets")
+local terminal_module = require("sidepanes.terminal")
 local util = require("sidepanes.util")
 local validation = require("sidepanes.validation")
 local markdown_reflow = require("sidepanes.markdown_reflow")
@@ -137,6 +139,20 @@ local function with_options(values, fn)
     end
 end
 
+local function with_home(path, fn)
+    local previous = vim.env.HOME
+
+    vim.env.HOME = path
+
+    local ok, err = xpcall(fn, debug.traceback)
+
+    vim.env.HOME = previous
+
+    if not ok then
+        error(err)
+    end
+end
+
 local function capture_notify(fn)
     local original = vim.notify
     local messages = {}
@@ -211,13 +227,28 @@ end
 
 local function reset_pane()
     pane.shutdown_terminals({ timeout_ms = 50 })
+    if pane.markdown_reload_timer then
+        pcall(function()
+            pane.markdown_reload_timer:stop()
+        end)
+        pcall(function()
+            pane.markdown_reload_timer:close()
+        end)
+    end
     pane.close()
     pane.zoomed = false
     pane.relative_width = nil
     pane.source = nil
     pane.markdown_view = nil
+    pane.markdown_file_signature = nil
+    pane.markdown_reloaded = false
+    pane.markdown_reload_badge_armed = false
+    pane.markdown_reload_token = 0
+    pane.markdown_watcher_path = nil
+    pane.markdown_reload_timer = nil
     pane.active_mode = "markdown"
     pane.active_terminal_key = nil
+    pane.agent_sessions = {}
     pane.config = vim.deepcopy(defaults.config)
 end
 
@@ -280,10 +311,17 @@ test("public facade hides mutable state and exposes config copy", function()
         "winid",
         "source",
         "markdown_view",
+        "markdown_file_signature",
+        "markdown_reloaded",
+        "markdown_reload_badge_armed",
+        "markdown_reload_token",
+        "markdown_watcher_path",
+        "markdown_reload_timer",
         "active_mode",
         "active_terminal_key",
         "last_focus_win",
         "terminals",
+        "agent_sessions",
         "question_buffers",
         "zoomed",
         "config",
@@ -324,6 +362,251 @@ test("public facade hides mutable state and exposes config copy", function()
     assert(second.tools.codex.presets[1].name == defaults.config.tools.codex.presets[1].name, "get_config returned nested mutable config")
     assert(sidepanes._state() == pane, "internal state escape hatch changed identity")
     assert(sidepanes.text_width() == pane.text_width(), "facade did not delegate text_width")
+end)
+
+test("agent session resume commands use native tool forms", function()
+    local claude_cmd, claude_resumed = agent_session.resume_command("claude", { "claude", "--model", "sonnet" }, "claude-session")
+    local codex_cmd, codex_resumed = agent_session.resume_command("codex", { "codex", "--cd", "/repo", "--model", "gpt-5.5" }, "codex-session")
+    local sh_cmd, sh_resumed = agent_session.resume_command("claude", { "sh", "-c", "sleep 10" }, "claude-session")
+
+    assert(claude_resumed == true, "Claude command was not marked resumed")
+    assert(vim.deep_equal(claude_cmd, { "claude", "--resume", "claude-session", "--model", "sonnet" }), "Claude resume command was wrong")
+    assert(codex_resumed == true, "Codex command was not marked resumed")
+    assert(vim.deep_equal(codex_cmd, { "codex", "resume", "--cd", "/repo", "--model", "gpt-5.5", "codex-session" }), "Codex resume command was wrong")
+    assert(sh_resumed == false, "non-Claude command was marked resumed")
+    assert(vim.deep_equal(sh_cmd, { "sh", "-c", "sleep 10" }), "non-Claude command was rewritten")
+end)
+
+test("agent sessions discover Claude pid metadata and project fallback", function()
+    reset_pane()
+
+    local home = helpers.tmp_path("sidepanes-agent-home-claude")
+    local root = root_fixture("agent-session-claude-root")
+    local project_dir = util.normalize_project_root(root):gsub("/$", ""):gsub("/", "-")
+    local state = { agent_sessions = {} }
+    local key = util.terminal_key("claude", root)
+    local ctx = {
+        key = key,
+        tool_name = "claude",
+        root = root,
+        pid = 4242,
+    }
+
+    vim.fn.delete(home, "rf")
+    mkdir(home .. "/.claude/sessions")
+    mkdir(home .. "/.claude/projects/" .. project_dir)
+
+    with_home(home, function()
+        write(home .. "/.claude/sessions/4242.json", {
+            vim.json.encode({
+                pid = 4242,
+                sessionId = "claude-pid-session",
+                cwd = root,
+            }),
+        })
+
+        assert(agent_session.refresh_context(state, ctx) == "claude-pid-session", "Claude pid metadata did not refresh context")
+        assert(ctx.session_id == "claude-pid-session", "Claude session id was not written to context")
+        assert(state.agent_sessions[key].session_id == "claude-pid-session", "Claude session id was not remembered")
+
+        ctx.pid = 9999
+        ctx.session_id = nil
+        state.agent_sessions = {}
+        write(home .. "/.claude/projects/" .. project_dir .. "/fallback-session.jsonl", {
+            vim.json.encode({ sessionId = "fallback-session" }),
+        })
+
+        assert(agent_session.resolve_resume_id(state, ctx, "claude", root) == "fallback-session", "Claude project fallback session was not discovered")
+    end)
+end)
+
+test("agent sessions discover latest Codex session for project root", function()
+    reset_pane()
+
+    local home = helpers.tmp_path("sidepanes-agent-home-codex")
+    local root = root_fixture("agent-session-codex-root")
+
+    vim.fn.delete(home, "rf")
+    mkdir(home .. "/.codex/sessions/2026/07/21")
+
+    with_home(home, function()
+        write(home .. "/.codex/sessions/2026/07/21/rollout-2026-07-21T10-00-00-codex-session.jsonl", {
+            vim.json.encode({
+                type = "event_msg",
+                payload = {
+                    cwd = root,
+                    id = "wrong-event-id",
+                    message = "metadata was not the first line",
+                },
+            }),
+            vim.json.encode({
+                type = "session_meta",
+                payload = {
+                    session_id = "codex-session",
+                    cwd = root,
+                },
+            }),
+        })
+
+        assert(agent_session.latest_for_root("codex", root) == "codex-session", "Codex latest project session was not discovered")
+    end)
+end)
+
+test("running agent contexts do not adopt stale transcript fallbacks", function()
+    reset_pane()
+
+    local home = helpers.tmp_path("sidepanes-agent-home-stale-running")
+    local root = root_fixture("agent-session-stale-running-root")
+    local project_dir = util.normalize_project_root(root):gsub("/$", ""):gsub("/", "-")
+    local state = { agent_sessions = {} }
+
+    vim.fn.delete(home, "rf")
+    mkdir(home .. "/.claude/projects/" .. project_dir)
+    write(home .. "/.claude/projects/" .. project_dir .. "/old-session.jsonl", {
+        vim.json.encode({ sessionId = "old-session" }),
+    })
+
+    with_home(home, function()
+        local job_id = vim.fn.jobstart({ "sh", "-c", "sleep 10" })
+        local ctx = {
+            key = util.terminal_key("claude", root),
+            tool_name = "claude",
+            root = root,
+            job_id = job_id,
+            initial_latest_session_id = "old-session",
+        }
+
+        assert(job_id > 0, "running context test job did not start")
+        assert(agent_session.refresh_context(state, ctx) == nil, "running context adopted stale transcript fallback")
+        assert(ctx.session_id == nil, "running context stored stale transcript session id")
+        assert(state.agent_sessions[ctx.key] == nil, "running context remembered stale transcript")
+
+        vim.fn.jobstop(job_id)
+        vim.wait(1000, function()
+            return not util.is_running(job_id)
+        end, 20)
+
+        assert(agent_session.refresh_context(state, ctx) == nil, "stopped fresh context adopted stale transcript fallback")
+    end)
+end)
+
+test("resume badge clearing can target a recovered terminal that is no longer active", function()
+    local calls = 0
+    local first = {
+        resume_badge_visible = true,
+        resume_badge_armed = true,
+        resume_badge_token = 0,
+    }
+    local second = {
+        resume_badge_visible = true,
+        resume_badge_armed = true,
+        resume_badge_token = 0,
+    }
+    local state = {
+        active_terminal_key = "second",
+        terminals = {
+            first = first,
+            second = second,
+        },
+    }
+
+    local cleared = terminal_module.clear_resume_badge(state, {
+        update_sticky_heading = function()
+            calls = calls + 1
+        end,
+    }, first)
+
+    assert(cleared == true, "explicit resume badge target was not cleared")
+    assert(first.resume_badge_visible == false, "explicit resume badge target stayed visible")
+    assert(second.resume_badge_visible == true, "active terminal badge was cleared instead of explicit target")
+    assert(calls == 1, "resume badge clear did not refresh heading exactly once")
+end)
+
+test("agent sessions report remembered live process candidates", function()
+    reset_pane()
+
+    local root = root_fixture("agent-session-live-pid-root")
+    local key = util.terminal_key("codex", root)
+    local state = {
+        agent_sessions = {
+            [key] = {
+                tool_name = "codex",
+                root = root,
+                session_id = "live-codex-session",
+                pid = vim.fn.getpid(),
+            },
+        },
+    }
+    local resume = agent_session.resolve_resume(state, nil, "codex", root)
+
+    assert(resume and resume.session_id == "live-codex-session", "remembered session was not used")
+    assert(resume.pid == vim.fn.getpid(), "remembered pid was not returned")
+    assert(resume.pid_running == true, "remembered live pid was not detected")
+    assert(resume.source == "remembered", "remembered resume source was not reported")
+end)
+
+test("opening Claude resumes latest project session when no live job exists", function()
+    reset_pane()
+
+    local home = helpers.tmp_path("sidepanes-agent-home-open-claude")
+    local bin = helpers.tmp_path("sidepanes-agent-bin-open-claude")
+    local root = root_fixture("agent-session-open-claude-root")
+    local project_dir = util.normalize_project_root(root):gsub("/$", ""):gsub("/", "-")
+    local args_file = helpers.tmp_path("sidepanes-agent-open-claude-args.txt")
+    local fake_claude = bin .. "/claude"
+
+    vim.fn.delete(home, "rf")
+    vim.fn.delete(bin, "rf")
+    vim.fn.delete(args_file)
+    mkdir(home .. "/.claude/projects/" .. project_dir)
+    mkdir(bin)
+    write(home .. "/.claude/projects/" .. project_dir .. "/resume-session.jsonl", {
+        vim.json.encode({ sessionId = "resume-session" }),
+    })
+    write(fake_claude, {
+        "#!/bin/sh",
+        "printf '%s\\n' \"$@\" > " .. vim.fn.shellescape(args_file),
+        "sleep 10",
+    })
+    vim.fn.setfperm(fake_claude, "rwxr-xr-x")
+
+    with_home(home, function()
+        pane.setup({
+            tools = {
+                claude = {
+                    label = "Claude",
+                    cmd = fake_claude,
+                    presets = { { name = "default", label = "Default", args = {} } },
+                },
+            },
+            terminal = {
+                agent_resume_badge = {
+                    text = "[RECOVERED]",
+                },
+            },
+        })
+
+        local ctx = nil
+        local messages = capture_notify(function()
+            ctx = pane.open_terminal("claude", nil, { root = root, focus = false })
+        end)
+        local wrote_args = vim.wait(1000, function()
+            return vim.fn.filereadable(args_file) == 1
+        end, 20)
+
+        assert(ctx and ctx.tool_name == "claude", "Claude terminal did not open")
+        assert(ctx.resumed == true, "Claude terminal did not mark resumed startup")
+        assert(ctx.session_id == "resume-session", "Claude terminal did not keep resume session id")
+        assert(ctx.resume_source == "latest", "Claude terminal did not record resume source")
+        assert(ctx.resume_badge_visible == true, "Claude terminal did not mark resume badge visible")
+        assert(has_notify(messages, "Recovered/resumed a lost Claude session: session id resume-session"), "Claude recovery notification was not emitted")
+        assert(wrote_args, "fake Claude did not record argv")
+        assert(read_file(args_file):find("--resume\nresume%-session", 1, false), "Claude terminal did not launch with --resume session")
+
+        local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+        assert(winbar:find("%#SidepanesResumed# [RECOVERED] ", 1, true), winbar)
+    end)
 end)
 
 test("public switch entry helper normalizes strings, maps, and aliases", function()
@@ -448,6 +731,8 @@ test("pane-local slot maps exist on markdown and terminal panes", function()
         assert(has_nowait_map(ctx.bufnr, lhs), lhs .. " missing on terminal pane")
     end
     assert(has_map(ctx.bufnr, "ll", "x"), "ll missing on terminal pane")
+    assert(has_nowait_map(ctx.bufnr, "\\gg", "t"), "terminal-mode primary toggle map missing on terminal pane")
+    assert(has_nowait_map(ctx.bufnr, "<C-G>", "t"), "terminal-mode toggle map missing on terminal pane")
 end)
 
 test("pane-local mappings are configurable", function()
@@ -519,7 +804,8 @@ test("pane-local mappings are configurable", function()
     assert(has_map(bufnr, "ma", "x"), "custom ask-last pane map missing")
     assert(has_map(bufnr, "mx", "x"), "custom ask-Codex pane map missing")
     assert(has_map(bufnr, "mc", "x"), "custom ask-Claude pane map missing")
-    assert(not has_map(bufnr, "<C-g>"), "disabled toggle-terminal alternate map was installed")
+    assert(not has_map(bufnr, "<C-G>"), "disabled toggle-terminal alternate map was installed")
+    assert(not has_map(bufnr, "<C-G>", "t"), "disabled terminal-mode toggle-terminal alternate map was installed")
     assert(not has_map(bufnr, "<leader>gi"), "disabled IPython alternate map was installed")
 
     call_map(bufnr, "m0")
@@ -594,7 +880,9 @@ test("legacy pane-local terminal toggle mapping keys remain aliases", function()
     })
 
     assert(has_map(bufnr, "ma"), "legacy toggle_agent pane map missing")
-    assert(not has_map(bufnr, "<C-g>"), "legacy disabled toggle_agent_alt map was installed")
+    assert(has_nowait_map(bufnr, "ma", "t"), "legacy terminal-mode toggle_agent pane map missing")
+    assert(not has_map(bufnr, "<C-G>"), "legacy disabled toggle_agent_alt map was installed")
+    assert(not has_map(bufnr, "<C-G>", "t"), "legacy disabled terminal-mode toggle_agent_alt map was installed")
 
     call_map(bufnr, "ma")
     assert(called == true, "legacy toggle_agent pane map did not call toggle")
@@ -710,10 +998,12 @@ test("setup installs single focus and shutdown autocmds when repeated", function
 
     local focus_autocmds = vim.api.nvim_get_autocmds({ group = "SidepanesFocus" })
     local resize_autocmds = vim.api.nvim_get_autocmds({ group = "SidepanesResize" })
+    local reload_autocmds = vim.api.nvim_get_autocmds({ group = "SidepanesReload" })
     local shutdown_autocmds = vim.api.nvim_get_autocmds({ group = "SidepanesShutdown" })
 
     assert(#focus_autocmds == 1, "setup duplicated focus autocmds")
     assert(#resize_autocmds == 1, "setup duplicated resize autocmds")
+    assert(#reload_autocmds == 3, "setup duplicated reload autocmds")
     assert(#shutdown_autocmds == 1, "setup duplicated shutdown autocmds")
     assert(pane.config.width == 61, "setup lost earlier config merge")
     assert(pane.config.wrap == true, "setup did not merge later config")
@@ -1250,6 +1540,18 @@ test("config normalizes ergonomic markdown and tool setup", function()
         },
         markdown = {
             wrap = true,
+            auto_reload = false,
+            reload_interval_ms = 250,
+            reload_badge_ms = 1500,
+            reload_badge = {
+                text = "[FRESH]",
+                clear_on_interaction = false,
+                hl = {
+                    fg = "#111111",
+                    bg = "#eeeeee",
+                    bold = false,
+                },
+            },
             wrap_toggle_key = "<leader>tw",
             sticky_heading = false,
             reflow = {
@@ -1276,6 +1578,18 @@ test("config normalizes ergonomic markdown and tool setup", function()
             shutdown_on_exit = false,
             shutdown_timeout_ms = 123,
         },
+        terminal = {
+            agent_resume_badge_ms = 2500,
+            agent_resume_badge = {
+                text = "[RECOVERED]",
+                clear_on_interaction = false,
+                hl = {
+                    fg = "#101010",
+                    bg = "#abcdef",
+                    bold = false,
+                },
+            },
+        },
         validation = {
             enabled = false,
         },
@@ -1284,6 +1598,7 @@ test("config normalizes ergonomic markdown and tool setup", function()
     assert(pane.config.layout == nil, "ergonomic layout table leaked into runtime config")
     assert(pane.config.markdown == nil, "ergonomic markdown table leaked into runtime config")
     assert(pane.config.lifecycle == nil, "ergonomic lifecycle table leaked into runtime config")
+    assert(pane.config.terminal == nil, "ergonomic terminal table leaked into runtime config")
     assert(pane.config.validation == nil, "ergonomic validation table leaked into runtime config")
     assert(pane.config.width == 88, "layout.width did not map to width")
     assert(pane.config.zoom_text_width == 77, "layout.zoom_text_width did not map to zoom_text_width")
@@ -1291,6 +1606,12 @@ test("config normalizes ergonomic markdown and tool setup", function()
     assert(pane.config.width_snap_points[2] == "50%", "layout.width_snap_points did not map to width_snap_points")
     assert(pane.config.width_picker_points[1] == "1/3", "layout.width_picker_points did not map to width_picker_points")
     assert(pane.config.wrap == true, "markdown.wrap did not map to wrap")
+    assert(pane.config.auto_reload == false, "markdown.auto_reload did not map to auto_reload")
+    assert(pane.config.reload_interval_ms == 250, "markdown.reload_interval_ms did not map to reload_interval_ms")
+    assert(pane.config.reload_badge_ms == 1500, "markdown.reload_badge_ms did not map to reload_badge_ms")
+    assert(pane.config.reload_badge.text == "[FRESH]", "markdown.reload_badge.text did not map to reload_badge.text")
+    assert(pane.config.reload_badge.clear_on_interaction == false, "markdown.reload_badge.clear_on_interaction did not map")
+    assert(pane.config.reload_badge.hl.bg == "#eeeeee", "markdown.reload_badge.hl did not map")
     assert(pane.config.wrap_toggle_key == "<leader>tw", "markdown.wrap_toggle_key did not map to wrap_toggle_key")
     assert(pane.config.sticky_heading == false, "markdown.sticky_heading did not map to sticky_heading")
     assert(pane.config.auto_reflow == false, "markdown.reflow.enabled did not map to auto_reflow")
@@ -1302,6 +1623,10 @@ test("config normalizes ergonomic markdown and tool setup", function()
     assert(pane.config.focus_on_ask == false, "lifecycle.focus_on_ask did not map to focus_on_ask")
     assert(pane.config.shutdown_on_exit == false, "lifecycle.shutdown_on_exit did not map to shutdown_on_exit")
     assert(pane.config.shutdown_timeout_ms == 123, "lifecycle.shutdown_timeout_ms did not map to shutdown_timeout_ms")
+    assert(pane.config.agent_resume_badge_ms == 2500, "terminal.agent_resume_badge_ms did not map")
+    assert(pane.config.agent_resume_badge.text == "[RECOVERED]", "terminal.agent_resume_badge.text did not map")
+    assert(pane.config.agent_resume_badge.clear_on_interaction == false, "terminal.agent_resume_badge.clear_on_interaction did not map")
+    assert(pane.config.agent_resume_badge.hl.bg == "#abcdef", "terminal.agent_resume_badge.hl did not map")
     assert(pane.config.validate == false, "validation.enabled did not map to validate")
     assert(pane.config.tools.claude == nil, "disabled tool was still present")
     assert(pane.config.tools.codex.cmd[1] == "sh", "generated tool lost explicit command override")
@@ -1360,8 +1685,14 @@ test("canonical default setup normalizes to runtime defaults", function()
     assert(vim.deep_equal(setup.layout.width_snap_points, defaults.config.width_snap_points), "default setup width snap points were wrong")
     assert(vim.deep_equal(setup.layout.width_picker_points, defaults.config.width_picker_points), "default setup width picker points were wrong")
     assert(setup.markdown.wrap == defaults.config.wrap, "default setup markdown wrap was wrong")
+    assert(setup.markdown.auto_reload == defaults.config.auto_reload, "default setup auto reload was wrong")
+    assert(setup.markdown.reload_interval_ms == defaults.config.reload_interval_ms, "default setup reload interval was wrong")
+    assert(setup.markdown.reload_badge_ms == defaults.config.reload_badge_ms, "default setup reload badge timeout was wrong")
+    assert(vim.deep_equal(setup.markdown.reload_badge, defaults.config.reload_badge), "default setup reload badge was wrong")
     assert(setup.markdown.reflow.enabled == defaults.config.auto_reflow, "default setup reflow enabled was wrong")
     assert(setup.lifecycle.shutdown_on_exit == defaults.config.shutdown_on_exit, "default setup lifecycle was wrong")
+    assert(setup.terminal.agent_resume_badge_ms == defaults.config.agent_resume_badge_ms, "default setup resume badge timeout was wrong")
+    assert(vim.deep_equal(setup.terminal.agent_resume_badge, defaults.config.agent_resume_badge), "default setup resume badge was wrong")
     assert(setup.validation.enabled == defaults.config.validate, "default setup validation was wrong")
     assert(vim.deep_equal(normalized, defaults.config), "canonical default setup did not round-trip to runtime defaults")
 end)
@@ -1374,6 +1705,18 @@ test("runtime config converts to canonical setup shape", function()
         width_snap_points = { 64, "1/2" },
         width_picker_points = { "1/4", 72 },
         wrap = true,
+        auto_reload = false,
+        reload_interval_ms = 500,
+        reload_badge_ms = 2000,
+        reload_badge = {
+            text = "[SYNCED]",
+            clear_on_interaction = true,
+            hl = {
+                fg = "CursorFG",
+                bg = "WarningMsg",
+                bold = true,
+            },
+        },
         wrap_toggle_key = "<leader>xw",
         sticky_heading = false,
         auto_reflow = false,
@@ -1385,6 +1728,16 @@ test("runtime config converts to canonical setup shape", function()
         focus_on_ask = false,
         shutdown_on_exit = false,
         shutdown_timeout_ms = 99,
+        agent_resume_badge_ms = 3000,
+        agent_resume_badge = {
+            text = "[RECOVERED]",
+            clear_on_interaction = true,
+            hl = {
+                fg = "CursorFG",
+                bg = "DiagnosticInfo",
+                bold = true,
+            },
+        },
         validate = false,
     })
     local setup = config.to_setup(runtime)
@@ -1396,6 +1749,10 @@ test("runtime config converts to canonical setup shape", function()
     assert(setup.layout.width_snap_points[2] == "1/2", "to_setup lost width snap points")
     assert(setup.layout.width_picker_points[2] == 72, "to_setup lost width picker points")
     assert(setup.markdown.wrap == true, "to_setup lost markdown wrap")
+    assert(setup.markdown.auto_reload == false, "to_setup lost markdown auto reload")
+    assert(setup.markdown.reload_interval_ms == 500, "to_setup lost markdown reload interval")
+    assert(setup.markdown.reload_badge_ms == 2000, "to_setup lost markdown reload badge timeout")
+    assert(setup.markdown.reload_badge.text == "[SYNCED]", "to_setup lost markdown reload badge")
     assert(setup.markdown.wrap_toggle_key == "<leader>xw", "to_setup lost wrap mapping")
     assert(setup.markdown.sticky_heading == false, "to_setup lost sticky heading")
     assert(setup.markdown.reflow.enabled == false, "to_setup lost reflow enabled")
@@ -1407,6 +1764,8 @@ test("runtime config converts to canonical setup shape", function()
     assert(setup.lifecycle.focus_on_ask == false, "to_setup lost focus_on_ask")
     assert(setup.lifecycle.shutdown_on_exit == false, "to_setup lost shutdown_on_exit")
     assert(setup.lifecycle.shutdown_timeout_ms == 99, "to_setup lost shutdown timeout")
+    assert(setup.terminal.agent_resume_badge_ms == 3000, "to_setup lost resume badge timeout")
+    assert(setup.terminal.agent_resume_badge.text == "[RECOVERED]", "to_setup lost resume badge")
     assert(setup.validation.enabled == false, "to_setup lost validation flag")
     assert(vim.deep_equal(normalized, runtime), "canonical setup did not round-trip custom runtime config")
 end)
@@ -1676,6 +2035,19 @@ test("setup validation reports malformed config and implied dependency gaps", fu
         },
         width_snap_points = { 80, true },
         width_picker_points = { "1/2", false },
+        reload_interval_ms = 0,
+        reload_badge_ms = -1,
+        reload_badge = {
+            text = true,
+            clear_on_interaction = "yes",
+            hl = "WarningMsg",
+        },
+        agent_resume_badge_ms = -1,
+        agent_resume_badge = {
+            text = true,
+            clear_on_interaction = "yes",
+            hl = "DiagnosticInfo",
+        },
         tools = {
             broken = {
                 cmd = "definitely_missing_sidepanes_validation_cmd",
@@ -1700,6 +2072,15 @@ test("setup validation reports malformed config and implied dependency gaps", fu
     assert(joined:find("Sidepanes dependency missing for markdown headings: Treesitter markdown parser", 1, true), joined)
     assert(joined:find("Invalid Sidepanes width_snap_points entry at index 2", 1, true), joined)
     assert(joined:find("Invalid Sidepanes width_picker_points entry at index 2", 1, true), joined)
+    assert(joined:find("Sidepanes config reload_interval_ms must be a positive number.", 1, true), joined)
+    assert(joined:find("Sidepanes config reload_badge_ms must be a non-negative number.", 1, true), joined)
+    assert(joined:find("Sidepanes config reload_badge.text must be a string.", 1, true), joined)
+    assert(joined:find("Sidepanes config reload_badge.clear_on_interaction must be a boolean.", 1, true), joined)
+    assert(joined:find("Sidepanes config reload_badge.hl must be a table.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_badge_ms must be a non-negative number.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_badge.text must be a string.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_badge.clear_on_interaction must be a boolean.", 1, true), joined)
+    assert(joined:find("Sidepanes config agent_resume_badge.hl must be a table.", 1, true), joined)
     assert(joined:find("Sidepanes tool executable not found for broken", 1, true), joined)
     assert(joined:find("Sidepanes tool has no presets configured: broken", 1, true), joined)
 end)
@@ -2550,6 +2931,186 @@ test("opening a different markdown file resets cursor to top", function()
     assert(vim.api.nvim_buf_get_lines(pane.bufnr, 0, 1, false)[1] == "Second 1", "second file did not load")
 end)
 
+test("markdown auto reload detects filesystem changes and restores approximate cursor", function()
+    reset_pane()
+
+    local root = root_fixture("viewer-auto-reload-test")
+    local doc = root .. "/docs/doc.md"
+    local original = {}
+
+    for index = 1, 60 do
+        original[index] = "Line " .. index
+    end
+
+    original[30] = "Anchor detail version one"
+    write(doc, original)
+    pane.setup({
+        auto_reflow = false,
+        markdown = {
+            auto_reload = true,
+        },
+    })
+    pane.open(doc)
+    pane.focus_toggle()
+    vim.api.nvim_win_set_cursor(pane.winid, { 30, 0 })
+    assert(pane.markdown_watcher_path == doc, "auto reload did not track the source path")
+    assert(pane.markdown_reload_timer ~= nil, "auto reload did not start polling timer")
+
+    local changed = {
+        "# Inserted",
+        "",
+        "new intro",
+        "",
+        "another new line",
+    }
+
+    for index, line in ipairs(original) do
+        changed[#changed + 1] = index == 30 and "Anchor detail version two" or line
+    end
+
+    write(doc, changed)
+    local reloaded = vim.wait(1500, function()
+        return vim.api.nvim_buf_get_lines(pane.bufnr, 0, 1, false)[1] == "# Inserted"
+    end, 20)
+
+    assert(reloaded, "auto reload did not refresh buffer contents")
+
+    local cursor = vim.api.nvim_win_get_cursor(pane.winid)
+    local current_line = vim.api.nvim_buf_get_lines(pane.bufnr, cursor[1] - 1, cursor[1], false)[1]
+    local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+    assert(current_line == "Anchor detail version two", "auto reload did not restore fuzzy cursor line: " .. tostring(current_line))
+    assert(winbar:find("%#SidepanesReloaded# [RELOADED] ", 1, true), winbar)
+    assert(pane.markdown_reloaded == true, "reload badge state was not set")
+
+    assert(vim.wait(500, function()
+        return pane.markdown_reload_badge_armed == true
+    end, 10), "reload badge was not armed for interaction clearing")
+
+    local other_buf = vim.api.nvim_create_buf(false, true)
+    local other_win = vim.api.nvim_get_current_win()
+
+    vim.cmd("botright new")
+    other_win = vim.api.nvim_get_current_win()
+    vim.api.nvim_win_set_buf(other_win, other_buf)
+    vim.cmd("doautocmd CursorMoved")
+    assert(pane.markdown_reloaded == true, "non-markdown interaction cleared reload badge")
+
+    vim.api.nvim_set_current_win(pane.winid)
+    vim.cmd("doautocmd CursorMoved")
+    assert(pane.markdown_reloaded == true, "synthetic markdown cursor event cleared reload badge")
+
+    vim.api.nvim_feedkeys("j", "xt", false)
+    assert(vim.wait(500, function()
+        return pane.markdown_reloaded == false
+    end, 10), "markdown key interaction did not clear reload badge")
+    assert(not vim.api.nvim_get_option_value("winbar", { win = pane.winid }):find("[RELOADED]", 1, true), "cleared reload badge stayed in winbar")
+
+    if vim.api.nvim_win_is_valid(other_win) then
+        vim.api.nvim_win_close(other_win, true)
+    end
+end)
+
+test("markdown auto reload detects external atomic file replacement and updates winbar", function()
+    reset_pane()
+
+    local root = root_fixture("viewer-auto-reload-external-test")
+    local doc = root .. "/docs/doc.md"
+
+    write(doc, {
+        "# Original",
+        "",
+        "before external save",
+    })
+    pane.setup({
+        auto_reflow = false,
+        markdown = {
+            auto_reload = true,
+        },
+    })
+    pane.open(doc)
+    pane.focus_toggle()
+
+    local tmp = doc .. ".tmp"
+    local job = vim.fn.jobstart({
+        "sh",
+        "-c",
+        "sleep 0.1; printf '%s\n%s\n%s\n' '# External' '' 'after external save' > " .. vim.fn.shellescape(tmp) .. "; mv " .. vim.fn.shellescape(tmp) .. " " .. vim.fn.shellescape(doc),
+    })
+
+    assert(job > 0, "external writer job did not start")
+
+    local reloaded = vim.wait(2000, function()
+        return vim.api.nvim_buf_get_lines(pane.bufnr, 0, 1, false)[1] == "# External"
+    end, 20)
+
+    assert(reloaded, "external atomic save did not reload markdown pane")
+
+    local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+    assert(vim.api.nvim_buf_get_lines(pane.bufnr, 2, 3, false)[1] == "after external save", "external save body did not reload")
+    assert(winbar:find("%#SidepanesReloaded# [RELOADED] ", 1, true), winbar)
+end)
+
+test("markdown auto reload detects same-size external content replacement", function()
+    reset_pane()
+
+    local root = root_fixture("viewer-auto-reload-same-size-test")
+    local doc = root .. "/docs/doc.md"
+
+    write(doc, {
+        "# Original",
+        "",
+        "alpha",
+    })
+    pane.setup({
+        auto_reflow = false,
+        markdown = {
+            auto_reload = true,
+        },
+    })
+    pane.open(doc)
+
+    local job = vim.fn.jobstart({
+        "sh",
+        "-c",
+        "sleep 0.1; printf '%s\n%s\n%s\n' '# Original' '' 'bravo' > " .. vim.fn.shellescape(doc),
+    })
+
+    assert(job > 0, "same-size external writer job did not start")
+
+    local reloaded = vim.wait(2000, function()
+        return vim.api.nvim_buf_get_lines(pane.bufnr, 2, 3, false)[1] == "bravo"
+    end, 20)
+
+    assert(reloaded, "same-size external content replacement did not reload markdown pane")
+    assert(vim.api.nvim_get_option_value("winbar", { win = pane.winid }):find("%#SidepanesReloaded# [RELOADED] ", 1, true), "same-size reload did not update winbar")
+end)
+
+test("disabled markdown auto reload leaves pane buffer unchanged", function()
+    reset_pane()
+
+    local root = root_fixture("viewer-auto-reload-disabled-test")
+    local doc = root .. "/docs/doc.md"
+
+    write(doc, { "# Original", "", "old body" })
+    pane.setup({
+        auto_reflow = false,
+        markdown = {
+            auto_reload = false,
+        },
+    })
+    pane.open(doc)
+    assert(pane.markdown_watcher_path == nil, "disabled auto reload tracked a source path")
+    assert(pane.markdown_reload_timer == nil, "disabled auto reload started polling timer")
+    write(doc, { "# Changed", "", "new body" })
+    pane.markdown_file_signature = "stale-signature"
+    vim.cmd("doautocmd CursorHold")
+
+    assert(vim.api.nvim_buf_get_lines(pane.bufnr, 0, 1, false)[1] == "# Original", "disabled auto reload changed buffer")
+    assert(pane.markdown_reloaded == false, "disabled auto reload set reload badge")
+end)
+
 test("show markdown from terminal restores markdown cursor view", function()
     reset_pane()
 
@@ -3145,6 +3706,46 @@ test("markdown winbar shows current heading and zoom state", function()
     winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
 
     assert(winbar:find("[zoom]", 1, true), winbar)
+end)
+
+test("markdown reload badge text and highlight are configurable", function()
+    reset_pane()
+
+    local root = root_fixture("winbar-reload-badge-config-test")
+
+    write(root .. "/docs/doc.md", {
+        "# Top",
+        "",
+        "body",
+    })
+    pane.setup({
+        auto_reflow = false,
+        sticky_heading = true,
+        markdown = {
+            reload_badge = {
+                text = "[SYNCED]",
+                hl = {
+                    fg = "#111111",
+                    bg = "#eeeeee",
+                    bold = false,
+                },
+            },
+        },
+    })
+    pane.open(root .. "/docs/doc.md")
+    pane.focus_toggle()
+
+    pane.markdown_reloaded = true
+    pane.markdown_reload_badge_armed = false
+    vim.cmd("doautocmd WinResized")
+
+    local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+    local hl = vim.api.nvim_get_hl(0, { name = "SidepanesReloaded", link = false })
+
+    assert(winbar:find("%#SidepanesReloaded# [SYNCED] ", 1, true), winbar)
+    assert(hl.fg == 0x111111, "reload badge fg was not configurable")
+    assert(hl.bg == 0xeeeeee, "reload badge bg was not configurable")
+    assert(hl.bold ~= true, "reload badge bold was not configurable")
 end)
 
 test("terminal winbar shows tool preset and root", function()

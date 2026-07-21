@@ -28,10 +28,11 @@ Sidepanes keeps one right-hand pane and switches it between:
 - Claude
 - IPython
 
-It preserves Markdown cursor/scroll position, reuses terminal sessions, sends
-visual selections into agent prompt editors, sends lines or selections to
-IPython, includes pane-local smart `gf`, and ships built-in Markdown reflow as
-`sidepanes.markdown_reflow`.
+It preserves Markdown cursor/scroll position, reuses terminal sessions, resumes
+Codex and Claude sessions after pane-owned terminal exits, sends visual
+selections into agent prompt editors, sends lines or selections to IPython,
+includes pane-local smart `gf`, auto-reloads Markdown files changed on disk, and
+ships built-in Markdown reflow as `sidepanes.markdown_reflow`.
 
 ## Install
 
@@ -58,6 +59,32 @@ reflow.
   },
   config = function()
     require("sidepanes").setup({
+      markdown = {
+        auto_reload = true,
+        reload_interval_ms = 1000,
+        reload_badge_ms = 0,
+        reload_badge = {
+          text = "[RELOADED]",
+          clear_on_interaction = true,
+          hl = {
+            fg = "CursorFG",
+            bg = "WarningMsg",
+            bold = true,
+          },
+        },
+      },
+      terminal = {
+        agent_resume_badge_ms = 0,
+        agent_resume_badge = {
+          text = "[RESUMED]",
+          clear_on_interaction = true,
+          hl = {
+            fg = "CursorFG",
+            bg = "DiagnosticInfo",
+            bold = true,
+          },
+        },
+      },
       commands = true,
       mappings = {
         global = {
@@ -134,7 +161,9 @@ are available in your environment.
 
 2. For long Markdown files, jump by heading instead of scrolling. Press
    `<leader>mf` to fuzzy find headings in the current Sidepanes document. Pick a
-   heading and the pane moves directly there.
+   heading and the pane moves directly there. If the Markdown file changes on
+   disk, Sidepanes reloads it, returns near your previous line, and marks the
+   winbar with `[RELOADED]` until you interact with the Markdown pane.
 
 3. When a Markdown note points at a source file, put the cursor on the filename
    and press `gf` inside the pane. Sidepanes resolves the path against the
@@ -157,7 +186,15 @@ are available in your environment.
    Inside the Sidepanes panel, use the faster pane-local mappings: `<space>x`
    for Codex, `<space>c` for Claude, `<space>i` for IPython, and `<space>0` for
    the Markdown viewer. Press `<leader>gg` or `<C-g>` inside the pane to toggle
-   between the Markdown document and the last terminal.
+   between the Markdown document and the last terminal. These toggle mappings
+   are also installed in terminal-input mode, so pressing `<C-g>` while typing
+   in Claude or Codex is handled by Sidepanes instead of being sent to the agent.
+   If a pane-owned Codex or Claude terminal exits unexpectedly, reopening that
+   tool first checks for a live pane job, then resumes the remembered or latest
+   matching project session when Sidepanes can find one. Recovered terminals
+   echo the session/PID details and show a `[RESUMED]` winbar badge. Sidepanes
+   cannot reattach to a lost terminal pty; if the previous PID is still alive,
+   the notification reports it so you can decide how to handle that process.
 
 7. If the pane feels too wide or narrow, use `<leader>p-`, `<leader>p+`, or
    `<leader>pw` to adjust it. Use `<leader>p%` when you want relative widths to
@@ -201,8 +238,8 @@ them with `mappings.pane`.
 | `codex` | `<space>x` | Show Codex. |
 | `claude` | `<space>c` | Show Claude. |
 | `ipython` | `<space>i` | Show IPython. |
-| `toggle_terminal` | `<leader>gg` | Toggle Markdown and last terminal. |
-| `toggle_terminal_alt` | `<C-g>` | Faster toggle between Markdown and last terminal. |
+| `toggle_terminal` | `<leader>gg` | Toggle Markdown and last terminal, including from terminal-input mode. |
+| `toggle_terminal_alt` | `<C-g>` | Faster toggle between Markdown and last terminal, including from terminal-input mode. |
 | `ipython_alt` | `<leader>gi` | Show IPython. |
 | `gf` | `gf` | Smart go-to-file from the pane into the last non-pane window. |
 | `send_ipython` | `ll` | Send visual selection to IPython. |

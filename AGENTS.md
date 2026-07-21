@@ -63,3 +63,13 @@ Implementation notes that are no longer active should move under `docs/`.
 `CHANGELOG.md` is the source of truth for release-facing changes. Add entries
 under `Unreleased` when a change affects users, documented behavior, release
 process, or supported workflows.
+
+When working on plugin updates from a feature or fix branch, keep
+`CHANGELOG.md` updated as part of the branch instead of waiting until release
+prep. This keeps small changes easy to review and makes patch releases less
+error-prone.
+
+Also note incidental fixes discovered along the way, even when they are not the
+main branch goal. For example, if a Markdown reload branch exposes and fixes a
+`smart_gf` path resolution bug, add a separate `CHANGELOG.md` entry for that
+fix instead of hiding it inside the feature summary.

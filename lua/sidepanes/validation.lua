@@ -162,6 +162,49 @@ local function validate_layout(diagnostics, config)
     end
 end
 
+local function validate_badge(diagnostics, key, badge)
+    if badge ~= nil and type(badge) ~= "table" then
+        warn(diagnostics, "Sidepanes config " .. key .. " must be a table.")
+        return
+    end
+
+    badge = badge or {}
+
+    if badge.text ~= nil and type(badge.text) ~= "string" then
+        warn(diagnostics, "Sidepanes config " .. key .. ".text must be a string.")
+    end
+
+    if badge.clear_on_interaction ~= nil and type(badge.clear_on_interaction) ~= "boolean" then
+        warn(diagnostics, "Sidepanes config " .. key .. ".clear_on_interaction must be a boolean.")
+    end
+
+    if badge.hl ~= nil and type(badge.hl) ~= "table" then
+        warn(diagnostics, "Sidepanes config " .. key .. ".hl must be a table.")
+    end
+end
+
+--- Validate markdown reload and badge config shape.
+local function validate_markdown(diagnostics, config)
+    if config.reload_interval_ms ~= nil and (type(config.reload_interval_ms) ~= "number" or config.reload_interval_ms <= 0) then
+        warn(diagnostics, "Sidepanes config reload_interval_ms must be a positive number.")
+    end
+
+    if config.reload_badge_ms ~= nil and (type(config.reload_badge_ms) ~= "number" or config.reload_badge_ms < 0) then
+        warn(diagnostics, "Sidepanes config reload_badge_ms must be a non-negative number.")
+    end
+
+    validate_badge(diagnostics, "reload_badge", config.reload_badge)
+end
+
+--- Validate terminal recovery badge config shape.
+local function validate_terminal(diagnostics, config)
+    if config.agent_resume_badge_ms ~= nil and (type(config.agent_resume_badge_ms) ~= "number" or config.agent_resume_badge_ms < 0) then
+        warn(diagnostics, "Sidepanes config agent_resume_badge_ms must be a non-negative number.")
+    end
+
+    validate_badge(diagnostics, "agent_resume_badge", config.agent_resume_badge)
+end
+
 --- Return the executable head for a tool command.
 local function command_head(tool)
     if not tool then
@@ -220,6 +263,8 @@ function M.diagnostics(config)
 
     validate_surface(diagnostics, config or {})
     validate_layout(diagnostics, config or {})
+    validate_markdown(diagnostics, config or {})
+    validate_terminal(diagnostics, config or {})
     validate_tools(diagnostics, config or {})
 
     return diagnostics

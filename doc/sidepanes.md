@@ -137,8 +137,8 @@ Sidepanes buffers.
 | `codex` | `<space>x` | Show Codex. |
 | `claude` | `<space>c` | Show Claude. |
 | `ipython` | `<space>i` | Show IPython. |
-| `toggle_terminal` | `<leader>gg` | Toggle Markdown and last terminal. |
-| `toggle_terminal_alt` | `<C-g>` | Faster toggle Markdown and last terminal. |
+| `toggle_terminal` | `<leader>gg` | Toggle Markdown and last terminal, including from terminal-input mode. |
+| `toggle_terminal_alt` | `<C-g>` | Faster toggle Markdown and last terminal, including from terminal-input mode. |
 | `ipython_alt` | `<leader>gi` | Show IPython. |
 | `gf` | `gf` | Smart go-to-file from the pane into the last non-pane window. |
 | `send_ipython` | `ll` | Send visual selection to IPython. |
@@ -165,6 +165,18 @@ require("sidepanes").setup({
   },
   markdown = {
     wrap = false,
+    auto_reload = true,
+    reload_interval_ms = 1000,
+    reload_badge_ms = 0,
+    reload_badge = {
+      text = "[RELOADED]",
+      clear_on_interaction = true,
+      hl = {
+        fg = "CursorFG",
+        bg = "WarningMsg",
+        bold = true,
+      },
+    },
     wrap_toggle_key = "<leader>mw",
     sticky_heading = true,
     reflow = {
@@ -180,6 +192,18 @@ require("sidepanes").setup({
     focus_on_ask = true,
     shutdown_on_exit = true,
     shutdown_timeout_ms = 300,
+  },
+  terminal = {
+    agent_resume_badge_ms = 0,
+    agent_resume_badge = {
+      text = "[RESUMED]",
+      clear_on_interaction = true,
+      hl = {
+        fg = "CursorFG",
+        bg = "DiagnosticInfo",
+        bold = true,
+      },
+    },
   },
   validation = {
     enabled = true,
@@ -222,6 +246,10 @@ Grouped options normalize to runtime keys:
 | `layout.width_snap_points` | `width_snap_points` |
 | `layout.width_picker_points` | `width_picker_points` |
 | `markdown.wrap` | `wrap` |
+| `markdown.auto_reload` | `auto_reload` |
+| `markdown.reload_interval_ms` | `reload_interval_ms` |
+| `markdown.reload_badge_ms` | `reload_badge_ms` |
+| `markdown.reload_badge` | `reload_badge` |
 | `markdown.wrap_toggle_key` | `wrap_toggle_key` |
 | `markdown.sticky_heading` | `sticky_heading` |
 | `markdown.reflow.enabled` | `auto_reflow` |
@@ -233,6 +261,8 @@ Grouped options normalize to runtime keys:
 | `lifecycle.focus_on_ask` | `focus_on_ask` |
 | `lifecycle.shutdown_on_exit` | `shutdown_on_exit` |
 | `lifecycle.shutdown_timeout_ms` | `shutdown_timeout_ms` |
+| `terminal.agent_resume_badge_ms` | `agent_resume_badge_ms` |
+| `terminal.agent_resume_badge` | `agent_resume_badge` |
 | `validation.enabled` | `validate` |
 
 ## Width Behavior
@@ -276,6 +306,31 @@ pane width as the ratio target.
 Width changes reflow and rerender Markdown only when the Markdown viewer is the
 active pane. Terminal panes resize without reflowing the hidden Markdown buffer.
 
+When `markdown.auto_reload` is enabled, Sidepanes periodically compares a
+content fingerprint of the active Markdown source file so same-size rewrites and
+atomic saves are detected. `markdown.reload_interval_ms` controls the polling
+interval. It also checks on focus and cursor-hold events, and when switching
+back to the Markdown viewer. If the file changed on disk, the pane reloads it,
+tries to return to the same or nearest matching line, and shows a `[RELOADED]`
+badge in the winbar.
+
+By default, the reload badge stays visible until key interaction inside the
+Sidepanes Markdown pane. Set `markdown.reload_badge.clear_on_interaction` to
+false to disable that behavior, or set `markdown.reload_badge_ms` to a positive
+millisecond value to also hide it on a timer. `markdown.reload_badge.text`
+changes the label. `markdown.reload_badge.hl.fg` and `.bg` accept hex colors or
+Neovim highlight group names such as `CursorFG` and `WarningMsg`; group names
+resolve to their configured colors for the generated `SidepanesReloaded`
+highlight group.
+
+Recovered Codex and Claude terminals show a `[RESUMED]` badge in the winbar by
+default. Set `terminal.agent_resume_badge.clear_on_interaction` to false to keep
+it visible, or set `terminal.agent_resume_badge_ms` to a positive millisecond
+value to hide it on a timer. `terminal.agent_resume_badge.text` changes the
+label. `terminal.agent_resume_badge.hl.fg` and `.bg` accept hex colors or
+Neovim highlight group names for the generated `SidepanesResumed` highlight
+group.
+
 ## Tool Presets
 
 You can write presets explicitly or generate them compactly.
@@ -310,6 +365,22 @@ Preset tables may include:
 The running terminal session is one per tool. If Codex is already open and a
 new Codex preset is chosen, Sidepanes sends the configured `switch_command`
 before sending the prompt.
+
+Codex and Claude panes also track the agent process id and resumable session id
+when the CLI exposes one. Opening Codex or Claude first reuses a live pane-owned
+terminal buffer and Neovim job. If that live check fails because the terminal
+exited, crashed, or its buffer was lost, Sidepanes builds a recovery candidate
+from the current context, the remembered session record, or the latest matching
+project transcript. Claude uses `~/.claude/sessions/<pid>.json` first and falls
+back to the latest `~/.claude/projects/<project>/` transcript. Codex falls back
+to the latest matching project transcript in `~/.codex/sessions/**`.
+
+When a recovery candidate is launched, Claude receives
+`claude --resume <session-id>` and Codex receives `codex resume <session-id>`.
+Sidepanes checks whether any remembered previous PID is still alive, includes
+the previous/new PID and session id in the notification when available, and
+shows the recovered terminal badge. Sidepanes cannot reattach to a lost terminal
+pty; recovery starts a new CLI process with the tool's resume command.
 
 Default exit commands:
 
@@ -364,8 +435,11 @@ the normalized internal entry. It is useful for integration code, but normal
 users should prefer `switch_to()`.
 
 `show_last_terminal(opts)` and `toggle_markdown_terminal()` are advanced workflow
-helpers. They rely on Sidepanes' current runtime memory, not a durable history
-model, and may show Codex, Claude, IPython, or a configured custom pane terminal.
+helpers. They may show Codex, Claude, IPython, or a configured custom pane
+terminal. For Codex and Claude, reopening after a dead pane-owned terminal uses
+Sidepanes' remembered session id or the tool's latest matching project
+transcript when available, then reports the recovered session and shows the
+resume badge.
 
 `show_last_agent(opts)` and `toggle_markdown_agent()` remain compatibility
 aliases for older callers.

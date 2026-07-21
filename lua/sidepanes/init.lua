@@ -51,7 +51,14 @@ local M = {
     last_focus_win = nil,
     zoomed = false,
     markdown_view = nil,
+    markdown_file_signature = nil,
+    markdown_reloaded = false,
+    markdown_reload_badge_armed = false,
+    markdown_reload_token = 0,
+    markdown_watcher_path = nil,
+    markdown_reload_timer = nil,
     terminals = {},
+    agent_sessions = {},
     question_buffers = {},
     config = vim.deepcopy(defaults.config),
 }
@@ -66,6 +73,7 @@ local sticky_heading_group = vim.api.nvim_create_augroup("SidepanesStickyHeading
 local focus_group = vim.api.nvim_create_augroup("SidepanesFocus", { clear = true })
 local shutdown_group = vim.api.nvim_create_augroup("SidepanesShutdown", { clear = true })
 local resize_group = vim.api.nvim_create_augroup("SidepanesResize", { clear = true })
+local reload_group = vim.api.nvim_create_augroup("SidepanesReload", { clear = true })
 
 
 -- =============================================================================
@@ -164,9 +172,26 @@ local function update_sticky_heading()
     winbar.update(M)
 end
 
+--- Clear the temporary markdown reload badge.
+local function clear_markdown_reload_badge()
+    viewer.clear_reload_badge(M, {
+        update_sticky_heading = update_sticky_heading,
+    })
+end
+
+--- Clear the temporary recovered/resumed agent badge.
+local function clear_agent_resume_badge()
+    terminal.clear_resume_badge(M, {
+        update_sticky_heading = update_sticky_heading,
+    })
+end
+
 --- Install autocmds that keep the sticky heading current.
 local function setup_sticky_heading_autocmds()
-    winbar.setup_autocmds(M, sticky_heading_group)
+    winbar.setup_autocmds(M, sticky_heading_group, {
+        clear_reload_badge = clear_markdown_reload_badge,
+        clear_resume_badge = clear_agent_resume_badge,
+    })
 end
 
 --- Create or return the markdown viewer buffer.
@@ -186,6 +211,11 @@ local window_deps
 local viewer_deps
 local render_deps
 local switcher_deps
+
+--- Reload the markdown viewer if its source file changed on disk.
+local function check_markdown_reload()
+    viewer.check_reload(M, viewer_deps())
+end
 
 
 -- =============================================================================
@@ -410,7 +440,9 @@ function M.setup(opts)
         focus = focus_group,
         resize = resize_group,
         shutdown = shutdown_group,
+        reload = reload_group,
     }, {
+        check_markdown_reload = check_markdown_reload,
         record_focus_win = record_focus_win,
         refresh_width = M.refresh_width,
         shutdown_terminals = M.shutdown_terminals,
