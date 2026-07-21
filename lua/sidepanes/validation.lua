@@ -178,6 +178,10 @@ local function validate_badge(diagnostics, key, badge)
         warn(diagnostics, "Sidepanes config " .. key .. ".clear_on_interaction must be a boolean.")
     end
 
+    if badge.min_display_ms ~= nil and (type(badge.min_display_ms) ~= "number" or badge.min_display_ms < 0) then
+        warn(diagnostics, "Sidepanes config " .. key .. ".min_display_ms must be a non-negative number.")
+    end
+
     if badge.hl ~= nil and type(badge.hl) ~= "table" then
         warn(diagnostics, "Sidepanes config " .. key .. ".hl must be a table.")
     end

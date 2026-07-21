@@ -2228,7 +2228,7 @@ test("setup installs single focus and shutdown autocmds when repeated", function
 
     assert(#focus_autocmds == 1, "setup duplicated focus autocmds")
     assert(#resize_autocmds == 1, "setup duplicated resize autocmds")
-    assert(#reload_autocmds == 3, "setup duplicated reload autocmds")
+    assert(#reload_autocmds == 4, "setup duplicated reload autocmds")
     assert(#shutdown_autocmds == 1, "setup duplicated shutdown autocmds")
     assert(pane.config.width == 61, "setup lost earlier config merge")
     assert(pane.config.wrap == true, "setup did not merge later config")
@@ -2771,6 +2771,7 @@ test("config normalizes ergonomic markdown and tool setup", function()
             reload_badge = {
                 text = "[FRESH]",
                 clear_on_interaction = false,
+                min_display_ms = 1250,
                 hl = {
                     fg = "#111111",
                     bg = "#eeeeee",
@@ -2862,6 +2863,7 @@ test("config normalizes ergonomic markdown and tool setup", function()
     assert(pane.config.reload_badge_ms == 1500, "markdown.reload_badge_ms did not map to reload_badge_ms")
     assert(pane.config.reload_badge.text == "[FRESH]", "markdown.reload_badge.text did not map to reload_badge.text")
     assert(pane.config.reload_badge.clear_on_interaction == false, "markdown.reload_badge.clear_on_interaction did not map")
+    assert(pane.config.reload_badge.min_display_ms == 1250, "markdown.reload_badge.min_display_ms did not map")
     assert(pane.config.reload_badge.hl.bg == "#eeeeee", "markdown.reload_badge.hl did not map")
     assert(pane.config.wrap_toggle_key == "<leader>tw", "markdown.wrap_toggle_key did not map to wrap_toggle_key")
     assert(pane.config.sticky_heading == false, "markdown.sticky_heading did not map to sticky_heading")
@@ -2988,6 +2990,7 @@ test("runtime config converts to canonical setup shape", function()
         reload_badge = {
             text = "[SYNCED]",
             clear_on_interaction = true,
+            min_display_ms = 1750,
             hl = {
                 fg = "CursorFG",
                 bg = "WarningMsg",
@@ -3051,6 +3054,7 @@ test("runtime config converts to canonical setup shape", function()
     assert(setup.markdown.reload_interval_ms == 500, "to_setup lost markdown reload interval")
     assert(setup.markdown.reload_badge_ms == 2000, "to_setup lost markdown reload badge timeout")
     assert(setup.markdown.reload_badge.text == "[SYNCED]", "to_setup lost markdown reload badge")
+    assert(setup.markdown.reload_badge.min_display_ms == 1750, "to_setup lost markdown reload badge minimum display")
     assert(setup.markdown.wrap_toggle_key == "<leader>xw", "to_setup lost wrap mapping")
     assert(setup.markdown.sticky_heading == false, "to_setup lost sticky heading")
     assert(setup.markdown.reflow.enabled == false, "to_setup lost reflow enabled")
@@ -3352,6 +3356,7 @@ test("setup validation reports malformed config and implied dependency gaps", fu
         reload_badge = {
             text = true,
             clear_on_interaction = "yes",
+            min_display_ms = "soon",
             hl = "WarningMsg",
         },
         project_root_markers = 42,
@@ -3404,6 +3409,7 @@ test("setup validation reports malformed config and implied dependency gaps", fu
     assert(joined:find("Sidepanes config reload_badge_ms must be a non-negative number.", 1, true), joined)
     assert(joined:find("Sidepanes config reload_badge.text must be a string.", 1, true), joined)
     assert(joined:find("Sidepanes config reload_badge.clear_on_interaction must be a boolean.", 1, true), joined)
+    assert(joined:find("Sidepanes config reload_badge.min_display_ms must be a non-negative number.", 1, true), joined)
     assert(joined:find("Sidepanes config reload_badge.hl must be a table.", 1, true), joined)
     assert(joined:find("Sidepanes config project_root_markers must be a string, table, function, or false.", 1, true), joined)
     assert(joined:find("Sidepanes config project_root_fallback must be 'buffer_dir' or 'cwd'.", 1, true), joined)
@@ -4414,6 +4420,9 @@ test("markdown auto reload detects filesystem changes and restores approximate c
         auto_reflow = false,
         markdown = {
             auto_reload = true,
+            reload_badge = {
+                min_display_ms = 100,
+            },
         },
     })
     pane.open(doc)
@@ -4518,6 +4527,56 @@ test("markdown auto reload detects external atomic file replacement and updates 
     assert(winbar:find("%#SidepanesReloaded# [RELOADED] ", 1, true), winbar)
 end)
 
+test("markdown reload badge ignores interaction until minimum display delay", function()
+    reset_pane()
+
+    local root = root_fixture("viewer-reload-badge-delay-test")
+    local doc = root .. "/docs/doc.md"
+
+    write(doc, {
+        "# Original",
+        "",
+        "old body",
+        "extra line",
+    })
+    pane.setup({
+        auto_reflow = false,
+        markdown = {
+            auto_reload = true,
+            reload_badge = {
+                min_display_ms = 250,
+            },
+        },
+    })
+    pane.open(doc)
+    pane.focus_toggle()
+
+    write(doc, {
+        "# Changed",
+        "",
+        "new body",
+        "extra line",
+    })
+    vim.cmd("doautocmd CursorHold")
+
+    assert(pane.markdown_reloaded == true, "reload badge state was not set")
+    assert(pane.markdown_reload_badge_armed == false, "reload badge armed before minimum display delay")
+
+    vim.api.nvim_feedkeys("j", "xt", false)
+    assert(vim.wait(100, function()
+        return pane.markdown_reloaded == false
+    end, 10) == false, "interaction cleared reload badge before minimum display delay")
+
+    assert(vim.wait(500, function()
+        return pane.markdown_reload_badge_armed == true
+    end, 10), "reload badge did not arm after minimum display delay")
+
+    vim.api.nvim_feedkeys("j", "xt", false)
+    assert(vim.wait(500, function()
+        return pane.markdown_reloaded == false
+    end, 10), "interaction did not clear reload badge after minimum display delay")
+end)
+
 test("markdown auto reload detects same-size external content replacement", function()
     reset_pane()
 
@@ -4616,6 +4675,35 @@ test("show markdown from terminal restores markdown cursor view", function()
     assert(vim.api.nvim_win_get_cursor(pane.winid)[1] == 45, "show_markdown did not restore cursor")
 end)
 
+test("show markdown from terminal reloads changed markdown source", function()
+    reset_pane()
+
+    local root = root_fixture("viewer-show-markdown-reload-test")
+    local doc = root .. "/docs/doc.md"
+
+    write(doc, { "# Original", "", "old body" })
+    pane.setup({
+        auto_reflow = false,
+        focus_on_switch = true,
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    pane.open(doc)
+    pane.open_terminal("codex", nil, { root = root, focus = true })
+    write(doc, { "# Changed", "", "Reloaded from Codex" })
+    pane.show_markdown()
+
+    assert(pane.active_mode == "markdown", "show_markdown did not activate markdown")
+    assert(vim.api.nvim_buf_get_lines(pane.bufnr, 0, 1, false)[1] == "# Changed", "show_markdown did not reload changed markdown source")
+    assert(vim.api.nvim_get_option_value("winbar", { win = pane.winid }):find("%#SidepanesReloaded# [RELOADED] ", 1, true), "show_markdown reload did not update winbar")
+end)
+
 test("toggle closes pane and reopens last markdown source", function()
     reset_pane()
 
@@ -4656,6 +4744,34 @@ test("focus toggle moves between normal window and pane", function()
 
     pane.focus_toggle()
     assert(vim.api.nvim_get_current_win() == origin_win, "focus_toggle did not return to origin window")
+end)
+
+test("focus toggle reloads changed markdown pane on return", function()
+    reset_pane()
+
+    local root = root_fixture("focus-toggle-reload-test")
+    local doc = root .. "/docs/doc.md"
+
+    write(doc, { "# Original", "", "old body" })
+    write(root .. "/src/origin.py", { "print('origin')" })
+
+    pane.setup({ auto_reflow = false })
+    vim.cmd.edit(root .. "/src/origin.py")
+
+    local origin_win = vim.api.nvim_get_current_win()
+
+    pane.open(doc)
+    pane.focus_toggle()
+    assert(vim.api.nvim_get_current_win() == pane.winid, "focus_toggle did not focus pane")
+    pane.focus_toggle()
+    assert(vim.api.nvim_get_current_win() == origin_win, "focus_toggle did not return to origin window")
+
+    write(doc, { "# Changed", "", "new body" })
+    pane.focus_toggle()
+
+    assert(vim.api.nvim_get_current_win() == pane.winid, "focus_toggle did not return to pane")
+    assert(vim.api.nvim_buf_get_lines(pane.bufnr, 0, 1, false)[1] == "# Changed", "focus_toggle did not reload changed markdown source")
+    assert(vim.api.nvim_get_option_value("winbar", { win = pane.winid }):find("%#SidepanesReloaded# [RELOADED] ", 1, true), "focus_toggle reload did not update winbar")
 end)
 
 test("closing and reopening sidepanes restores cursor view", function()

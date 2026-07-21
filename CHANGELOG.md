@@ -13,7 +13,14 @@ but they should be called out clearly in this changelog.
 
 ## Unreleased
 
-No unreleased changes yet.
+### Fixed
+
+- Returning focus to an already-open Markdown side pane now immediately reloads
+  the source file when it changed on disk, instead of waiting for the next
+  polling or idle check.
+- Markdown reload badges now wait `markdown.reload_badge.min_display_ms`
+  milliseconds before key interaction can clear them, so pane-switch gestures do
+  not immediately hide a freshly shown `[RELOADED]` badge.
 
 ## v0.3.0 - 2026-07-21
 

@@ -212,6 +212,13 @@ local function configured_badge_ms(state)
     return math.max(0, math.floor(timeout))
 end
 
+local function configured_badge_min_display_ms(state)
+    local badge = type(state.config.reload_badge) == "table" and state.config.reload_badge or {}
+    local timeout = tonumber(badge.min_display_ms) or 0
+
+    return math.max(0, math.floor(timeout))
+end
+
 --- Clear the temporary reload marker in the pane winbar.
 function M.clear_reload_badge(state, deps)
     if not state.markdown_reloaded then
@@ -234,13 +241,14 @@ local function mark_reloaded(state, deps)
 
     local token = state.markdown_reload_token
     local badge_ms = configured_badge_ms(state)
+    local min_display_ms = configured_badge_min_display_ms(state)
 
     deps.update_sticky_heading()
     vim.defer_fn(function()
         if state.markdown_reload_token == token then
             state.markdown_reload_badge_armed = true
         end
-    end, 100)
+    end, min_display_ms)
 
     if badge_ms > 0 then
         vim.defer_fn(function()

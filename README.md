@@ -66,6 +66,7 @@ reflow.
         reload_badge = {
           text = "[RELOADED]",
           clear_on_interaction = true,
+          min_display_ms = 3000,
           hl = {
             fg = "CursorFG",
             bg = "WarningMsg",

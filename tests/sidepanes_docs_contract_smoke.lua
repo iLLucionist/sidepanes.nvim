@@ -176,6 +176,7 @@ for _, item in ipairs({
     "Older flat runtime keys",
     "markdown.auto_reload",
     "markdown.reload_interval_ms",
+    "markdown.reload_badge.min_display_ms",
     "markdown.reload_badge",
     "[RELOADED]",
     "SidepanesReloaded",

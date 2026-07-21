@@ -52,7 +52,7 @@ function M.setup(state, groups, deps, opts)
 
     if groups.reload and deps.check_markdown_reload then
         vim.api.nvim_clear_autocmds({ group = groups.reload })
-        vim.api.nvim_create_autocmd({ "FocusGained", "CursorHold", "CursorHoldI" }, {
+        vim.api.nvim_create_autocmd({ "WinEnter", "FocusGained", "CursorHold", "CursorHoldI" }, {
             group = groups.reload,
             callback = function()
                 deps.check_markdown_reload()
