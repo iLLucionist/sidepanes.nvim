@@ -49,7 +49,24 @@ local function write_json(path, value)
         return false
     end
 
-    return vim.fn.writefile({ encoded }, path) == 0
+    local uv = vim.uv or vim.loop
+    local token = tostring(uv and uv.hrtime and uv.hrtime() or os.time())
+    local tmp = path .. ".tmp." .. tostring(vim.fn.getpid()) .. "." .. token
+
+    if vim.fn.writefile({ encoded }, tmp) ~= 0 then
+        return false
+    end
+
+    pcall(vim.fn.setfperm, tmp, "rw-------")
+
+    if vim.fn.rename(tmp, path) ~= 0 then
+        pcall(vim.fn.delete, tmp)
+        return false
+    end
+
+    pcall(vim.fn.setfperm, path, "rw-------")
+
+    return true
 end
 
 local function read_jsonl_head(path)
@@ -99,7 +116,8 @@ local function claude_session_from_pid(pid, root)
         return nil
     end
 
-    local metadata = read_json(home_path(".claude", "sessions", tostring(pid) .. ".json"))
+    local metadata_path = home_path(".claude", "sessions", tostring(pid) .. ".json")
+    local metadata = read_json(metadata_path)
 
     local session_id = metadata and (metadata.sessionId or metadata.session_id) or nil
 
@@ -113,18 +131,28 @@ local function claude_session_from_pid(pid, root)
         return nil
     end
 
-    return session_id
+    return session_id, {
+        metadata_path = metadata_path,
+        captured_cwd = metadata_root,
+    }
 end
 
-local function session_info(path, session_id)
+local function session_info(path, session_id, extra)
     if not session_id or session_id == "" then
         return nil
     end
 
-    return {
+    local info = {
         session_id = session_id,
         updated_at = vim.fn.getftime(path),
+        transcript_path = path,
     }
+
+    if type(extra) == "table" then
+        info = vim.tbl_extend("force", info, extra)
+    end
+
+    return info
 end
 
 local function latest_claude_session(root)
@@ -141,22 +169,30 @@ local function latest_claude_session(root)
     return nil
 end
 
-local function latest_codex_session(root)
+local function codex_sessions(root)
+    local sessions = {}
+
     for _, path in ipairs(sorted_files(home_path(".codex", "sessions", "**", "*.jsonl"))) do
         for _, item in ipairs(read_jsonl_head(path)) do
             local payload = item and item.payload or nil
 
             if item.type == "session_meta" and type(payload) == "table" and same_root(payload.cwd, root) then
-                local info = session_info(path, payload.session_id or payload.id)
+                local info = session_info(path, payload.session_id or payload.id, {
+                    captured_cwd = payload.cwd,
+                })
 
                 if info then
-                    return info
+                    table.insert(sessions, info)
                 end
             end
         end
     end
 
-    return nil
+    return sessions
+end
+
+local function latest_codex_session(root)
+    return codex_sessions(root)[1]
 end
 
 local function contains_flag(cmd, flags)
@@ -234,6 +270,48 @@ local function store_path(config)
     return state_dir() .. "/agent_sessions.json"
 end
 
+local function registry_sessions(decoded)
+    if type(decoded) ~= "table" then
+        return {}
+    end
+
+    return type(decoded.sessions) == "table" and decoded.sessions or decoded
+end
+
+local function valid_session_record(session)
+    return type(session) == "table" and type(session.session_id) == "string" and session.session_id ~= "" and type(session.root) == "string" and type(session.tool_name) == "string"
+end
+
+local function session_updated_at(session)
+    return tonumber(session and session.updated_at) or 0
+end
+
+local function normalized_session_record(session)
+    local copy = vim.deepcopy(session)
+
+    copy.root = normalize_root(copy.root)
+    copy.key = util.terminal_key(copy.tool_name, copy.root)
+
+    return copy
+end
+
+local function merge_sessions(base, incoming)
+    local merged = vim.deepcopy(base or {})
+
+    for key, session in pairs(incoming or {}) do
+        if valid_session_record(session) then
+            session = normalized_session_record(session)
+            key = session.key or key
+
+            if not valid_session_record(merged[key]) or session_updated_at(session) >= session_updated_at(merged[key]) then
+                merged[key] = session
+            end
+        end
+    end
+
+    return merged
+end
+
 local function capture_dir()
     return state_dir() .. "/agent-capture"
 end
@@ -284,6 +362,18 @@ function M.latest_info_for_root(tool_name, root)
     return nil
 end
 
+function M.session_infos_for_root(tool_name, root)
+    if tool_name == "claude" then
+        local latest = latest_claude_session(root)
+
+        return latest and { latest } or {}
+    elseif tool_name == "codex" then
+        return codex_sessions(root)
+    end
+
+    return {}
+end
+
 function M.can_infer_from_transcripts(config)
     return resume_options(config).infer_from_transcripts
 end
@@ -296,15 +386,8 @@ function M.load_store(state)
         return false
     end
 
-    local sessions = type(decoded.sessions) == "table" and decoded.sessions or decoded
-
     state.agent_sessions = state.agent_sessions or {}
-
-    for key, session in pairs(sessions) do
-        if type(session) == "table" and session.session_id and session.root and session.tool_name then
-            state.agent_sessions[key] = session
-        end
-    end
+    state.agent_sessions = merge_sessions(state.agent_sessions, registry_sessions(decoded))
 
     return true
 end
@@ -316,24 +399,54 @@ function M.save_store(state)
         return false
     end
 
+    local existing = registry_sessions(read_json(path))
+    local sessions = merge_sessions(existing, state.agent_sessions or {})
+
+    for key, deleted_at in pairs(state.agent_session_tombstones or {}) do
+        if not sessions[key] or session_updated_at(sessions[key]) <= deleted_at then
+            sessions[key] = nil
+        end
+    end
+
+    state.agent_sessions = sessions
+
     return write_json(path, {
         version = 1,
-        sessions = state.agent_sessions or {},
+        sessions = sessions,
     })
 end
 
-local function remember_session(state, ctx, session_id, source)
+local function remember_session(state, ctx, session_id, source, evidence)
     ctx.session_id = session_id
     state.agent_sessions = state.agent_sessions or {}
-    state.agent_sessions[ctx.key] = {
+    local key = util.terminal_key(ctx.tool_name, ctx.root)
+    local previous = state.agent_sessions[key] or state.agent_sessions[ctx.key]
+    local record = {
+        key = key,
         tool_name = ctx.tool_name,
-        root = ctx.root,
+        root = normalize_root(ctx.root),
         session_id = session_id,
         pid = ctx.pid,
         pid_running = util.pid_running(ctx.pid),
         source = source,
         updated_at = os.time(),
     }
+
+    if type(evidence) == "table" then
+        record.transcript_path = evidence.transcript_path
+        record.metadata_path = evidence.metadata_path
+        record.capture_path = evidence.capture_path
+        record.captured_cwd = evidence.captured_cwd
+    elseif previous and previous.session_id == session_id then
+        record.transcript_path = previous.transcript_path
+        record.metadata_path = previous.metadata_path
+        record.capture_path = previous.capture_path
+        record.captured_cwd = previous.captured_cwd
+        record.source = previous.source or source
+    end
+
+    record = normalized_session_record(record)
+    state.agent_sessions[record.key] = record
     M.save_store(state)
 end
 
@@ -349,7 +462,11 @@ local function session_from_capture(ctx)
     local root = data.cwd or data.root or (data.workspace and (data.workspace.project_dir or data.workspace.current_dir))
 
     if session_id and (not root or same_root(root, ctx.root)) then
-        return session_id
+        return session_id, {
+            capture_path = capture.path,
+            transcript_path = data.transcript_path,
+            captured_cwd = root,
+        }
     end
 
     return nil
@@ -441,6 +558,96 @@ local function can_use_latest_for_context(ctx, latest)
     return not ctx.started_at or latest.updated_at >= ctx.started_at - 1
 end
 
+local function capture_matches(record, root)
+    local data = read_json(record.capture_path)
+
+    if type(data) ~= "table" then
+        return false
+    end
+
+    local session_id = data.session_id or data.sessionId
+    local captured_root = data.cwd or data.root or (data.workspace and (data.workspace.project_dir or data.workspace.current_dir))
+
+    return session_id == record.session_id and (not captured_root or same_root(captured_root, root))
+end
+
+local function metadata_matches(record, root)
+    local data = read_json(record.metadata_path)
+
+    if type(data) ~= "table" then
+        return false
+    end
+
+    local session_id = data.sessionId or data.session_id
+    local metadata_root = data.cwd or data.root
+
+    return session_id == record.session_id and (not metadata_root or same_root(metadata_root, root))
+end
+
+local function claude_transcript_matches(record, root)
+    if vim.fn.filereadable(record.transcript_path or "") ~= 1 then
+        return false
+    end
+
+    local session_id = vim.fn.fnamemodify(record.transcript_path, ":t:r")
+    local project_dir = vim.fn.fnamemodify(vim.fn.fnamemodify(record.transcript_path, ":h"), ":t")
+
+    return session_id == record.session_id and project_dir == claude_project_dir(root)
+end
+
+local function codex_transcript_matches(record, root)
+    if vim.fn.filereadable(record.transcript_path or "") ~= 1 then
+        return false
+    end
+
+    for _, item in ipairs(read_jsonl_head(record.transcript_path)) do
+        local payload = item and item.payload or nil
+
+        if item.type == "session_meta" and type(payload) == "table" and (payload.session_id == record.session_id or payload.id == record.session_id) and same_root(payload.cwd, root) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function remembered_session_valid(record, root)
+    if not (valid_session_record(record) and same_root(record.root, root)) then
+        return false
+    end
+
+    if record.capture_path then
+        return capture_matches(record, root)
+    end
+
+    if record.metadata_path then
+        return metadata_matches(record, root)
+    end
+
+    if record.transcript_path and record.tool_name == "claude" then
+        return claude_transcript_matches(record, root)
+    elseif record.transcript_path and record.tool_name == "codex" then
+        return codex_transcript_matches(record, root)
+    end
+
+    return record.source == "resolver"
+end
+
+function M.forget_session(state, tool_name, root)
+    local key = util.terminal_key(tool_name, root)
+
+    if not (state and state.agent_sessions and state.agent_sessions[key]) then
+        return false
+    end
+
+    state.agent_sessions[key] = nil
+    state.agent_session_tombstones = state.agent_session_tombstones or {}
+    state.agent_session_tombstones[key] = os.time()
+    M.save_store(state)
+
+    return true
+end
+
 function M.refresh_context(state, ctx)
     if not (ctx and M.is_supported(ctx.tool_name)) then
         return nil
@@ -449,9 +656,10 @@ function M.refresh_context(state, ctx)
     local options = resume_options(state and state.config or nil)
     local session_id = ctx.session_id
     local source = ctx.session_id and "context" or nil
+    local evidence = nil
 
     if not session_id then
-        session_id = session_from_capture(ctx)
+        session_id, evidence = session_from_capture(ctx)
         source = session_id and "capture" or nil
     end
 
@@ -461,15 +669,22 @@ function M.refresh_context(state, ctx)
     end
 
     if options.use_claude_pid_metadata and not session_id and ctx.tool_name == "claude" and mechanism_enabled(state and state.config or nil, "claude", "pid_metadata") then
-        session_id = claude_session_from_pid(ctx.pid, ctx.root)
+        session_id, evidence = claude_session_from_pid(ctx.pid, ctx.root)
         source = session_id and "pid_metadata" or nil
     end
 
     if options.infer_from_transcripts and not session_id and mechanism_enabled(state and state.config or nil, ctx.tool_name, "transcript") then
-        local latest = M.latest_info_for_root(ctx.tool_name, ctx.root)
+        local matches = {}
 
-        if can_use_latest_for_context(ctx, latest) then
-            session_id = latest.session_id
+        for _, candidate in ipairs(M.session_infos_for_root(ctx.tool_name, ctx.root)) do
+            if can_use_latest_for_context(ctx, candidate) then
+                table.insert(matches, candidate)
+            end
+        end
+
+        if #matches == 1 then
+            session_id = matches[1].session_id
+            evidence = matches[1]
             source = "transcript"
         end
     end
@@ -478,7 +693,7 @@ function M.refresh_context(state, ctx)
         return nil
     end
 
-    remember_session(state, ctx, session_id, source)
+    remember_session(state, ctx, session_id, source, evidence)
 
     return session_id
 end
@@ -508,13 +723,15 @@ function M.resolve_resume(state, ctx, tool_name, root)
     local key = util.terminal_key(tool_name, root)
     local remembered = state.agent_sessions and state.agent_sessions[key] or nil
 
-    if remembered and remembered.session_id and same_root(remembered.root, root) then
+    if remembered and remembered_session_valid(remembered, root) then
         return {
             session_id = remembered.session_id,
             pid = remembered.pid,
             pid_running = util.pid_running(remembered.pid),
             source = "remembered",
         }
+    elseif remembered then
+        M.forget_session(state, tool_name, root)
     end
 
     return nil

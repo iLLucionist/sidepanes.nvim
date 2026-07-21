@@ -252,9 +252,11 @@ end
 
 --- Build the stable key used to identify one pane terminal session.
 function M.terminal_key(tool_name, root)
+    local normalized = M.normalize_project_root(root or vim.fn.getcwd()):gsub("/$", "")
+
     return table.concat({
         tool_name,
-        vim.fn.fnamemodify(root or vim.fn.getcwd(), ":p"),
+        normalized,
     }, "::")
 end
 

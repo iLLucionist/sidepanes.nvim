@@ -6,6 +6,12 @@ MODE="${1:-fast}"
 TMP_ROOT="${TMPDIR:-/tmp}"
 TMP_ROOT="${TMP_ROOT%/}"
 
+clean_nvim_state() {
+    name="$1"
+
+    rm -rf "${TMP_ROOT}/sidepanes-nvim-cache-${name}" "${TMP_ROOT}/sidepanes-nvim-state-${name}"
+}
+
 run_nvim() {
     name="$1"
     shift
@@ -19,6 +25,7 @@ run_lua() {
     name="$1"
     file="$2"
 
+    clean_nvim_state "$name"
     run_nvim "$name" \
         -u NONE \
         -c "lua local ok, err = xpcall(function() dofile([[$ROOT_DIR/tests/$file]]) end, debug.traceback); if not ok then io.stderr:write(err .. '\n'); vim.cmd('cquit') end" \
@@ -36,6 +43,7 @@ run_lifecycle() {
     session_id="codex-lifecycle-session"
     fake_codex="$bin/codex"
 
+    clean_nvim_state "$name"
     mkdir -p "$home" "$root/.git" "$bin"
     cat > "$fake_codex" <<'EOF'
 #!/bin/sh

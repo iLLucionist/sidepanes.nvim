@@ -31,6 +31,13 @@ but they should be called out clearly in this changelog.
 - Claude recovery now captures session ids through a Sidepanes-injected
   `SessionStart` hook when available. Codex embedded-terminal recovery continues
   to use Codex `session_meta` entries for Sidepanes-owned sessions.
+- Agent auto-resume is more finicky than originally expected because Codex and
+  Claude expose different terminal-session metadata surfaces. Sidepanes now
+  treats recovery as best-effort, project-scoped CLI session resume rather than
+  terminal pty reattachment.
+- The persisted agent-session registry now uses canonical project-root keys,
+  atomic writes, and merge-before-save behavior so independent Neovim instances
+  are less likely to clobber each other's remembered Sidepanes sessions.
 
 ### Fixed
 
@@ -40,6 +47,13 @@ but they should be called out clearly in this changelog.
   are not adopted just because they share a project root.
 - Root-scoped Codex and Claude lookups now stay inside the requested project
   root instead of falling back to a running agent pane from another project.
+- Remembered agent sessions now validate their source evidence before resume.
+  Missing or mismatched hook captures, PID metadata, or transcripts are cleared
+  instead of being used.
+- Codex transcript inference now refuses ambiguous same-root candidates instead
+  of guessing which newly written transcript belongs to the Sidepanes pane.
+- Resumed Codex and Claude processes that exit immediately with a non-zero code
+  now clear the stale remembered session and start fresh once.
 
 ## v0.2.0 - 2026-07-21
 

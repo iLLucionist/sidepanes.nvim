@@ -50,6 +50,12 @@ local function configured_resume_badge_ms(state)
     return math.max(0, math.floor(timeout))
 end
 
+local function now_ms()
+    local uv = vim.uv or vim.loop
+
+    return uv and uv.now and uv.now() or (os.time() * 1000)
+end
+
 local function clear_resume_badge_for_context(ctx, deps)
     if not (ctx and ctx.resume_badge_visible) then
         return false
@@ -236,6 +242,7 @@ function M.start(state, deps, tool_name, preset_name, root)
         job_id = nil,
         pid = nil,
         started_at = os.time(),
+        started_at_ms = now_ms(),
         initial_latest_session_id = initial_latest and initial_latest.session_id or nil,
         session_id = resume_id,
         resumed = resuming,
@@ -272,7 +279,21 @@ function M.start(state, deps, tool_name, preset_name, root)
         vim.api.nvim_set_current_buf(bufnr)
         ctx.job_id = vim.fn.termopen(cmd, {
             cwd = root,
-            on_exit = function()
+            on_exit = function(_, exit_code)
+                if ctx.resumed and not ctx.shutdown_requested and exit_code ~= 0 and not ctx.resume_retry_attempted and now_ms() - (ctx.started_at_ms or 0) <= 750 then
+                    ctx.resume_retry_attempted = true
+                    agent_session.forget_session(state, ctx.tool_name, ctx.root)
+                    vim.schedule(function()
+                        if state.terminals[key] == ctx then
+                            state.terminals[key] = nil
+                        end
+
+                        vim.notify("Recovered " .. (ctx.tool_label or ctx.tool_name or "agent") .. " session exited quickly; cleared stale resume id and starting fresh.", vim.log.levels.WARN)
+                        M.start(state, deps, tool_name, preset_name, root)
+                    end)
+                    return
+                end
+
                 agent_session.refresh_context(state, ctx)
                 deps.update_sticky_heading()
             end,
@@ -580,6 +601,8 @@ local function shutdown_one(state, ctx, opts)
 
     local timeout = shutdown_timeout(state, ctx, opts)
     local command = shutdown_command(state, ctx)
+
+    ctx.shutdown_requested = true
 
     if command and command ~= "" then
         pcall(vim.fn.chansend, ctx.job_id, command)

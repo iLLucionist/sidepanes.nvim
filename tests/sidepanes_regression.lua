@@ -249,6 +249,7 @@ local function reset_pane()
     pane.active_mode = "markdown"
     pane.active_terminal_key = nil
     pane.agent_sessions = {}
+    pane.agent_session_tombstones = {}
     pane.config = vim.deepcopy(defaults.config)
 end
 
@@ -319,6 +320,47 @@ test("project root detection uses configurable markers fallback and resolver", f
 
     assert(ok, fallback_root)
     assert(fallback_root == root, "vim.fs.find fallback resolved marker file instead of root")
+end)
+
+test("agent terminal keys canonicalize equivalent project roots", function()
+    reset_pane()
+
+    local root = root_fixture("agent-session-canonical-key-root")
+    local link = helpers.tmp_path("sidepanes-agent-session-canonical-key-link")
+
+    vim.fn.delete(link, "rf")
+
+    local uv = vim.uv or vim.loop
+
+    if not (uv and uv.fs_symlink) then
+        return
+    end
+
+    local ok = pcall(uv.fs_symlink, root, link, { dir = true })
+
+    if not ok then
+        return
+    end
+
+    local key = util.terminal_key("codex", root)
+    local link_key = util.terminal_key("codex", link)
+
+    assert(key == link_key, "symlinked project root produced a different terminal key")
+
+    local state = {
+        agent_sessions = {
+            [key] = {
+                key = key,
+                tool_name = "codex",
+                root = root,
+                session_id = "canonical-session",
+                source = "resolver",
+            },
+        },
+    }
+    local resume = agent_session.resolve_resume(state, nil, "codex", link)
+
+    assert(resume and resume.session_id == "canonical-session", "canonical remembered session was not found through equivalent root")
 end)
 
 test("public facade hides mutable state and exposes config copy", function()
@@ -609,6 +651,54 @@ test("running agent contexts do not adopt stale transcript fallbacks", function(
     end)
 end)
 
+test("running Codex context does not adopt ambiguous same-root transcripts", function()
+    reset_pane()
+
+    local home = helpers.tmp_path("sidepanes-agent-home-ambiguous-codex")
+    local root = root_fixture("agent-session-ambiguous-codex-root")
+    local state = { agent_sessions = {} }
+
+    vim.fn.delete(home, "rf")
+    mkdir(home .. "/.codex/sessions/2026/07/21")
+
+    with_home(home, function()
+        local job_id = vim.fn.jobstart({ "sh", "-c", "sleep 10" })
+        local ctx = {
+            key = util.terminal_key("codex", root),
+            tool_name = "codex",
+            root = root,
+            job_id = job_id,
+            started_at = os.time(),
+        }
+
+        assert(job_id > 0, "ambiguous Codex context test job did not start")
+
+        write(home .. "/.codex/sessions/2026/07/21/first.jsonl", {
+            vim.json.encode({
+                type = "session_meta",
+                payload = {
+                    session_id = "first-ambiguous-session",
+                    cwd = root,
+                },
+            }),
+        })
+        write(home .. "/.codex/sessions/2026/07/21/second.jsonl", {
+            vim.json.encode({
+                type = "session_meta",
+                payload = {
+                    session_id = "second-ambiguous-session",
+                    cwd = root,
+                },
+            }),
+        })
+
+        assert(agent_session.refresh_context(state, ctx) == nil, "ambiguous Codex transcripts were adopted")
+        assert(state.agent_sessions[ctx.key] == nil, "ambiguous Codex transcript session was remembered")
+
+        vim.fn.jobstop(job_id)
+    end)
+end)
+
 test("resume badge clearing can target a recovered terminal that is no longer active", function()
     local calls = 0
     local first = {
@@ -653,6 +743,7 @@ test("agent sessions report remembered live process candidates", function()
                 root = root,
                 session_id = "live-codex-session",
                 pid = vim.fn.getpid(),
+                source = "resolver",
             },
         },
     }
@@ -662,6 +753,92 @@ test("agent sessions report remembered live process candidates", function()
     assert(resume.pid == vim.fn.getpid(), "remembered pid was not returned")
     assert(resume.pid_running == true, "remembered live pid was not detected")
     assert(resume.source == "remembered", "remembered resume source was not reported")
+end)
+
+test("agent session registry saves atomically and merges independent writers", function()
+    reset_pane()
+
+    local store = helpers.tmp_path("sidepanes-agent-session-merge-store.json")
+    local root_one = root_fixture("agent-session-merge-root-one")
+    local root_two = root_fixture("agent-session-merge-root-two")
+    local key_one = util.terminal_key("codex", root_one)
+    local key_two = util.terminal_key("claude", root_two)
+    local first = {
+        config = {
+            agent_resume_store_path = store,
+        },
+        agent_sessions = {
+            [key_one] = {
+                key = key_one,
+                tool_name = "codex",
+                root = root_one,
+                session_id = "codex-merge-session",
+                source = "resolver",
+                updated_at = 100,
+            },
+        },
+    }
+    local second = {
+        config = {
+            agent_resume_store_path = store,
+        },
+        agent_sessions = {
+            [key_two] = {
+                key = key_two,
+                tool_name = "claude",
+                root = root_two,
+                session_id = "claude-merge-session",
+                source = "resolver",
+                updated_at = 200,
+            },
+        },
+    }
+
+    vim.fn.delete(store)
+    assert(agent_session.save_store(first), "first registry save failed")
+    assert(agent_session.save_store(second), "second registry save failed")
+
+    local loaded = {
+        config = {
+            agent_resume_store_path = store,
+        },
+        agent_sessions = {},
+    }
+
+    assert(agent_session.load_store(loaded), "merged registry did not load")
+    assert(loaded.agent_sessions[key_one].session_id == "codex-merge-session", "first writer registry entry was lost")
+    assert(loaded.agent_sessions[key_two].session_id == "claude-merge-session", "second writer registry entry was lost")
+    assert(vim.fn.glob(store .. ".tmp.*") == "", "atomic registry save left temp files behind")
+end)
+
+test("remembered sessions require valid source evidence", function()
+    reset_pane()
+
+    local root = root_fixture("agent-session-invalid-evidence-root")
+    local key = util.terminal_key("codex", root)
+    local missing_transcript = helpers.tmp_path("sidepanes-agent-missing-transcript.jsonl")
+    local store = helpers.tmp_path("sidepanes-agent-invalid-evidence-store.json")
+    local state = {
+        config = {
+            agent_resume_store_path = store,
+        },
+        agent_sessions = {
+            [key] = {
+                key = key,
+                tool_name = "codex",
+                root = root,
+                session_id = "missing-evidence-session",
+                source = "transcript",
+                transcript_path = missing_transcript,
+                updated_at = os.time(),
+            },
+        },
+    }
+
+    vim.fn.delete(missing_transcript)
+
+    assert(agent_session.resolve_resume(state, nil, "codex", root) == nil, "remembered session with missing evidence was resumed")
+    assert(state.agent_sessions[key] == nil, "invalid remembered session was not cleared")
 end)
 
 test("agent auto resume can be disabled even when a session is remembered", function()
@@ -779,6 +956,7 @@ test("agent recovery notification reports live previous pid without active wordi
         root = root,
         session_id = "live-codex-session",
         pid = vim.fn.getpid(),
+        source = "resolver",
     }
     pane.setup({
         tools = {
@@ -934,6 +1112,68 @@ test("opening Codex resumes the same Sidepanes-owned session after terminal loss
         assert(read_file(args_file):find("resume", 1, true), "Codex reopened without resume subcommand")
         assert(read_file(args_file):find(session_id, 1, true), "Codex reopened without captured session id")
     end)
+end)
+
+test("failed remembered Codex resume clears stale session and starts fresh", function()
+    reset_pane()
+
+    local bin = helpers.tmp_path("sidepanes-agent-bin-codex-failed-resume")
+    local root = root_fixture("agent-session-codex-failed-resume-root")
+    local args_file = helpers.tmp_path("sidepanes-agent-codex-failed-resume-args.txt")
+    local fake_codex = bin .. "/codex"
+    local key = util.terminal_key("codex", root)
+
+    vim.fn.delete(bin, "rf")
+    vim.fn.delete(args_file)
+    mkdir(bin)
+    write(fake_codex, {
+        "#!/bin/sh",
+        "printf 'run:%s\\n' \"$*\" >> " .. vim.fn.shellescape(args_file),
+        "if [ \"${1:-}\" = 'resume' ]; then exit 7; fi",
+        "sleep 10",
+    })
+    vim.fn.setfperm(fake_codex, "rwxr-xr-x")
+
+    pane.agent_sessions[key] = {
+        key = key,
+        tool_name = "codex",
+        root = root,
+        session_id = "stale-codex-session",
+        source = "resolver",
+        updated_at = os.time(),
+    }
+    pane.setup({
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = fake_codex,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    local initial = nil
+    local messages = capture_notify(function()
+        initial = pane.open_terminal("codex", nil, { root = root, focus = false })
+        local restarted = vim.wait(3500, function()
+            local text = read_file(args_file)
+            local _, runs = text:gsub("run:", "")
+            local current = pane.terminals[key]
+
+            return runs >= 2 and current and current ~= initial and util.is_running(current.job_id)
+        end, 50)
+
+        assert(restarted, "failed resume did not start a fresh Codex process:\n" .. read_file(args_file))
+    end)
+    local args = read_file(args_file)
+    local current = pane.terminals[key]
+
+    assert(initial and initial.resumed == true, "initial stale Codex launch did not try resume")
+    assert(args:find("stale%-codex%-session"), args)
+    assert(args:find("run:--cd " .. root, 1, true), args)
+    assert(current and current.resumed == false, "fresh Codex retry was marked resumed")
+    assert(pane.agent_sessions[key] == nil, "stale Codex session was not cleared")
+    assert(has_notify(messages, "cleared stale resume id and starting fresh"), "stale resume notification was not emitted")
 end)
 
 test("opening Claude resumes the same hook-captured session after terminal loss", function()

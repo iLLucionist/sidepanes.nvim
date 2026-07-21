@@ -222,13 +222,17 @@ are available in your environment.
 
    Auto-resume is configurable because session discovery depends on CLI-owned
    metadata. Sidepanes persists only Sidepanes-captured session ids in its
-   Neovim state directory, so a later Neovim process can resume a pane-owned
-   session without adopting arbitrary external sessions. Claude uses a
+   Neovim state directory using canonical project-root keys, so a later Neovim
+   process can resume a pane-owned session without adopting arbitrary external
+   sessions. Remembered sessions validate their hook, PID metadata, or
+   transcript evidence before resume; stale evidence is cleared and an
+   immediately failing resumed CLI starts fresh once. Claude uses a
    Sidepanes-injected `SessionStart` hook by default; Codex in embedded-terminal
-   mode uses the `session_meta` entry written to `~/.codex/sessions/**`. Set
-   `terminal.auto_resume = false` or `terminal.resume.enabled = false` to always
-   start fresh. Set `terminal.resume.infer_from_transcripts = false` when you
-   only want hook/custom/persisted ids, and use `terminal.resume.resolver` or
+   mode uses unambiguous `session_meta` entries written to
+   `~/.codex/sessions/**`. Set `terminal.auto_resume = false` or
+   `terminal.resume.enabled = false` to always start fresh. Set
+   `terminal.resume.infer_from_transcripts = false` when you only want
+   hook/custom/persisted ids, and use `terminal.resume.resolver` or
    `terminal.resume.mechanisms` to provide a stricter site-specific mechanism.
 
 7. If the pane feels too wide or narrow, use `<leader>p-`, `<leader>p+`, or

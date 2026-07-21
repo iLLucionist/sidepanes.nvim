@@ -409,8 +409,10 @@ when the CLI exposes one. Opening Codex or Claude first reuses a live pane-owned
 terminal buffer and Neovim job. If that live check fails because the terminal
 exited, crashed, or its buffer was lost, Sidepanes builds a recovery candidate
 from the current Sidepanes context or a Sidepanes-owned session record persisted
-under Neovim's state directory. Sidepanes does not resume arbitrary latest
-project transcripts on first open.
+under Neovim's state directory. Registry writes are atomic and merge with any
+existing registry entries so independent Neovim instances do not casually
+clobber each other. Sidepanes does not resume arbitrary latest project
+transcripts on first open.
 
 Claude session capture uses a Sidepanes-injected `SessionStart` hook by default.
 Sidepanes passes a temporary `--settings` file for the pane process only, records
@@ -419,11 +421,20 @@ session id in the Sidepanes registry. If hook capture is unavailable, the defaul
 Claude mechanism list can still use `~/.claude/sessions/<pid>.json` and, when
 transcript inference is enabled, a matching project transcript.
 
-Codex embedded-terminal capture uses the `session_meta` entry that Codex writes
-to `~/.codex/sessions/**` for the pane's project root. Codex also exposes richer
-thread ids through the app-server/SDK surfaces, but Sidepanes' built-in terminal
-integration does not switch to that separate API surface. Users who have a
-stricter local Codex capture mechanism can provide `terminal.resume.resolver`.
+Codex embedded-terminal capture uses an unambiguous `session_meta` entry that
+Codex writes to `~/.codex/sessions/**` for the pane's project root. If multiple
+same-root transcript candidates appear for a fresh Sidepanes context, Sidepanes
+does not guess. Codex also exposes richer thread ids through the app-server/SDK
+surfaces, but Sidepanes' built-in terminal integration does not switch to that
+separate API surface. Users who have a stricter local Codex capture mechanism
+can provide `terminal.resume.resolver`.
+
+Remembered sessions validate their source evidence before resume. Hook captures,
+Claude PID metadata, and Codex/Claude transcript paths must still exist and
+match the requested tool, root, and session id. Stale or mismatched registry
+entries are cleared and treated as fresh starts. If a resumed Codex or Claude
+process exits immediately with a non-zero status, Sidepanes clears the stale
+resume id and starts the tool fresh once.
 
 Set `terminal.auto_resume = false` or `terminal.resume.enabled = false` to
 disable automatic resume command rewriting. Set
