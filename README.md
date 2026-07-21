@@ -107,6 +107,9 @@ reflow.
         -- Override this for wildcard, glob, monorepo, or non-file project logic.
         resolver = nil,
       },
+      lifecycle = {
+        focus_on_pick = true,
+      },
       commands = true,
       mappings = {
         global = {
@@ -178,8 +181,10 @@ are available in your environment.
 1. Imagine you are coding and want a reference Markdown document next to your
    source file. This is exactly why Sidepanes exists. Press `<leader>mP` to
    fuzzy find a Markdown document with Telescope. Once you select a file, it
-   opens in a fixed panel on the right. As you scroll through the document, the
-   active section stays visible in the pane winbar.
+   opens in a fixed panel on the right and focuses that pane by default. Set
+   `lifecycle.focus_on_pick = false` if you want the picker to open Markdown
+   without stealing focus. As you scroll through the document, the active
+   section stays visible in the pane winbar.
 
 2. For long Markdown files, jump by heading instead of scrolling. Press
    `<leader>mf` to fuzzy find headings in the current Sidepanes document. Pick a
@@ -379,6 +384,10 @@ Markdown Reflow mappings are configured separately through
 | Config key | Example lhs | Behavior |
 | --- | --- | --- |
 | `reflow` | `<leader>mR` | Reflow the current Markdown buffer or selection. |
+
+The Markdown document picker focuses the Sidepanes Markdown pane after a
+selection by default. Configure `lifecycle.focus_on_pick = false` to keep focus
+in the previous window after `<leader>mP` or `:Sidepanes pick`.
 
 ## Commands
 

@@ -220,6 +220,8 @@ for _, item in ipairs({
     "more finicky than originally anticipated",
     "resumes CLI sessions",
     "terminal-input mode",
+    "lifecycle.focus_on_pick",
+    "focus_on_pick",
     "CursorFG",
     ":Sidepanes width prev",
     "Release Policy",

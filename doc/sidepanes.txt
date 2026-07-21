@@ -256,6 +256,7 @@ runtime config.
       },
       lifecycle = {
         focus_on_switch = true,
+        focus_on_pick = true,
         focus_on_ask = true,
         shutdown_on_exit = true,
         shutdown_timeout_ms = 300,
@@ -358,6 +359,11 @@ The normal pane width can be configured or changed at runtime:
 
 Sidepanes' built-in numeric/letter pickers accept one-key choices without
 Enter. Press `Esc`, `q`, or `<C-c>` to cancel without changing panes or width.
+
+The Markdown document picker focuses the Sidepanes Markdown pane after a
+selection by default. Configure `lifecycle.focus_on_pick = false` to keep focus
+in the previous window after `pick()`, `:Sidepanes pick`, or
+`:SidepanesPick`. Direct `open(path)` calls remain non-focusing.
 
 `layout.sticky_relative_width` keeps relative values such as "50%", "1/2", or
 0.5 tied to the total Neovim width. When disabled, relative inputs are resolved

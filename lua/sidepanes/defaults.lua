@@ -60,6 +60,7 @@ M.config = {
     sticky_heading = true,
     wrap_toggle_key = "<leader>mw",
     focus_on_switch = true,
+    focus_on_pick = true,
     focus_on_ask = true,
     shutdown_on_exit = true,
     shutdown_timeout_ms = 300,

@@ -62,6 +62,7 @@ local function expand_lifecycle(opts)
     local lifecycle = expanded.lifecycle or {}
 
     set_if_present(expanded, "focus_on_switch", lifecycle.focus_on_switch)
+    set_if_present(expanded, "focus_on_pick", lifecycle.focus_on_pick)
     set_if_present(expanded, "focus_on_ask", lifecycle.focus_on_ask)
     set_if_present(expanded, "shutdown_on_exit", lifecycle.shutdown_on_exit)
     set_if_present(expanded, "shutdown_timeout_ms", lifecycle.shutdown_timeout_ms)
@@ -252,6 +253,7 @@ function M.to_setup(runtime_config)
         },
         lifecycle = {
             focus_on_switch = config.focus_on_switch,
+            focus_on_pick = config.focus_on_pick,
             focus_on_ask = config.focus_on_ask,
             shutdown_on_exit = config.shutdown_on_exit,
             shutdown_timeout_ms = config.shutdown_timeout_ms,
