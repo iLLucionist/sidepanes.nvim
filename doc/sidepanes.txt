@@ -485,13 +485,17 @@ surfaces, but Sidepanes' built-in terminal integration does not switch to that
 separate API surface. Users who have a stricter local Codex capture mechanism
 can provide `terminal.resume.resolver`.
 
-Custom resolvers receive `resolver(tool_name, ctx, opts)`. During capture,
-`opts.purpose` is `"capture"` and the resolver can return a session id string or
-a table such as `{ session_id = "...", evidence = { resolver_state = ... } }`.
-For resolver-sourced remembered records, Sidepanes calls the resolver again
-with `opts.purpose = "validate"` and `opts.remembered` before reuse. Return the
-same session id, `true`, or `{ valid = true }` to keep the record; return
-`false`, `nil`, or a different id to make Sidepanes clear it and start fresh.
+Custom resolvers receive `resolver(tool_name, ctx, opts)`. `ctx` is a stable
+copy of the Sidepanes terminal context, with fields such as `key`, `tool_name`,
+`root`, `session_id`, `pid`, `job_id`, `bufnr`, `started_at`, `resumed`, and
+`resume_source`. Mutating `ctx` does not mutate Sidepanes internals. During
+capture, `opts.purpose` is `"capture"` and the resolver can return a session id
+string or a table such as
+`{ session_id = "...", evidence = { resolver_state = ... } }`. For
+resolver-sourced remembered records, Sidepanes calls the resolver again with
+`opts.purpose = "validate"` and `opts.remembered` before reuse. Return the same
+session id, `true`, or `{ valid = true }` to keep the record; return `false`,
+`nil`, or a different id to make Sidepanes clear it and start fresh.
 
 Remembered sessions validate their source evidence before resume. Hook captures,
 Claude PID metadata, and Codex/Claude transcript paths must still exist and
@@ -506,8 +510,10 @@ disable automatic resume command rewriting. Set
 not infer a session id from the latest matching transcript. Set
 `terminal.resume.use_claude_pid_metadata = false` to skip Claude's
 `~/.claude/sessions/<pid>.json` lookup. Set `terminal.resume.mechanisms` to
-replace the ordered built-in mechanism lists, `terminal.resume.store_path` to
-change or disable the persistent Sidepanes registry, or
+replace the ordered built-in mechanism lists. Mechanism entries are built-in
+names: `"hook"`, `"pid_metadata"`, and `"transcript"`. Use
+`terminal.resume.store_path` to change or disable the persistent Sidepanes
+registry, or
 `terminal.resume.resolver = function(tool_name, ctx, opts) return session_id end`
 to provide a custom capture source. Set
 `terminal.resume.store_lock_timeout_ms` if you want registry saves to wait

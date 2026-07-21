@@ -200,6 +200,8 @@ for _, item in ipairs({
     "lock directory",
     "source evidence",
     "opts.purpose",
+    "stable context copy",
+    "built-in mechanism",
     "does not guess",
     "stale resume id",
     "more finicky than originally anticipated",

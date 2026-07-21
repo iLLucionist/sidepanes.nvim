@@ -1045,6 +1045,8 @@ test("agent resume supports custom resolver mechanisms", function()
                 assert(tool_name == "codex", "resolver received wrong tool")
                 assert(ctx.root == root, "resolver received wrong root")
                 assert(opts.key == ctx.key, "resolver received wrong key")
+                assert(opts.state == nil, "resolver received mutable internal state")
+                ctx.root = "mutated"
                 return "custom-resolver-session"
             end,
         }),
@@ -1057,6 +1059,7 @@ test("agent resume supports custom resolver mechanisms", function()
     }
 
     assert(agent_session.refresh_context(state, ctx) == "custom-resolver-session", "custom resolver did not provide a session id")
+    assert(ctx.root == root, "custom resolver mutated internal terminal context")
     assert(state.agent_sessions[ctx.key].session_id == "custom-resolver-session", "custom resolver session was not remembered")
     assert(state.agent_sessions[ctx.key].source == "resolver", "custom resolver source was not recorded")
 end)
@@ -3117,7 +3120,7 @@ test("setup validation reports malformed config and implied dependency gaps", fu
         agent_resume_infer_from_transcripts = "no",
         agent_resume_use_claude_pid_metadata = "maybe",
         agent_resume_mechanisms = {
-            codex = { "transcript", false },
+            codex = { "transcript", false, "custom" },
             claude = "hook",
         },
         agent_resume_store_path = 42,
@@ -3168,6 +3171,7 @@ test("setup validation reports malformed config and implied dependency gaps", fu
     assert(joined:find("Sidepanes config agent_resume_infer_from_transcripts must be a boolean.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_use_claude_pid_metadata must be a boolean.", 1, true), joined)
     assert(joined:find("Invalid Sidepanes agent_resume_mechanisms.codex entry at index 2", 1, true), joined)
+    assert(joined:find("Unknown Sidepanes agent_resume_mechanisms.codex entry at index 3: custom. Use terminal.resume.resolver for custom session discovery.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_mechanisms.claude must be a table or false.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_store_path must be a string or false.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_store_lock_timeout_ms must be a non-negative number.", 1, true), joined)

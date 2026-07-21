@@ -579,6 +579,22 @@ local function resolver_evidence(result)
     return evidence
 end
 
+local function resolver_context(ctx)
+    return {
+        key = ctx.key,
+        tool_name = ctx.tool_name,
+        root = ctx.root,
+        session_id = ctx.session_id,
+        pid = ctx.pid,
+        job_id = ctx.job_id,
+        bufnr = ctx.bufnr,
+        started_at = ctx.started_at,
+        started_at_ms = ctx.started_at_ms,
+        resumed = ctx.resumed,
+        resume_source = ctx.resume_source,
+    }
+end
+
 local function call_custom_resolver(state, ctx, purpose, record)
     local resolver = resume_options(state and state.config or nil).resolver
 
@@ -586,8 +602,8 @@ local function call_custom_resolver(state, ctx, purpose, record)
         return nil
     end
 
-    local ok, session_id = pcall(resolver, ctx.tool_name, ctx, {
-        state = state,
+    local public_ctx = resolver_context(ctx)
+    local ok, session_id = pcall(resolver, public_ctx.tool_name, public_ctx, {
         root = ctx.root,
         key = ctx.key,
         purpose = purpose,

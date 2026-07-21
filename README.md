@@ -240,8 +240,10 @@ are available in your environment.
   `terminal.resume.enabled = false` to always start fresh. Set
   `terminal.resume.infer_from_transcripts = false` when you only want
   hook/custom/persisted ids, and use `terminal.resume.resolver` or
-   `terminal.resume.mechanisms` to provide a stricter site-specific mechanism.
-   Custom resolvers can return either a session id string or a table such as
+   `terminal.resume.mechanisms` to enable, disable, or reorder built-in
+   mechanisms. Use `terminal.resume.resolver` as the extension point for custom
+   session discovery. Resolvers receive a stable context copy and can return
+   either a session id string or a table such as
    `{ session_id = "...", evidence = { resolver_state = ... } }`; Sidepanes
    later calls the resolver with `opts.purpose = "validate"` before reusing that
    resolver-sourced record. Tune `terminal.resume.failure_timeout_ms` and

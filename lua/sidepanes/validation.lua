@@ -214,6 +214,12 @@ end
 
 --- Validate terminal recovery badge config shape.
 local function validate_terminal(diagnostics, config)
+    local known_resume_mechanisms = {
+        hook = true,
+        pid_metadata = true,
+        transcript = true,
+    }
+
     if config.agent_auto_resume ~= nil and type(config.agent_auto_resume) ~= "boolean" then
         warn(diagnostics, "Sidepanes config agent_auto_resume must be a boolean.")
     end
@@ -236,6 +242,8 @@ local function validate_terminal(diagnostics, config)
                 for index, mechanism in ipairs(mechanisms) do
                     if type(mechanism) ~= "string" then
                         warn(diagnostics, "Invalid Sidepanes agent_resume_mechanisms." .. tostring(tool_name) .. " entry at index " .. index .. ": use a string.")
+                    elseif not known_resume_mechanisms[mechanism] then
+                        warn(diagnostics, "Unknown Sidepanes agent_resume_mechanisms." .. tostring(tool_name) .. " entry at index " .. index .. ": " .. mechanism .. ". Use terminal.resume.resolver for custom session discovery.")
                     end
                 end
             end

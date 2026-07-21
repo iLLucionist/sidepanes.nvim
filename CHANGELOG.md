@@ -25,10 +25,13 @@ but they should be called out clearly in this changelog.
 - Agent session capture is now configurable with
   `terminal.resume.mechanisms`, `terminal.resume.store_path`, and
   `terminal.resume.resolver`. Custom resolvers can now return evidence and are
-  revalidated before Sidepanes reuses resolver-sourced records. The default
-  registry stores only Sidepanes-captured session ids under Neovim's state
-  directory so Codex and Claude can resume after a Neovim restart without
-  adopting unrelated external sessions.
+  revalidated before Sidepanes reuses resolver-sourced records. Resolver
+  callbacks receive a stable context copy, and unknown built-in mechanism names
+  now produce validation warnings that point users toward
+  `terminal.resume.resolver` for custom discovery. The default registry stores
+  only Sidepanes-captured session ids under Neovim's state directory so Codex
+  and Claude can resume after a Neovim restart without adopting unrelated
+  external sessions.
 - Agent resume registry contention and crash recovery are configurable with
   `terminal.resume.store_lock_timeout_ms` and
   `terminal.resume.store_lock_stale_ms`.
