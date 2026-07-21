@@ -34,9 +34,11 @@ Released as `v0.1.0` on 2026-07-19.
 
 ## v0.2.0 Platform And UI Pass
 
-Status: in progress through the `v0.2.0` release.
+Status: released.
 
-Candidate work:
+Released as `v0.2.0` on 2026-07-21.
+
+Follow-up candidate work:
 
 - Define stable, advanced, and internal API tiers for plugin authors.
 - Decide whether Sidepanes should expose an extension registration API such as
