@@ -41,10 +41,11 @@ but they should be called out clearly in this changelog.
   revalidated before Sidepanes reuses resolver-sourced records. Resolver
   callbacks receive a stable context copy, and unknown built-in mechanism names
   now produce validation warnings that point users toward
-  `terminal.resume.resolver` for custom discovery. The default registry stores
-  only Sidepanes-captured session ids under Neovim's state directory so Codex
-  and Claude can resume after a Neovim restart without adopting unrelated
-  external sessions.
+  `terminal.resume.resolver` for custom discovery. Built-in mechanism names are
+  `"hook"`, `"pid_metadata"`, `"terminal_output"`, and `"transcript"`. The
+  default registry stores only Sidepanes-captured session ids under Neovim's
+  state directory so Codex and Claude can resume after a Neovim restart without
+  adopting unrelated external sessions.
 - Agent resume registry contention and crash recovery are configurable with
   `terminal.resume.store_lock_timeout_ms` and
   `terminal.resume.store_lock_stale_ms`.
@@ -78,8 +79,8 @@ but they should be called out clearly in this changelog.
 - Root-scoped Codex and Claude lookups now stay inside the requested project
   root instead of falling back to a running agent pane from another project.
 - Remembered agent sessions now validate their source evidence before resume.
-  Missing or mismatched hook captures, PID metadata, or transcripts are cleared
-  instead of being used.
+  Missing or mismatched hook captures, PID metadata, terminal-output captures,
+  or transcripts are cleared instead of being used.
 - Resolver-sourced remembered sessions are now revalidated through the custom
   resolver before reuse instead of being trusted indefinitely.
 - Codex transcript inference now refuses ambiguous same-root candidates instead
@@ -87,6 +88,8 @@ but they should be called out clearly in this changelog.
 - Codex panes now resume after manual `/exit` when Codex prints
   `To continue this session, run codex resume <session-id>` but no usable
   `session_meta` transcript has been captured.
+- Sidepanes' built-in numeric/letter pickers now treat `<C-c>` as cancellation
+  instead of surfacing Neovim's `Keyboard interrupt` error.
 - Resumed Codex and Claude processes that exit immediately with a non-zero code
   now clear the stale remembered session and start fresh once.
 

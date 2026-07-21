@@ -298,6 +298,15 @@ Public tuning and extension points:
 | `terminal.resume.failure_timeout_ms` | Tune the quick-failure window for stale resume ids. |
 | `terminal.resume.failure_action` | Choose `"fresh"`, `"notify"`, or `"ignore"` after quick failed resume. |
 
+Built-in mechanism names mean:
+
+| Mechanism | Tool | Evidence |
+| --- | --- | --- |
+| `"hook"` | Claude | Pane-local `SessionStart` hook capture. |
+| `"pid_metadata"` | Claude | Claude PID metadata under `~/.claude/sessions`. |
+| `"terminal_output"` | Codex | The `codex resume <session-id>` command Codex prints in the pane on exit. |
+| `"transcript"` | Codex/Claude | Unambiguous same-root transcript metadata. |
+
 Custom resolvers receive `resolver(tool_name, ctx, opts)`. `ctx` is a stable
 copy of the terminal context; mutating it does not mutate Sidepanes internals.
 During capture, return a session id string or a table such as
@@ -339,6 +348,9 @@ Global mappings are not enabled by default. Configure them with
 | `ask_last` | `aa` | Ask last coding agent from visual selection. |
 | `ask_codex` | `ax` | Ask Codex from visual selection. |
 | `ask_claude` | `ac` | Ask Claude from visual selection. |
+
+Sidepanes' built-in numeric/letter pickers accept one-key choices without
+Enter. Press `Esc`, `q`, or `<C-c>` to cancel without changing panes or width.
 
 Pane-local mappings are installed inside Sidepanes buffers by default. Configure
 them with `mappings.pane`.

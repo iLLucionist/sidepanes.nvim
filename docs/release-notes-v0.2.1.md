@@ -56,7 +56,8 @@ Configuration:
   inference.
 - `terminal.resume.mechanisms` and `terminal.resume.resolver` let users replace
   the built-in mechanisms with a stricter local strategy. Mechanism entries are
-  built-in names; use `terminal.resume.resolver` for custom session discovery.
+  built-in names: `"hook"`, `"pid_metadata"`, `"terminal_output"`, and
+  `"transcript"`. Use `terminal.resume.resolver` for custom session discovery.
 - `terminal.resume.store_lock_timeout_ms` and
   `terminal.resume.store_lock_stale_ms` tune shared-registry contention and
   crash recovery.
@@ -65,6 +66,12 @@ Configuration:
 - `project.root_markers`, `project.fallback`, and `project.resolver` control
   the root Sidepanes uses as the pane/restart/resume boundary. The resolver runs
   before marker lookup and can return `nil` to continue with `vim.fs.root()`.
+
+Picker behavior:
+
+- Sidepanes' built-in numeric/letter pickers now treat `Esc`, `q`, and `<C-c>`
+  as cancellation. Pressing `<C-c>` in the pane switcher closes the picker
+  instead of surfacing Neovim's `Keyboard interrupt` error.
 
 Extension boundary:
 

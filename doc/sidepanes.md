@@ -334,6 +334,9 @@ sidepanes.width_picker()
 sidepanes.toggle_sticky_relative_width()
 ```
 
+Sidepanes' built-in numeric/letter pickers accept one-key choices without
+Enter. Press `Esc`, `q`, or `<C-c>` to cancel without changing panes or width.
+
 When `layout.sticky_relative_width` is false, relative values are resolved once
 to columns. When it is true, relative values keep their ratio as Neovim columns
 change. Turning sticky relative width on at runtime captures the current normal
@@ -472,9 +475,10 @@ not block future saves. Reads stay lock-free because a registry reader sees
 either the previous complete file or the next complete file.
 
 Remembered sessions validate their source evidence before resume. Hook captures,
-Claude PID metadata, Codex/Claude transcript paths, and custom resolver records
-must still match the requested tool, root, and session id. Stale or mismatched
-registry entries are cleared and treated as fresh starts.
+Claude PID metadata, Codex terminal-output captures, Codex/Claude transcript
+paths, and custom resolver records must still match the requested tool, root,
+and session id. Stale or mismatched registry entries are cleared and treated as
+fresh starts.
 
 Public tuning and extension points:
 
@@ -490,6 +494,15 @@ Public tuning and extension points:
 | `terminal.resume.store_lock_stale_ms` | Tune crash recovery for abandoned registry locks. |
 | `terminal.resume.failure_timeout_ms` | Tune the quick-failure window for stale resume ids. |
 | `terminal.resume.failure_action` | Choose `"fresh"`, `"notify"`, or `"ignore"` after quick failed resume. |
+
+Built-in mechanism names:
+
+| Mechanism | Tool | Evidence |
+| --- | --- | --- |
+| `"hook"` | Claude | Pane-local `SessionStart` hook capture. |
+| `"pid_metadata"` | Claude | Claude PID metadata under `~/.claude/sessions`. |
+| `"terminal_output"` | Codex | The `codex resume <session-id>` command Codex prints in the pane on exit. |
+| `"transcript"` | Codex/Claude | Unambiguous same-root transcript metadata. |
 
 Custom resolvers receive `resolver(tool_name, ctx, opts)`. `ctx` is a stable
 copy of the Sidepanes terminal context, with fields such as `key`, `tool_name`,
