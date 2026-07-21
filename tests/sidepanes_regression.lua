@@ -3692,6 +3692,38 @@ test("pane switch picker selects markdown and shortcut entries without enter", f
     assert(vim.api.nvim_win_get_buf(pane.winid) == pane.bufnr, "picker 0 did not restore markdown buffer")
 end)
 
+test("pane switch picker treats Ctrl-C as cancel", function()
+    reset_pane()
+
+    local root = root_fixture("switch-picker-cancel-test")
+
+    write(root .. "/docs/doc.md", { "# Doc" })
+    pane.setup({
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+    pane.open(root .. "/docs/doc.md")
+
+    local before_mode = pane.active_mode
+    pane._test_getcharstr = function()
+        error("Keyboard interrupt")
+    end
+
+    local ok, err = pcall(function()
+        pane.switch_picker()
+    end)
+
+    pane._test_getcharstr = nil
+
+    assert(ok, "switch picker Ctrl-C raised: " .. tostring(err))
+    assert(pane.active_mode == before_mode, "switch picker Ctrl-C changed active mode")
+end)
+
 test("pane switch picker title includes current project name", function()
     reset_pane()
 
