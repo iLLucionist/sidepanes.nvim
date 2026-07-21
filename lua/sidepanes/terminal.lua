@@ -11,6 +11,18 @@ local util = require("sidepanes.util")
 
 local M = {}
 
+local function same_root(a, b)
+    if not (a and b) then
+        return false
+    end
+
+    return util.normalize_project_root(a):gsub("/$", "") == util.normalize_project_root(b):gsub("/$", "")
+end
+
+local function context_matches_root(ctx, root)
+    return not root or (ctx and same_root(ctx.root, root))
+end
+
 local function recovery_message(ctx)
     local tool_label = ctx.tool_label or ctx.tool_name or "Agent"
     local details = { "session id " .. tostring(ctx.session_id) }
@@ -36,6 +48,34 @@ local function configured_resume_badge_ms(state)
     local timeout = tonumber(state.config.agent_resume_badge_ms) or 0
 
     return math.max(0, math.floor(timeout))
+end
+
+local function now_ms()
+    local uv = vim.uv or vim.loop
+
+    return uv and uv.now and uv.now() or (os.time() * 1000)
+end
+
+local function resume_failure_timeout_ms(state)
+    local config = state and state.config or {}
+    local timeout = tonumber(config.agent_resume_failure_timeout_ms)
+
+    if timeout == nil then
+        timeout = 750
+    end
+
+    return math.max(0, math.floor(timeout))
+end
+
+local function resume_failure_action(state)
+    local config = state and state.config or {}
+    local action = config.agent_resume_failure_action
+
+    if action == "notify" or action == "ignore" then
+        return action
+    end
+
+    return "fresh"
 end
 
 local function clear_resume_badge_for_context(ctx, deps)
@@ -139,7 +179,7 @@ function M.context_for_tool(state, tool_name, root)
     local last_key = state.last_tool_terminal_keys and state.last_tool_terminal_keys[tool_name] or nil
     local last_ctx = last_key and state.terminals[last_key] or nil
 
-    if last_ctx and last_ctx.tool_name == tool_name and M.is_running(last_ctx) then
+    if last_ctx and last_ctx.tool_name == tool_name and M.is_running(last_ctx) and context_matches_root(last_ctx, root) then
         return last_ctx
     end
 
@@ -150,7 +190,7 @@ function M.context_for_tool(state, tool_name, root)
     end
 
     for _, ctx in pairs(state.terminals or {}) do
-        if ctx.tool_name == tool_name and M.is_running(ctx) then
+        if ctx.tool_name == tool_name and M.is_running(ctx) and context_matches_root(ctx, root) then
             return ctx
         end
     end
@@ -162,13 +202,13 @@ end
 function M.last_coding_agent_context(state, root)
     local last_ctx = state.last_coding_agent_terminal_key and state.terminals[state.last_coding_agent_terminal_key] or nil
 
-    if last_ctx and M.is_coding_agent_tool(last_ctx.tool_name) and M.is_running(last_ctx) then
+    if last_ctx and M.is_coding_agent_tool(last_ctx.tool_name) and M.is_running(last_ctx) and context_matches_root(last_ctx, root) then
         return last_ctx
     end
 
     local active_ctx = state.active_terminal_key and state.terminals[state.active_terminal_key] or nil
 
-    if active_ctx and M.is_coding_agent_tool(active_ctx.tool_name) and M.is_running(active_ctx) then
+    if active_ctx and M.is_coding_agent_tool(active_ctx.tool_name) and M.is_running(active_ctx) and context_matches_root(active_ctx, root) then
         return active_ctx
     end
 
@@ -200,7 +240,7 @@ function M.start(state, deps, tool_name, preset_name, root)
         return existing, false
     end
 
-    local initial_latest = agent_session.is_supported(tool_name) and agent_session.latest_info_for_root(tool_name, root) or nil
+    local initial_latest = agent_session.is_supported(tool_name) and agent_session.can_infer_from_transcripts(state.config) and agent_session.latest_info_for_root(tool_name, root) or nil
     local resume = agent_session.resolve_resume(state, existing, tool_name, root)
     local resume_id = resume and resume.session_id or nil
     local cmd = util.command_list(tool, preset, root)
@@ -213,12 +253,6 @@ function M.start(state, deps, tool_name, preset_name, root)
         resume_id = nil
     end
 
-    if not util.executable_exists(cmd[1]) then
-        vim.notify("Pane tool executable not found: " .. tostring(cmd[1]), vim.log.levels.ERROR)
-        return nil
-    end
-
-    local bufnr = vim.api.nvim_create_buf(false, true)
     local ctx = {
         key = key,
         tool_name = tool_name,
@@ -227,10 +261,10 @@ function M.start(state, deps, tool_name, preset_name, root)
         preset_label = preset.label or preset.name or "Default",
         preset = preset,
         root = root,
-        bufnr = bufnr,
         job_id = nil,
         pid = nil,
         started_at = os.time(),
+        started_at_ms = now_ms(),
         initial_latest_session_id = initial_latest and initial_latest.session_id or nil,
         session_id = resume_id,
         resumed = resuming,
@@ -242,6 +276,17 @@ function M.start(state, deps, tool_name, preset_name, root)
         resume_badge_token = 0,
         send_delay_ms = tool.send_delay_ms or 700,
     }
+
+    cmd = agent_session.prepare_command(state, ctx, cmd)
+
+    if not util.executable_exists(cmd[1]) then
+        vim.notify("Pane tool executable not found: " .. tostring(cmd[1]), vim.log.levels.ERROR)
+        return nil
+    end
+
+    local bufnr = vim.api.nvim_create_buf(false, true)
+
+    ctx.bufnr = bufnr
 
     pcall(vim.api.nvim_buf_set_name, bufnr, "Pane://" .. util.sanitize_name(key))
     vim.api.nvim_set_option_value("bufhidden", "hide", { buf = bufnr })
@@ -256,7 +301,29 @@ function M.start(state, deps, tool_name, preset_name, root)
         vim.api.nvim_set_current_buf(bufnr)
         ctx.job_id = vim.fn.termopen(cmd, {
             cwd = root,
-            on_exit = function()
+            on_exit = function(_, exit_code)
+                local failure_action = resume_failure_action(state)
+                local failure_timeout = resume_failure_timeout_ms(state)
+
+                if ctx.resumed and failure_action ~= "ignore" and not ctx.shutdown_requested and exit_code ~= 0 and not ctx.resume_retry_attempted and now_ms() - (ctx.started_at_ms or 0) <= failure_timeout then
+                    ctx.resume_retry_attempted = true
+                    agent_session.forget_session(state, ctx.tool_name, ctx.root)
+                    vim.schedule(function()
+                        if state.terminals[key] == ctx then
+                            state.terminals[key] = nil
+                        end
+
+                        if failure_action == "fresh" then
+                            vim.notify("Recovered " .. (ctx.tool_label or ctx.tool_name or "agent") .. " session exited quickly; cleared stale resume id and starting fresh.", vim.log.levels.WARN)
+                            M.start(state, deps, tool_name, preset_name, root)
+                        else
+                            vim.notify("Recovered " .. (ctx.tool_label or ctx.tool_name or "agent") .. " session exited quickly; cleared stale resume id.", vim.log.levels.WARN)
+                            deps.update_sticky_heading()
+                        end
+                    end)
+                    return
+                end
+
                 agent_session.refresh_context(state, ctx)
                 deps.update_sticky_heading()
             end,
@@ -564,6 +631,8 @@ local function shutdown_one(state, ctx, opts)
 
     local timeout = shutdown_timeout(state, ctx, opts)
     local command = shutdown_command(state, ctx)
+
+    ctx.shutdown_requested = true
 
     if command and command ~= "" then
         pcall(vim.fn.chansend, ctx.job_id, command)

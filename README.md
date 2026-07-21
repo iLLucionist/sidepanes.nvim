@@ -74,6 +74,22 @@ reflow.
         },
       },
       terminal = {
+        auto_resume = true,
+        resume = {
+          enabled = true,
+          infer_from_transcripts = true,
+          use_claude_pid_metadata = true,
+          mechanisms = {
+            claude = { "hook", "pid_metadata", "transcript" },
+            codex = { "transcript" },
+          },
+          store_path = nil,
+          store_lock_timeout_ms = 1000,
+          store_lock_stale_ms = 10000,
+          resolver = nil,
+          failure_timeout_ms = 750,
+          failure_action = "fresh",
+        },
         agent_resume_badge_ms = 0,
         agent_resume_badge = {
           text = "[RESUMED]",
@@ -84,6 +100,12 @@ reflow.
             bold = true,
           },
         },
+      },
+      project = {
+        root_markers = { ".git" },
+        fallback = "buffer_dir",
+        -- Override this for wildcard, glob, monorepo, or non-file project logic.
+        resolver = nil,
       },
       commands = true,
       mappings = {
@@ -190,15 +212,103 @@ are available in your environment.
    are also installed in terminal-input mode, so pressing `<C-g>` while typing
    in Claude or Codex is handled by Sidepanes instead of being sent to the agent.
    If a pane-owned Codex or Claude terminal exits unexpectedly, reopening that
-   tool first checks for a live pane job, then resumes the remembered or latest
-   matching project session when Sidepanes can find one. Recovered terminals
-   echo the session/PID details and show a `[RESUMED]` winbar badge. Sidepanes
-   resumes CLI sessions, not terminal ptys; when the pane-owned job is gone,
-   recovery starts a fresh CLI process with the resume command.
+   tool for the same project root first checks for a live pane job, then resumes
+   a Sidepanes-owned remembered session when one is available. Recovered
+   terminals echo the session/PID details and show a `[RESUMED]` winbar badge.
+   Sidepanes resumes CLI sessions, not terminal ptys; when the pane-owned job
+   is gone, recovery starts a fresh CLI process with the resume command.
 
 7. If the pane feels too wide or narrow, use `<leader>p-`, `<leader>p+`, or
    `<leader>pw` to adjust it. Use `<leader>p%` when you want relative widths to
    track the total Neovim window size.
+
+## Agent Auto-Resume
+
+Sidepanes auto-resume is intentionally scoped and evidence-based. It never
+reattaches to a lost terminal pty and it no longer adopts the latest global
+Codex or Claude session just because one exists. The resume key is always:
+
+```text
+tool name + detected project root
+```
+
+Project root detection uses Neovim's `vim.fs.root()` marker model when
+available. It defaults to the nearest `.git` parent, falling back to the current
+file's directory. Configure `project.root_markers` with the same marker shapes
+Neovim accepts: strings, functions, or nested equal-priority marker groups such
+as `{ { "pyproject.toml", "package.json" }, ".git" }`.
+
+Sidepanes intentionally does not clone the older
+`lspconfig.util.root_pattern()` wildcard/glob semantics. For unusual boundaries
+such as `*.sln`, generated worktrees, monorepo package rules, or tool-specific
+project files, use `project.resolver`. The resolver runs before marker lookup,
+receives either a buffer number or path plus `opts.kind`, and should return the
+root directory Sidepanes should use as the resume boundary:
+
+```lua
+require("sidepanes").setup({
+  project = {
+    root_markers = { { "pyproject.toml", "package.json" }, ".git" },
+    fallback = "buffer_dir",
+    resolver = function(source, opts)
+      -- Return nil to let Sidepanes continue with vim.fs.root().
+      -- Return a path to take full control for this buffer/path.
+    end,
+  },
+})
+```
+
+When Codex or Claude is opened, Sidepanes:
+
+1. reuses a live Sidepanes-owned terminal job for the same tool/root when one
+   still exists;
+2. otherwise looks for a Sidepanes-owned remembered session id for that
+   tool/root;
+3. validates the remembered record against its source evidence;
+4. starts a new CLI process using `codex resume <session-id>` or
+   `claude --resume <session-id>`;
+5. clears stale evidence and starts fresh once when a resumed CLI exits quickly
+   with a non-zero status.
+
+Built-in capture differs by agent. Claude uses a temporary pane-local
+`SessionStart` hook first, can fall back to Claude PID metadata, and can infer a
+matching transcript when enabled. Codex uses unambiguous `session_meta` entries
+from `~/.codex/sessions/**` for the pane's project root; ambiguous candidates
+are ignored instead of guessed.
+
+Remembered sessions are stored under Neovim's state directory by default. The
+registry writes with an atomic rename and a lock directory, merges existing
+entries before save, and recovers stale locks after
+`terminal.resume.store_lock_stale_ms` so a crashed Neovim/plugin instance does
+not block future saves.
+
+Public tuning and extension points:
+
+| Option | Use |
+| --- | --- |
+| `terminal.auto_resume` / `terminal.resume.enabled` | Turn auto-resume off entirely. |
+| `terminal.resume.infer_from_transcripts` | Disable transcript inference for stricter behavior. |
+| `terminal.resume.use_claude_pid_metadata` | Disable Claude PID metadata lookup. |
+| `terminal.resume.mechanisms` | Enable, disable, or reorder built-in mechanism names: `"hook"`, `"pid_metadata"`, `"transcript"`. |
+| `terminal.resume.resolver` | Provide custom session-id discovery and validation. |
+| `terminal.resume.store_path` | Change or disable the persisted registry. |
+| `terminal.resume.store_lock_timeout_ms` | Tune how long a registry save waits for another writer. |
+| `terminal.resume.store_lock_stale_ms` | Tune crash recovery for abandoned registry locks. |
+| `terminal.resume.failure_timeout_ms` | Tune the quick-failure window for stale resume ids. |
+| `terminal.resume.failure_action` | Choose `"fresh"`, `"notify"`, or `"ignore"` after quick failed resume. |
+
+Custom resolvers receive `resolver(tool_name, ctx, opts)`. `ctx` is a stable
+copy of the terminal context; mutating it does not mutate Sidepanes internals.
+During capture, return a session id string or a table such as
+`{ session_id = "...", evidence = { resolver_state = ... } }`. Before reusing a
+resolver-sourced record, Sidepanes calls the resolver again with
+`opts.purpose = "validate"` and `opts.remembered`. Return the same session id,
+`true`, or `{ valid = true }` to keep the record; return `false`, `nil`, or a
+different id to make Sidepanes clear it and start fresh.
+
+The current extension point is session identity discovery/validation. Resume
+command construction is still built in for Codex and Claude; alternative command
+rewriting for other CLIs would be a separate public API.
 
 ## Mappings
 

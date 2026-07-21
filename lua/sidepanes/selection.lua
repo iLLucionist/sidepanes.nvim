@@ -113,7 +113,7 @@ function M.context(opts, deps)
 
     local terminal_ctx = deps.terminal_context_for_buf and deps.terminal_context_for_buf(bufnr) or nil
     local markdown_source = bufnr == deps.pane_bufnr and deps.source or nil
-    local root = terminal_ctx and terminal_ctx.root or (markdown_source and util.project_root_for_path(markdown_source) or util.project_root(bufnr))
+    local root = terminal_ctx and terminal_ctx.root or (markdown_source and util.project_root_for_path(markdown_source, deps.config) or util.project_root(bufnr, deps.config))
     local path = markdown_source or vim.api.nvim_buf_get_name(bufnr)
 
     selection.bufnr = bufnr

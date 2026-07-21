@@ -34,9 +34,11 @@ Released as `v0.1.0` on 2026-07-19.
 
 ## v0.2.0 Platform And UI Pass
 
-Status: in progress through the `v0.2.0` release.
+Status: released.
 
-Candidate work:
+Released as `v0.2.0` on 2026-07-21.
+
+Follow-up candidate work:
 
 - Define stable, advanced, and internal API tiers for plugin authors.
 - Decide whether Sidepanes should expose an extension registration API such as
@@ -51,7 +53,7 @@ Candidate work:
 
 - Consider adding an explicit fresh-vs-resume choice for Codex and Claude pane
   recovery. For now, if no live pane job exists, opening a supported agent tool
-  prefers resuming the remembered or latest matching project session.
+  resumes only a Sidepanes-owned remembered session.
 - Decide whether Markdown Reflow should remain bundled or split into a separate
   `markdown-reflow.nvim` plugin.
 - Revisit compatibility aliases only when there is a clear reason to deprecate

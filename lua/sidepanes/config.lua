@@ -74,10 +74,35 @@ end
 local function expand_terminal(opts)
     local expanded = vim.deepcopy(opts or {})
     local terminal = expanded.terminal or {}
+    local resume = terminal.resume or {}
 
     set_if_present(expanded, "agent_resume_badge_ms", terminal.agent_resume_badge_ms)
     set_if_present(expanded, "agent_resume_badge", terminal.agent_resume_badge)
+    set_if_present(expanded, "agent_auto_resume", terminal.auto_resume)
+    set_if_present(expanded, "agent_auto_resume", resume.enabled)
+    set_if_present(expanded, "agent_resume_infer_from_transcripts", resume.infer_from_transcripts)
+    set_if_present(expanded, "agent_resume_use_claude_pid_metadata", resume.use_claude_pid_metadata)
+    set_if_present(expanded, "agent_resume_mechanisms", resume.mechanisms)
+    set_if_present(expanded, "agent_resume_store_path", resume.store_path)
+    set_if_present(expanded, "agent_resume_store_lock_timeout_ms", resume.store_lock_timeout_ms)
+    set_if_present(expanded, "agent_resume_store_lock_stale_ms", resume.store_lock_stale_ms)
+    set_if_present(expanded, "agent_resume_resolver", resume.resolver)
+    set_if_present(expanded, "agent_resume_failure_timeout_ms", resume.failure_timeout_ms)
+    set_if_present(expanded, "agent_resume_failure_action", resume.failure_action)
     expanded.terminal = nil
+
+    return expanded
+end
+
+--- Expand nested project root options to the internal flat config keys.
+local function expand_project(opts)
+    local expanded = vim.deepcopy(opts or {})
+    local project = expanded.project or {}
+
+    set_if_present(expanded, "project_root_markers", project.root_markers)
+    set_if_present(expanded, "project_root_fallback", project.fallback)
+    set_if_present(expanded, "project_root_resolver", project.resolver)
+    expanded.project = nil
 
     return expanded
 end
@@ -232,8 +257,26 @@ function M.to_setup(runtime_config)
             shutdown_timeout_ms = config.shutdown_timeout_ms,
         },
         terminal = {
+            auto_resume = config.agent_auto_resume,
+            resume = {
+                enabled = config.agent_auto_resume,
+                infer_from_transcripts = config.agent_resume_infer_from_transcripts,
+                use_claude_pid_metadata = config.agent_resume_use_claude_pid_metadata,
+                mechanisms = vim.deepcopy(config.agent_resume_mechanisms),
+                store_path = config.agent_resume_store_path,
+                store_lock_timeout_ms = config.agent_resume_store_lock_timeout_ms,
+                store_lock_stale_ms = config.agent_resume_store_lock_stale_ms,
+                resolver = config.agent_resume_resolver,
+                failure_timeout_ms = config.agent_resume_failure_timeout_ms,
+                failure_action = config.agent_resume_failure_action,
+            },
             agent_resume_badge_ms = config.agent_resume_badge_ms,
             agent_resume_badge = vim.deepcopy(config.agent_resume_badge),
+        },
+        project = {
+            root_markers = vim.deepcopy(config.project_root_markers),
+            fallback = config.project_root_fallback,
+            resolver = config.project_root_resolver,
         },
         validation = {
             enabled = config.validate,
@@ -246,7 +289,7 @@ end
 
 --- Expand ergonomic setup options without merging them into a base config.
 function M.expand(opts)
-    return expand_tools(expand_validation(expand_terminal(expand_lifecycle(expand_markdown(expand_layout(opts or {}))))))
+    return expand_tools(expand_validation(expand_terminal(expand_project(expand_lifecycle(expand_markdown(expand_layout(opts or {})))))))
 end
 
 --- Merge setup options into a base config after expanding ergonomic options.

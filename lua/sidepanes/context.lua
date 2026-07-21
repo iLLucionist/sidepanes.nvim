@@ -44,10 +44,10 @@ function M.pane_root(state, bufnr)
     end
 
     if bufnr == state.bufnr and state.source then
-        return util.project_root_for_path(state.source)
+        return util.project_root_for_path(state.source, state.config)
     end
 
-    return util.project_root(bufnr)
+    return util.project_root(bufnr, state.config)
 end
 
 --- Capture text, file, root, and snippet language for a send/ask action.
@@ -55,6 +55,7 @@ function M.selection_context(state, opts)
     return selection.context(opts, {
         pane_bufnr = state.bufnr,
         source = state.source,
+        config = state.config,
         terminal_context_for_buf = function(bufnr)
             return M.terminal_context_for_buf(state, bufnr)
         end,

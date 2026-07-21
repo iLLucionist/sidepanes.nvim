@@ -194,6 +194,22 @@ require("sidepanes").setup({
     shutdown_timeout_ms = 300,
   },
   terminal = {
+    auto_resume = true,
+    resume = {
+      enabled = true,
+      infer_from_transcripts = true,
+      use_claude_pid_metadata = true,
+      mechanisms = {
+        claude = { "hook", "pid_metadata", "transcript" },
+        codex = { "transcript" },
+      },
+      store_path = nil,
+      store_lock_timeout_ms = 1000,
+      store_lock_stale_ms = 10000,
+      resolver = nil,
+      failure_timeout_ms = 750,
+      failure_action = "fresh",
+    },
     agent_resume_badge_ms = 0,
     agent_resume_badge = {
       text = "[RESUMED]",
@@ -204,6 +220,12 @@ require("sidepanes").setup({
         bold = true,
       },
     },
+  },
+  project = {
+    root_markers = { ".git" },
+    fallback = "buffer_dir",
+    -- Override this for wildcard, glob, monorepo, or non-file project logic.
+    resolver = nil,
   },
   validation = {
     enabled = true,
@@ -261,6 +283,20 @@ Grouped options normalize to runtime keys:
 | `lifecycle.focus_on_ask` | `focus_on_ask` |
 | `lifecycle.shutdown_on_exit` | `shutdown_on_exit` |
 | `lifecycle.shutdown_timeout_ms` | `shutdown_timeout_ms` |
+| `project.root_markers` | `project_root_markers` |
+| `project.fallback` | `project_root_fallback` |
+| `project.resolver` | `project_root_resolver` |
+| `terminal.auto_resume` | `agent_auto_resume` |
+| `terminal.resume.enabled` | `agent_auto_resume` |
+| `terminal.resume.infer_from_transcripts` | `agent_resume_infer_from_transcripts` |
+| `terminal.resume.use_claude_pid_metadata` | `agent_resume_use_claude_pid_metadata` |
+| `terminal.resume.mechanisms` | `agent_resume_mechanisms` |
+| `terminal.resume.store_path` | `agent_resume_store_path` |
+| `terminal.resume.store_lock_timeout_ms` | `agent_resume_store_lock_timeout_ms` |
+| `terminal.resume.store_lock_stale_ms` | `agent_resume_store_lock_stale_ms` |
+| `terminal.resume.resolver` | `agent_resume_resolver` |
+| `terminal.resume.failure_timeout_ms` | `agent_resume_failure_timeout_ms` |
+| `terminal.resume.failure_action` | `agent_resume_failure_action` |
 | `terminal.agent_resume_badge_ms` | `agent_resume_badge_ms` |
 | `terminal.agent_resume_badge` | `agent_resume_badge` |
 | `validation.enabled` | `validate` |
@@ -362,18 +398,105 @@ Preset tables may include:
 }
 ```
 
-The running terminal session is one per tool. If Codex is already open and a
-new Codex preset is chosen, Sidepanes sends the configured `switch_command`
-before sending the prompt.
+Running terminal sessions are tracked per tool and project root. If Codex is
+already open for the current root and a new Codex preset is chosen, Sidepanes
+sends the configured `switch_command` before sending the prompt. Root-scoped
+agent lookups stay inside the requested project root, so a running Codex or
+Claude pane from another project is not reused for the current one.
 
-Codex and Claude panes also track the agent process id and resumable session id
-when the CLI exposes one. Opening Codex or Claude first reuses a live pane-owned
-terminal buffer and Neovim job. If that live check fails because the terminal
-exited, crashed, or its buffer was lost, Sidepanes builds a recovery candidate
-from the current context, the remembered session record, or the latest matching
-project transcript. Claude uses `~/.claude/sessions/<pid>.json` first and falls
-back to the latest `~/.claude/projects/<project>/` transcript. Codex falls back
-to the latest matching project transcript in `~/.codex/sessions/**`.
+## Agent Auto-Resume
+
+Sidepanes auto-resume is intentionally scoped and evidence-based. It never
+reattaches to a lost terminal pty and it does not adopt the latest global Codex
+or Claude session just because one exists. The resume key is always:
+
+```text
+tool name + detected project root
+```
+
+Project roots use Neovim's `vim.fs.root()` marker model when available. By
+default, Sidepanes finds the nearest parent containing `.git`; if no marker is
+found, it uses the current file's directory. Configure `project.root_markers`
+with the same marker shapes Neovim accepts: strings, functions, or nested
+equal-priority marker groups such as
+`{ { "pyproject.toml", "package.json" }, ".git" }`. Set `project.fallback` to
+`"cwd"` when markerless files should share the current working directory.
+
+Sidepanes intentionally does not clone the older
+`lspconfig.util.root_pattern()` wildcard/glob semantics. For unusual boundaries
+such as `*.sln`, generated worktrees, monorepo package rules, or tool-specific
+project files, provide `project.resolver = function(source, opts) return root
+end`. The resolver runs before marker lookup, receives a buffer number or path
+as `source` and an `opts.kind` of `"buffer"` or `"path"`, and should return the
+root directory Sidepanes should use as the pane/restart/resume boundary. Return
+`nil` to let Sidepanes continue with `vim.fs.root()`.
+
+When Codex or Claude is opened, Sidepanes:
+
+1. reuses a live Sidepanes-owned terminal job for the same tool/root when one
+   still exists;
+2. otherwise looks for a Sidepanes-owned remembered session id for that
+   tool/root;
+3. validates the remembered record against its source evidence;
+4. starts a new CLI process using `codex resume <session-id>` or
+   `claude --resume <session-id>`;
+5. clears stale evidence and starts fresh once when a resumed CLI exits quickly
+   with a non-zero status.
+
+Built-in capture differs by agent. Claude uses a Sidepanes-injected
+`SessionStart` hook by default: Sidepanes passes a temporary `--settings` file
+for the pane process only, records the hook's `session_id`, `transcript_path`,
+and `cwd`, and stores the matching session id in the Sidepanes registry. If hook
+capture is unavailable, the default Claude mechanism list can still use
+`~/.claude/sessions/<pid>.json` and, when transcript inference is enabled, a
+matching project transcript.
+
+Codex embedded-terminal capture uses an unambiguous `session_meta` entry that
+Codex writes to `~/.codex/sessions/**` for the pane's project root. If multiple
+same-root transcript candidates appear for a fresh Sidepanes context, Sidepanes
+does not guess. Codex also exposes richer thread ids through the app-server/SDK
+surfaces, but Sidepanes' built-in terminal integration does not switch to that
+separate API surface. Users who have a stricter local Codex capture mechanism
+can provide `terminal.resume.resolver`.
+
+Remembered sessions are stored under Neovim's state directory by default. The
+registry writes with an atomic rename and a lock directory, merges existing
+entries before save, and recovers stale locks after
+`terminal.resume.store_lock_stale_ms` so a crashed Neovim/plugin instance does
+not block future saves. Reads stay lock-free because a registry reader sees
+either the previous complete file or the next complete file.
+
+Remembered sessions validate their source evidence before resume. Hook captures,
+Claude PID metadata, Codex/Claude transcript paths, and custom resolver records
+must still match the requested tool, root, and session id. Stale or mismatched
+registry entries are cleared and treated as fresh starts.
+
+Public tuning and extension points:
+
+| Option | Use |
+| --- | --- |
+| `terminal.auto_resume` / `terminal.resume.enabled` | Turn auto-resume off entirely. |
+| `terminal.resume.infer_from_transcripts` | Disable transcript inference for stricter behavior. |
+| `terminal.resume.use_claude_pid_metadata` | Disable Claude PID metadata lookup. |
+| `terminal.resume.mechanisms` | Enable, disable, or reorder built-in mechanism names: `"hook"`, `"pid_metadata"`, `"transcript"`. |
+| `terminal.resume.resolver` | Provide custom session-id discovery and validation. |
+| `terminal.resume.store_path` | Change or disable the persisted registry. |
+| `terminal.resume.store_lock_timeout_ms` | Tune how long a registry save waits for another writer. |
+| `terminal.resume.store_lock_stale_ms` | Tune crash recovery for abandoned registry locks. |
+| `terminal.resume.failure_timeout_ms` | Tune the quick-failure window for stale resume ids. |
+| `terminal.resume.failure_action` | Choose `"fresh"`, `"notify"`, or `"ignore"` after quick failed resume. |
+
+Custom resolvers receive `resolver(tool_name, ctx, opts)`. `ctx` is a stable
+copy of the Sidepanes terminal context, with fields such as `key`, `tool_name`,
+`root`, `session_id`, `pid`, `job_id`, `bufnr`, `started_at`, `resumed`, and
+`resume_source`. Mutating `ctx` does not mutate Sidepanes internals. During
+capture, `opts.purpose` is `"capture"` and the resolver can return a session id
+string or a table such as
+`{ session_id = "...", evidence = { resolver_state = ... } }`. For
+resolver-sourced remembered records, Sidepanes calls the resolver again with
+`opts.purpose = "validate"` and `opts.remembered` before reuse. Return the same
+session id, `true`, or `{ valid = true }` to keep the record; return `false`,
+`nil`, or a different id to make Sidepanes clear it and start fresh.
 
 When a recovery candidate is launched, Claude receives
 `claude --resume <session-id>` and Codex receives `codex resume <session-id>`.
@@ -383,6 +506,10 @@ sessions, not terminal ptys; when the pane-owned job is gone, recovery starts a
 new CLI process with the tool's resume command. If a remembered PID still
 appears alive in an unusual case, Sidepanes reports it for context but still
 cannot reattach to that pty.
+
+The current extension point is session identity discovery/validation. Resume
+command construction is still built in for Codex and Claude; alternative command
+rewriting for other CLIs would be a separate public API.
 
 Default exit commands:
 
@@ -439,9 +566,8 @@ users should prefer `switch_to()`.
 `show_last_terminal(opts)` and `toggle_markdown_terminal()` are advanced workflow
 helpers. They may show Codex, Claude, IPython, or a configured custom pane
 terminal. For Codex and Claude, reopening after a dead pane-owned terminal uses
-Sidepanes' remembered session id or the tool's latest matching project
-transcript when available, then reports the recovered session and shows the
-resume badge.
+Sidepanes' remembered session id when available, then reports the recovered
+session and shows the resume badge.
 
 `show_last_agent(opts)` and `toggle_markdown_agent()` remain compatibility
 aliases for older callers.

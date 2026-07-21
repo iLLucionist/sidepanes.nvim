@@ -16,8 +16,9 @@ local help = read("doc/sidepanes.txt")
 local markdown = read("doc/sidepanes.md")
 local readme = read("README.md")
 local changelog = read("CHANGELOG.md")
+local release_notes = read("docs/release-notes-v0.2.1.md")
 local ci = read(".github/workflows/tests.yml")
-local docs = table.concat({ help, markdown, readme, changelog, ci }, "\n")
+local docs = table.concat({ help, markdown, readme, changelog, release_notes, ci }, "\n")
 
 local function assert_has(text, needle, label)
     assert(text:find(needle, 1, true), "missing docs contract entry for " .. (label or needle))
@@ -179,9 +180,38 @@ for _, item in ipairs({
     "[RELOADED]",
     "SidepanesReloaded",
     "terminal.agent_resume_badge",
+    "terminal.auto_resume",
+    "terminal.resume.infer_from_transcripts",
+    "terminal.resume.mechanisms",
+    "terminal.resume.store_path",
+    "terminal.resume.store_lock_timeout_ms",
+    "terminal.resume.store_lock_stale_ms",
+    "terminal.resume.resolver",
+    "terminal.resume.failure_timeout_ms",
+    "terminal.resume.failure_action",
+    "project.root_markers",
+    "project.resolver",
+    "vim.fs.root()",
+    "nested equal-priority marker groups",
+    "lspconfig.util.root_pattern()",
+    "wildcard/glob",
     "[RESUMED]",
     "SidepanesResumed",
+    "SessionStart",
     "session_meta",
+    "Sidepanes-owned",
+    "tool name + detected project root",
+    "terminal ptys",
+    "atomic writes",
+    "lock directory",
+    "source evidence",
+    "opts.purpose",
+    "stable context copy",
+    "built-in mechanism",
+    "session identity discovery",
+    "does not guess",
+    "stale resume id",
+    "more finicky than originally anticipated",
     "resumes CLI sessions",
     "terminal-input mode",
     "CursorFG",

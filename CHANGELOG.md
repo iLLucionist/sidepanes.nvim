@@ -13,6 +13,85 @@ but they should be called out clearly in this changelog.
 
 ## Unreleased
 
+### Changed
+
+- Project root detection is now configurable with `project.root_markers`,
+  `project.fallback`, and `project.resolver`. Sidepanes uses the detected root
+  as the safety boundary for root-scoped Codex and Claude panes. On modern
+  Neovim it uses `vim.fs.root()` semantics for both buffers and paths, including
+  string markers, function markers, and nested equal-priority marker groups.
+  Sidepanes intentionally does not clone older
+  `lspconfig.util.root_pattern()` wildcard/glob semantics; users with glob,
+  monorepo, generated-worktree, or tool-specific boundaries should implement
+  those rules in `project.resolver`, which runs before marker lookup.
+- Agent recovery can now be made stricter or disabled with
+  `terminal.auto_resume`, `terminal.resume.enabled`,
+  `terminal.resume.infer_from_transcripts`, and
+  `terminal.resume.use_claude_pid_metadata`.
+- Agent auto-resume is now documented and implemented as an evidence-based
+  `tool name + detected project root` workflow. On open, Sidepanes first reuses
+  a live Sidepanes-owned terminal job for that tool/root, then falls back to a
+  Sidepanes-owned remembered session id, validates the remembered source
+  evidence, and starts a new CLI process with `codex resume <session-id>` or
+  `claude --resume <session-id>`. It resumes CLI sessions, not terminal ptys,
+  and it does not adopt arbitrary latest global Codex or Claude sessions.
+- Agent session capture is now configurable with
+  `terminal.resume.mechanisms`, `terminal.resume.store_path`, and
+  `terminal.resume.resolver`. Custom resolvers can now return evidence and are
+  revalidated before Sidepanes reuses resolver-sourced records. Resolver
+  callbacks receive a stable context copy, and unknown built-in mechanism names
+  now produce validation warnings that point users toward
+  `terminal.resume.resolver` for custom discovery. The default registry stores
+  only Sidepanes-captured session ids under Neovim's state directory so Codex
+  and Claude can resume after a Neovim restart without adopting unrelated
+  external sessions.
+- Agent resume registry contention and crash recovery are configurable with
+  `terminal.resume.store_lock_timeout_ms` and
+  `terminal.resume.store_lock_stale_ms`.
+- Stale resume failure handling is configurable with
+  `terminal.resume.failure_timeout_ms` and
+  `terminal.resume.failure_action`.
+- Claude recovery now captures session ids through a Sidepanes-injected
+  `SessionStart` hook when available. Codex embedded-terminal recovery continues
+  to use unambiguous Codex `session_meta` entries for Sidepanes-owned sessions;
+  ambiguous same-root transcript candidates are ignored rather than guessed.
+- Agent auto-resume is more finicky than originally expected because Codex and
+  Claude expose different terminal-session metadata surfaces. Sidepanes now
+  treats recovery as best-effort, project-scoped CLI session resume rather than
+  terminal pty reattachment.
+- The persisted agent-session registry now uses canonical project-root keys,
+  atomic writes, a stale-recovering writer lock, and merge-before-save behavior
+  so independent Neovim instances are less likely to clobber each other's
+  remembered Sidepanes sessions.
+- The pane switcher title now includes the detected project name, making the
+  current root scope visible while switching between Markdown and terminal
+  panes.
+
+### Fixed
+
+- Codex and Claude panes no longer auto-resume an arbitrary latest project
+  transcript on first open. Recovery now requires a Sidepanes-owned context or
+  remembered Sidepanes session id, so agent sessions created outside Sidepanes
+  are not adopted just because they share a project root.
+- Root-scoped Codex and Claude lookups now stay inside the requested project
+  root instead of falling back to a running agent pane from another project.
+- Remembered agent sessions now validate their source evidence before resume.
+  Missing or mismatched hook captures, PID metadata, or transcripts are cleared
+  instead of being used.
+- Resolver-sourced remembered sessions are now revalidated through the custom
+  resolver before reuse instead of being trusted indefinitely.
+- Codex transcript inference now refuses ambiguous same-root candidates instead
+  of guessing which newly written transcript belongs to the Sidepanes pane.
+- Resumed Codex and Claude processes that exit immediately with a non-zero code
+  now clear the stale remembered session and start fresh once.
+
+### Notes
+
+- The current public extension point for agent auto-resume is session identity
+  discovery and validation through `terminal.resume.resolver`. Resume command
+  construction remains built in for Codex and Claude; alternative command
+  rewriting for other CLIs would be a separate public API.
+
 ## v0.2.0 - 2026-07-21
 
 ### Changed

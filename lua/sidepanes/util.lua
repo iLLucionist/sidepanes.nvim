@@ -79,57 +79,163 @@ end
 --- Normalize a project root and collapse accidental .git roots to the worktree.
 function M.normalize_project_root(root)
     root = vim.fn.fnamemodify(root or vim.fn.getcwd(), ":p")
+    local trimmed = root:gsub("/$", "")
+
+    root = vim.fn.resolve(trimmed)
 
     if vim.fn.fnamemodify(root:gsub("/$", ""), ":t") == ".git" then
         return vim.fn.fnamemodify(root, ":h:h:p")
     end
 
-    return root
+    return vim.fn.fnamemodify(root, ":p")
+end
+
+local function project_options(config)
+    config = config or {}
+
+    return {
+        markers = config.project_root_markers == nil and { ".git" } or config.project_root_markers,
+        fallback = config.project_root_fallback == nil and "buffer_dir" or config.project_root_fallback,
+        resolver = config.project_root_resolver,
+    }
+end
+
+local function fallback_root(start, fallback)
+    if fallback == "cwd" then
+        return M.normalize_project_root(vim.fn.getcwd())
+    end
+
+    return M.normalize_project_root(start)
+end
+
+local function root_from_resolver(source, kind, config)
+    local opts = project_options(config)
+
+    if type(opts.resolver) ~= "function" then
+        return nil
+    end
+
+    local ok, root = pcall(opts.resolver, source, {
+        kind = kind,
+        markers = opts.markers,
+        fallback = opts.fallback,
+    })
+
+    if ok and type(root) == "string" and root ~= "" then
+        return M.normalize_project_root(root)
+    end
+
+    return nil
+end
+
+local function simple_marker_names(markers)
+    if type(markers) == "string" then
+        return { markers }
+    elseif type(markers) ~= "table" then
+        return {}
+    end
+
+    local result = {}
+
+    for _, marker in ipairs(markers) do
+        if type(marker) == "string" then
+            table.insert(result, marker)
+        end
+    end
+
+    return result
+end
+
+local function native_marker_root(source, markers)
+    if markers == false or not (vim.fs and vim.fs.root) then
+        return nil
+    end
+
+    local ok, root = pcall(vim.fs.root, source, markers)
+
+    if ok and root then
+        return M.normalize_project_root(root):gsub("/$", "")
+    end
+
+    return nil
+end
+
+local function root_from_marker_path(path)
+    if not path or path == "" then
+        return nil
+    end
+
+    path = path:gsub("/+$", "")
+
+    return M.normalize_project_root(vim.fn.fnamemodify(path, ":h")):gsub("/$", "")
 end
 
 --- Resolve the project root for a buffer using Git as the primary marker.
-function M.project_root(bufnr)
+function M.project_root(bufnr, config)
     bufnr = bufnr or vim.api.nvim_get_current_buf()
+    local resolved = root_from_resolver(bufnr, "buffer", config)
 
-    if vim.fs and vim.fs.root then
-        local ok, root = pcall(vim.fs.root, bufnr, { ".git" })
-
-        if ok and root then
-            return M.normalize_project_root(root)
-        end
+    if resolved then
+        return resolved
     end
 
+    local opts = project_options(config)
     local name = vim.api.nvim_buf_get_name(bufnr)
+    local source = name ~= "" and name or bufnr
+
+    local root = native_marker_root(source, opts.markers)
+
+    if root then
+        return root
+    end
+
     local start = name ~= "" and vim.fn.fnamemodify(name, ":p:h") or vim.fn.getcwd()
+    local marker_names = simple_marker_names(opts.markers)
 
-    if vim.fs and vim.fs.find then
-        local found = vim.fs.find(".git", { path = start, upward = true })[1]
+    if #marker_names > 0 and vim.fs and vim.fs.find then
+        local found = vim.fs.find(marker_names, { path = start, upward = true })[1]
+        local root = root_from_marker_path(found)
 
-        if found then
-            return M.normalize_project_root(found)
+        if root then
+            return root
         end
     end
 
-    return M.normalize_project_root(start)
+    return fallback_root(start, opts.fallback)
 end
 
 --- Resolve the project root for a filesystem path.
-function M.project_root_for_path(path)
+function M.project_root_for_path(path, config)
     if not path or path == "" then
-        return M.project_root()
+        return M.project_root(nil, config)
+    end
+
+    local resolved = root_from_resolver(path, "path", config)
+
+    if resolved then
+        return resolved
     end
 
     local start = vim.fn.fnamemodify(path, ":p:h")
+    local opts = project_options(config)
+    local root = native_marker_root(path, opts.markers)
 
-    if vim.fs and vim.fs.find then
-        local found = vim.fs.find(".git", { path = start, upward = true })[1]
+    if root then
+        return root
+    end
 
-        if found then
-            return M.normalize_project_root(found)
+    local marker_names = simple_marker_names(opts.markers)
+
+    if opts.markers ~= false and #marker_names > 0 and vim.fs and vim.fs.find then
+        local found = vim.fs.find(marker_names, { path = start, upward = true })[1]
+        local root = root_from_marker_path(found)
+
+        if root then
+            return root
         end
     end
 
-    return M.normalize_project_root(start)
+    return fallback_root(start, opts.fallback)
 end
 
 --- Format a path relative to a root when possible.
@@ -157,9 +263,11 @@ end
 
 --- Build the stable key used to identify one pane terminal session.
 function M.terminal_key(tool_name, root)
+    local normalized = M.normalize_project_root(root or vim.fn.getcwd()):gsub("/$", "")
+
     return table.concat({
         tool_name,
-        vim.fn.fnamemodify(root or vim.fn.getcwd(), ":p"),
+        normalized,
     }, "::")
 end
 
