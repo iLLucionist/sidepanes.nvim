@@ -57,6 +57,9 @@ but they should be called out clearly in this changelog.
   atomic writes, a stale-recovering writer lock, and merge-before-save behavior
   so independent Neovim instances are less likely to clobber each other's
   remembered Sidepanes sessions.
+- The pane switcher title now includes the detected project name, making the
+  current root scope visible while switching between Markdown and terminal
+  panes.
 
 ### Fixed
 

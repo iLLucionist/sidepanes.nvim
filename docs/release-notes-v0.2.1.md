@@ -36,6 +36,8 @@ Changes:
 - Ambiguous same-root Codex transcript candidates are ignored instead of guessed.
 - Quickly failing resumed CLIs clear the stale resume id and start fresh once by
   default.
+- The pane switcher title now shows the detected project name, so the current
+  root scope is visible while choosing a pane.
 
 Configuration:
 

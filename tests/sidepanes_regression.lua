@@ -16,6 +16,7 @@ local heading_picker = require("sidepanes.heading_picker")
 local local_maps = require("sidepanes.maps")
 local nvim_tree_integration = require("sidepanes.integrations.nvim_tree")
 local presets = require("sidepanes.presets")
+local switcher = require("sidepanes.switcher")
 local terminal_module = require("sidepanes.terminal")
 local util = require("sidepanes.util")
 local validation = require("sidepanes.validation")
@@ -3523,6 +3524,40 @@ test("pane switch picker selects markdown and shortcut entries without enter", f
     pane.switch_picker()
     assert(pane.active_mode == "markdown", "picker 0 did not switch to Markdown")
     assert(vim.api.nvim_win_get_buf(pane.winid) == pane.bufnr, "picker 0 did not restore markdown buffer")
+end)
+
+test("pane switch picker title includes current project name", function()
+    reset_pane()
+
+    local root = root_fixture("switch-picker-project-title")
+    local prompts = {}
+
+    write(root .. "/docs/doc.md", { "# Doc" })
+
+    switcher.switch_picker({}, {
+        numbered_select = function(prompt, entries, callback)
+            table.insert(prompts, prompt)
+            callback(entries[1])
+        end,
+        open_terminal = function() end,
+        pane_root = function()
+            return root
+        end,
+        show_markdown = function() end,
+        terminal_context_for_buf = function()
+            return nil
+        end,
+        terminal_entries = function()
+            return {}
+        end,
+        tool_shortcut_entries = function()
+            return {}
+        end,
+    })
+
+    local expected = "Switch pane in " .. vim.fn.fnamemodify(root:gsub("/$", ""), ":t")
+
+    assert(prompts[1] == expected, "switch picker title did not include project name: " .. tostring(prompts[1]))
 end)
 
 test("show last terminal falls back to Codex when no terminal was remembered", function()

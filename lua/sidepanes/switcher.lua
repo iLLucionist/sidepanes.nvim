@@ -7,6 +7,26 @@ Architecture: Contains pane-mode routing logic while leaving window, terminal, a
 
 local M = {}
 
+local function project_label(root)
+    if type(root) ~= "string" or root == "" then
+        return "current project"
+    end
+
+    local label = vim.fn.fnamemodify(root:gsub("/$", ""), ":t")
+
+    if label == "" then
+        return root
+    end
+
+    return label
+end
+
+local function current_root(state, deps, bufnr)
+    local terminal_ctx = deps.terminal_context_for_buf(bufnr)
+
+    return terminal_ctx and terminal_ctx.root or deps.pane_root(bufnr)
+end
+
 --- Toggle between markdown view and the last remembered pane terminal.
 ---
 --- From markdown mode this delegates to show_last_terminal({ focus = true }), which may open
@@ -41,8 +61,7 @@ end
 
 --- Build pane switcher entries for the current buffer and root.
 function M.entries(state, deps, bufnr)
-    local terminal_ctx = deps.terminal_context_for_buf(bufnr)
-    local root = terminal_ctx and terminal_ctx.root or deps.pane_root(bufnr)
+    local root = current_root(state, deps, bufnr)
     local result = {
         {
             kind = "markdown",
@@ -61,9 +80,10 @@ end
 --- Show the pane switcher picker.
 function M.switch_picker(state, deps)
     local bufnr = vim.api.nvim_get_current_buf()
+    local root = current_root(state, deps, bufnr)
     local result = M.entries(state, deps, bufnr)
 
-    deps.numbered_select("Switch pane", result, function(choice)
+    deps.numbered_select("Switch pane in " .. project_label(root), result, function(choice)
         if choice then
             M.switch(state, deps, choice)
         end
