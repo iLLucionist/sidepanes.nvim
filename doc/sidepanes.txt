@@ -268,7 +268,7 @@ runtime config.
           use_claude_pid_metadata = true,
           mechanisms = {
             claude = { "hook", "pid_metadata", "transcript" },
-            codex = { "transcript" },
+            codex = { "terminal_output", "transcript" },
           },
           store_path = nil,
           store_lock_timeout_ms = 1000,
@@ -355,6 +355,9 @@ The normal pane width can be configured or changed at runtime:
 
 `layout.width_picker_points` controls the shorter picker shown by
 `width_picker()`.
+
+Sidepanes' built-in numeric/letter pickers accept one-key choices without
+Enter. Press `Esc`, `q`, or `<C-c>` to cancel without changing panes or width.
 
 `layout.sticky_relative_width` keeps relative values such as "50%", "1/2", or
 0.5 tied to the total Neovim width. When disabled, relative inputs are resolved
@@ -494,13 +497,18 @@ capture is unavailable, the default Claude mechanism list can still use
 `~/.claude/sessions/<pid>.json` and, when transcript inference is enabled, a
 matching project transcript.
 
-Codex embedded-terminal capture uses an unambiguous `session_meta` entry that
-Codex writes to `~/.codex/sessions/**` for the pane's project root. If multiple
-same-root transcript candidates appear for a fresh Sidepanes context, Sidepanes
-does not guess. Codex also exposes richer thread ids through the app-server/SDK
-surfaces, but Sidepanes' built-in terminal integration does not switch to that
-separate API surface. Users who have a stricter local Codex capture mechanism
-can provide `terminal.resume.resolver`.
+Codex embedded-terminal capture first reads the pane terminal output for the
+explicit `codex resume <session-id>` command that Codex prints on exit. Because
+terminal buffers can wrap long lines, Sidepanes also scans a de-wrapped tail of
+the buffer before storing that Sidepanes-observed session id as capture
+evidence. If terminal-output capture is unavailable, Sidepanes can fall back to
+an unambiguous `session_meta` entry that Codex writes to
+`~/.codex/sessions/**` for the pane's project root. If multiple same-root
+transcript candidates appear for a fresh Sidepanes context, Sidepanes does not
+guess. Codex also exposes richer thread ids through the app-server/SDK surfaces,
+but Sidepanes' built-in terminal integration does not switch to that separate
+API surface. Users who have a stricter local Codex capture mechanism can provide
+`terminal.resume.resolver`.
 
 Remembered sessions are stored under Neovim's state directory by default. The
 registry writes with an atomic rename and a lock directory, merges existing
@@ -510,9 +518,10 @@ not block future saves. Reads stay lock-free because a registry reader sees
 either the previous complete file or the next complete file.
 
 Remembered sessions validate their source evidence before resume. Hook captures,
-Claude PID metadata, Codex/Claude transcript paths, and custom resolver records
-must still match the requested tool, root, and session id. Stale or mismatched
-registry entries are cleared and treated as fresh starts.
+Claude PID metadata, Codex terminal-output captures, Codex/Claude transcript
+paths, and custom resolver records must still match the requested tool, root,
+and session id. Stale or mismatched registry entries are cleared and treated as
+fresh starts.
 
 Public tuning and extension points:
 
@@ -521,13 +530,22 @@ Public tuning and extension points:
 | `terminal.auto_resume` / `terminal.resume.enabled` | Turn auto-resume off entirely. |
 | `terminal.resume.infer_from_transcripts` | Disable transcript inference for stricter behavior. |
 | `terminal.resume.use_claude_pid_metadata` | Disable Claude PID metadata lookup. |
-| `terminal.resume.mechanisms` | Enable, disable, or reorder built-in mechanism names: `"hook"`, `"pid_metadata"`, `"transcript"`. |
+| `terminal.resume.mechanisms` | Enable, disable, or reorder built-in mechanism names: `"hook"`, `"pid_metadata"`, `"terminal_output"`, `"transcript"`. |
 | `terminal.resume.resolver` | Provide custom session-id discovery and validation. |
 | `terminal.resume.store_path` | Change or disable the persisted registry. |
 | `terminal.resume.store_lock_timeout_ms` | Tune how long a registry save waits for another writer. |
 | `terminal.resume.store_lock_stale_ms` | Tune crash recovery for abandoned registry locks. |
 | `terminal.resume.failure_timeout_ms` | Tune the quick-failure window for stale resume ids. |
 | `terminal.resume.failure_action` | Choose `"fresh"`, `"notify"`, or `"ignore"` after quick failed resume. |
+
+Built-in mechanism names:
+
+| Mechanism | Tool | Evidence |
+| --- | --- | --- |
+| `"hook"` | Claude | Pane-local `SessionStart` hook capture. |
+| `"pid_metadata"` | Claude | Claude PID metadata under `~/.claude/sessions`. |
+| `"terminal_output"` | Codex | The `codex resume <session-id>` command Codex prints in the pane on exit. |
+| `"transcript"` | Codex/Claude | Unambiguous same-root transcript metadata. |
 
 Custom resolvers receive `resolver(tool_name, ctx, opts)`. `ctx` is a stable
 copy of the Sidepanes terminal context, with fields such as `key`, `tool_name`,

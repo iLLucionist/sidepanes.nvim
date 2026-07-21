@@ -36,11 +36,16 @@ local function key_state(by_key, prefix)
 end
 
 --- Read a picker choice, allowing multi-character numeric choices without Enter.
-local function read_choice(by_key)
+local function read_choice(by_key, getcharstr)
     local typed = ""
+    getcharstr = getcharstr or vim.fn.getcharstr
 
     while true do
-        local char = vim.fn.getcharstr()
+        local ok, char = pcall(getcharstr)
+
+        if not ok then
+            return nil
+        end
 
         if char == "\27" or char == "q" then
             return nil
@@ -56,7 +61,11 @@ local function read_choice(by_key)
 
         if exact and has_longer then
             for _ = 1, 30 do
-                local next_char = vim.fn.getcharstr(0)
+                local ok_next, next_char = pcall(getcharstr, 0)
+
+                if not ok_next then
+                    return nil
+                end
 
                 if next_char and next_char ~= "" then
                     typed = typed .. next_char
@@ -160,7 +169,7 @@ function M.numbered_select(prompt, entries, callback, state)
         choice = by_key[tostring(state._test_next_choice)]
         state._test_next_choice = nil
     else
-        choice = read_choice(by_key)
+        choice = read_choice(by_key, state and state._test_getcharstr)
     end
 
     close_window(winid)

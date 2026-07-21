@@ -27,6 +27,8 @@ Changes:
 - Codex and Claude no longer adopt arbitrary latest project transcripts on first
   open.
 - Remembered sessions are scoped by canonical project root.
+- Codex now captures the explicit `codex resume <session-id>` command printed in
+  the terminal on exit, including when Neovim wraps the long line.
 - Project root detection uses Neovim `vim.fs.root()` semantics for buffers and
   paths, including string markers, function markers, and nested equal-priority
   marker groups.
@@ -36,8 +38,8 @@ Changes:
   rules.
 - The Sidepanes agent-session registry uses atomic writes, a stale-recovering
   writer lock, and merge-before-save behavior.
-- Remembered sessions validate hook, PID metadata, or transcript evidence before
-  resume.
+- Remembered sessions validate hook, PID metadata, terminal-output capture, or
+  transcript evidence before resume.
 - Custom resolver records are revalidated before reuse, and resolver callbacks
   receive a stable context copy rather than mutable Sidepanes internals.
 - Ambiguous same-root Codex transcript candidates are ignored instead of guessed.
@@ -54,7 +56,8 @@ Configuration:
   inference.
 - `terminal.resume.mechanisms` and `terminal.resume.resolver` let users replace
   the built-in mechanisms with a stricter local strategy. Mechanism entries are
-  built-in names; use `terminal.resume.resolver` for custom session discovery.
+  built-in names: `"hook"`, `"pid_metadata"`, `"terminal_output"`, and
+  `"transcript"`. Use `terminal.resume.resolver` for custom session discovery.
 - `terminal.resume.store_lock_timeout_ms` and
   `terminal.resume.store_lock_stale_ms` tune shared-registry contention and
   crash recovery.
@@ -63,6 +66,12 @@ Configuration:
 - `project.root_markers`, `project.fallback`, and `project.resolver` control
   the root Sidepanes uses as the pane/restart/resume boundary. The resolver runs
   before marker lookup and can return `nil` to continue with `vim.fs.root()`.
+
+Picker behavior:
+
+- Sidepanes' built-in numeric/letter pickers now treat `Esc`, `q`, and `<C-c>`
+  as cancellation. Pressing `<C-c>` in the pane switcher closes the picker
+  instead of surfacing Neovim's `Keyboard interrupt` error.
 
 Extension boundary:
 

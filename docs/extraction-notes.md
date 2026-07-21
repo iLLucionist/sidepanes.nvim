@@ -148,7 +148,7 @@ Acceptance:
 
 ### 5. Package Extraction
 
-Status: in progress.
+Status: completed for the standalone extraction and GitHub-consumer pass.
 
 Extract the local plugin work from `illu.nvim` into a proper standalone GitHub repository and make `illu.nvim` consume it like any other Neovim config.
 

@@ -37,7 +37,7 @@ M.config = {
     agent_resume_use_claude_pid_metadata = true,
     agent_resume_mechanisms = {
         claude = { "hook", "pid_metadata", "transcript" },
-        codex = { "transcript" },
+        codex = { "terminal_output", "transcript" },
     },
     agent_resume_store_path = nil,
     agent_resume_store_lock_timeout_ms = 1000,
