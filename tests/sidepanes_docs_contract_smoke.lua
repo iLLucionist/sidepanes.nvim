@@ -16,7 +16,7 @@ local help = read("doc/sidepanes.txt")
 local markdown = read("doc/sidepanes.md")
 local readme = read("README.md")
 local changelog = read("CHANGELOG.md")
-local release_notes = read("docs/release-notes-v0.2.1.md")
+local release_notes = read("docs/release-notes-v0.3.0.md")
 local ci = read(".github/workflows/tests.yml")
 local docs = table.concat({ help, markdown, readme, changelog, release_notes, ci }, "\n")
 

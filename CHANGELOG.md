@@ -15,7 +15,7 @@ but they should be called out clearly in this changelog.
 
 No unreleased changes yet.
 
-## v0.2.1 - 2026-07-21
+## v0.3.0 - 2026-07-21
 
 ### Changed
 

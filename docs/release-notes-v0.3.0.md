@@ -1,4 +1,4 @@
-# sidepanes.nvim v0.2.1 Release Notes
+# sidepanes.nvim v0.3.0 Release Notes
 
 This release includes the project-scoped agent auto-resume hardening, Codex
 resume capture fixes, picker cancellation fixes, project-root UI visibility,
