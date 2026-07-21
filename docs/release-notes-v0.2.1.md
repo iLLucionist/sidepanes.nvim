@@ -10,6 +10,18 @@ expose different terminal-session metadata surfaces. Sidepanes now treats
 recovery as best-effort, project-scoped CLI session resume rather than terminal
 pty reattachment.
 
+Mental model:
+
+- Auto-resume is keyed by `tool name + detected project root`.
+- Opening Codex or Claude first reuses a live Sidepanes-owned terminal job for
+  that tool/root.
+- If the live job is gone, Sidepanes looks for a Sidepanes-owned remembered
+  session id, validates its evidence, and starts a new CLI with
+  `codex resume <session-id>` or `claude --resume <session-id>`.
+- Sidepanes does not adopt arbitrary latest global Codex or Claude sessions.
+- If a resumed CLI exits quickly with a non-zero status, Sidepanes treats the id
+  as stale and starts fresh once by default.
+
 Changes:
 
 - Codex and Claude no longer adopt arbitrary latest project transcripts on first
@@ -39,3 +51,13 @@ Configuration:
   crash recovery.
 - `terminal.resume.failure_timeout_ms` and `terminal.resume.failure_action`
   tune what happens when a stale resume id fails after launch.
+
+Extension boundary:
+
+- `terminal.resume.resolver` is the public hook for custom session identity
+  discovery and validation. It can return a session id string or
+  `{ session_id = "...", evidence = { resolver_state = ... } }`, and Sidepanes
+  calls it again with `opts.purpose = "validate"` before reusing resolver-owned
+  records.
+- Resume command construction remains built in for Codex and Claude. A custom
+  command-rewriting API for other CLIs would be a future feature.

@@ -217,42 +217,76 @@ are available in your environment.
    Sidepanes resumes CLI sessions, not terminal ptys; when the pane-owned job
    is gone, recovery starts a fresh CLI process with the resume command.
 
-   Sidepanes scopes Codex and Claude panes by tool plus detected project root.
-   By default, the root is the nearest parent containing `.git`; if no marker is
-   found, Sidepanes uses the current file's directory. Configure
-   `project.root_markers`, `project.fallback`, or `project.resolver` if your
-   project boundaries are defined by files such as `pyproject.toml`,
-   `package.json`, or an existing root plugin.
-
-   Auto-resume is configurable because session discovery depends on CLI-owned
-   metadata. Sidepanes persists only Sidepanes-captured session ids in its
-   Neovim state directory using canonical project-root keys, so a later Neovim
-   process can resume a pane-owned session without adopting arbitrary external
-  sessions. Registry writes use an atomic rename plus a lock directory, and a
-  stale lock is recovered after `terminal.resume.store_lock_stale_ms` so a
-  crashed Neovim/plugin instance does not permanently block future saves.
-  Remembered sessions validate their hook, PID metadata, transcript, or custom
-  resolver evidence before resume; stale evidence is cleared and an immediately
-  failing resumed CLI starts fresh once. Claude uses a
-  Sidepanes-injected `SessionStart` hook by default; Codex in embedded-terminal
-  mode uses unambiguous `session_meta` entries written to
-  `~/.codex/sessions/**`. Set `terminal.auto_resume = false` or
-  `terminal.resume.enabled = false` to always start fresh. Set
-  `terminal.resume.infer_from_transcripts = false` when you only want
-  hook/custom/persisted ids, and use `terminal.resume.resolver` or
-   `terminal.resume.mechanisms` to enable, disable, or reorder built-in
-   mechanisms. Use `terminal.resume.resolver` as the extension point for custom
-   session discovery. Resolvers receive a stable context copy and can return
-   either a session id string or a table such as
-   `{ session_id = "...", evidence = { resolver_state = ... } }`; Sidepanes
-   later calls the resolver with `opts.purpose = "validate"` before reusing that
-   resolver-sourced record. Tune `terminal.resume.failure_timeout_ms` and
-   `terminal.resume.failure_action` when a local CLI needs more time to reject a
-   stale resume id, or when you prefer notification over automatic fresh retry.
-
 7. If the pane feels too wide or narrow, use `<leader>p-`, `<leader>p+`, or
    `<leader>pw` to adjust it. Use `<leader>p%` when you want relative widths to
    track the total Neovim window size.
+
+## Agent Auto-Resume
+
+Sidepanes auto-resume is intentionally scoped and evidence-based. It never
+reattaches to a lost terminal pty and it no longer adopts the latest global
+Codex or Claude session just because one exists. The resume key is always:
+
+```text
+tool name + detected project root
+```
+
+Project root detection defaults to the nearest `.git` parent, falling back to
+the current file's directory. Configure `project.root_markers`,
+`project.fallback`, or `project.resolver` if your real project boundary is
+different.
+
+When Codex or Claude is opened, Sidepanes:
+
+1. reuses a live Sidepanes-owned terminal job for the same tool/root when one
+   still exists;
+2. otherwise looks for a Sidepanes-owned remembered session id for that
+   tool/root;
+3. validates the remembered record against its source evidence;
+4. starts a new CLI process using `codex resume <session-id>` or
+   `claude --resume <session-id>`;
+5. clears stale evidence and starts fresh once when a resumed CLI exits quickly
+   with a non-zero status.
+
+Built-in capture differs by agent. Claude uses a temporary pane-local
+`SessionStart` hook first, can fall back to Claude PID metadata, and can infer a
+matching transcript when enabled. Codex uses unambiguous `session_meta` entries
+from `~/.codex/sessions/**` for the pane's project root; ambiguous candidates
+are ignored instead of guessed.
+
+Remembered sessions are stored under Neovim's state directory by default. The
+registry writes with an atomic rename and a lock directory, merges existing
+entries before save, and recovers stale locks after
+`terminal.resume.store_lock_stale_ms` so a crashed Neovim/plugin instance does
+not block future saves.
+
+Public tuning and extension points:
+
+| Option | Use |
+| --- | --- |
+| `terminal.auto_resume` / `terminal.resume.enabled` | Turn auto-resume off entirely. |
+| `terminal.resume.infer_from_transcripts` | Disable transcript inference for stricter behavior. |
+| `terminal.resume.use_claude_pid_metadata` | Disable Claude PID metadata lookup. |
+| `terminal.resume.mechanisms` | Enable, disable, or reorder built-in mechanism names: `"hook"`, `"pid_metadata"`, `"transcript"`. |
+| `terminal.resume.resolver` | Provide custom session-id discovery and validation. |
+| `terminal.resume.store_path` | Change or disable the persisted registry. |
+| `terminal.resume.store_lock_timeout_ms` | Tune how long a registry save waits for another writer. |
+| `terminal.resume.store_lock_stale_ms` | Tune crash recovery for abandoned registry locks. |
+| `terminal.resume.failure_timeout_ms` | Tune the quick-failure window for stale resume ids. |
+| `terminal.resume.failure_action` | Choose `"fresh"`, `"notify"`, or `"ignore"` after quick failed resume. |
+
+Custom resolvers receive `resolver(tool_name, ctx, opts)`. `ctx` is a stable
+copy of the terminal context; mutating it does not mutate Sidepanes internals.
+During capture, return a session id string or a table such as
+`{ session_id = "...", evidence = { resolver_state = ... } }`. Before reusing a
+resolver-sourced record, Sidepanes calls the resolver again with
+`opts.purpose = "validate"` and `opts.remembered`. Return the same session id,
+`true`, or `{ valid = true }` to keep the record; return `false`, `nil`, or a
+different id to make Sidepanes clear it and start fresh.
+
+The current extension point is session identity discovery/validation. Resume
+command construction is still built in for Codex and Claude; alternative command
+rewriting for other CLIs would be a separate public API.
 
 ## Mappings
 

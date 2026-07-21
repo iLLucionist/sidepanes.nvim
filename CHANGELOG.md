@@ -22,6 +22,13 @@ but they should be called out clearly in this changelog.
   `terminal.auto_resume`, `terminal.resume.enabled`,
   `terminal.resume.infer_from_transcripts`, and
   `terminal.resume.use_claude_pid_metadata`.
+- Agent auto-resume is now documented and implemented as an evidence-based
+  `tool name + detected project root` workflow. On open, Sidepanes first reuses
+  a live Sidepanes-owned terminal job for that tool/root, then falls back to a
+  Sidepanes-owned remembered session id, validates the remembered source
+  evidence, and starts a new CLI process with `codex resume <session-id>` or
+  `claude --resume <session-id>`. It resumes CLI sessions, not terminal ptys,
+  and it does not adopt arbitrary latest global Codex or Claude sessions.
 - Agent session capture is now configurable with
   `terminal.resume.mechanisms`, `terminal.resume.store_path`, and
   `terminal.resume.resolver`. Custom resolvers can now return evidence and are
@@ -40,7 +47,8 @@ but they should be called out clearly in this changelog.
   `terminal.resume.failure_action`.
 - Claude recovery now captures session ids through a Sidepanes-injected
   `SessionStart` hook when available. Codex embedded-terminal recovery continues
-  to use Codex `session_meta` entries for Sidepanes-owned sessions.
+  to use unambiguous Codex `session_meta` entries for Sidepanes-owned sessions;
+  ambiguous same-root transcript candidates are ignored rather than guessed.
 - Agent auto-resume is more finicky than originally expected because Codex and
   Claude expose different terminal-session metadata surfaces. Sidepanes now
   treats recovery as best-effort, project-scoped CLI session resume rather than
@@ -67,6 +75,13 @@ but they should be called out clearly in this changelog.
   of guessing which newly written transcript belongs to the Sidepanes pane.
 - Resumed Codex and Claude processes that exit immediately with a non-zero code
   now clear the stale remembered session and start fresh once.
+
+### Notes
+
+- The current public extension point for agent auto-resume is session identity
+  discovery and validation through `terminal.resume.resolver`. Resume command
+  construction remains built in for Codex and Claude; alternative command
+  rewriting for other CLIs would be a separate public API.
 
 ## v0.2.0 - 2026-07-21
 
