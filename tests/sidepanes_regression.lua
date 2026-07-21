@@ -283,6 +283,31 @@ test("project root detection uses configurable markers fallback and resolver", f
         project_root_markers = { "pyproject.toml" },
     }) == root, "custom project marker did not resolve root")
 
+    if vim.fs and vim.fs.root then
+        local nested = root .. "/packages/app"
+
+        mkdir(nested .. "/src")
+        write(nested .. "/package.json", { "{}" })
+        write(nested .. "/src/main.lua", { "return true" })
+
+        assert(util.project_root_for_path(nested .. "/src/main.lua", {
+            project_root_markers = { { "package.json", "pyproject.toml" }, ".git" },
+        }) == nested, "native nested project marker group did not resolve path root")
+
+        assert(util.project_root_for_path(root .. "/docs/doc.md", {
+            project_root_markers = function(name)
+                return name == "pyproject.toml"
+            end,
+        }) == root, "native function project marker did not resolve path root")
+
+        local bufnr = vim.api.nvim_create_buf(false, true)
+
+        vim.api.nvim_buf_set_name(bufnr, nested .. "/src/main.lua")
+        assert(util.project_root(bufnr, {
+            project_root_markers = { { "package.json", "pyproject.toml" }, ".git" },
+        }) == nested, "native nested project marker group did not resolve buffer root")
+    end
+
     assert(util.project_root_for_path(outside .. "/docs/doc.md", {
         project_root_markers = { "pyproject.toml" },
         project_root_fallback = "buffer_dir",
@@ -3188,6 +3213,32 @@ test("setup validation reports malformed config and implied dependency gaps", fu
     assert(joined:find("Sidepanes tool has no presets configured: broken", 1, true), joined)
 end)
 
+test("setup validation accepts native project marker groups and warns on invalid entries", function()
+    local valid = validation.diagnostics({
+        project_root_markers = {
+            { "pyproject.toml", "package.json" },
+            function()
+                return false
+            end,
+            ".git",
+        },
+    })
+
+    assert(#valid == 0, "native project marker groups produced diagnostics: " .. vim.inspect(valid))
+
+    local invalid = validation.diagnostics({
+        project_root_markers = {
+            "pyproject.toml",
+            { false },
+        },
+    })
+    local joined = table.concat(vim.tbl_map(function(item)
+        return item.message
+    end, invalid), "\n")
+
+    assert(joined:find("Sidepanes config project_root_markers entries must be strings, functions, or nested marker tables.", 1, true), joined)
+end)
+
 test("setup validation can be disabled", function()
     local messages = capture_notify(function()
         validation.notify({
@@ -3312,7 +3363,7 @@ test("context identifies pane buffers and resolves pane roots", function()
     assert(not pane_context.is_pane_buf(pane, normal_buf), "normal buffer was identified as pane buffer")
     assert(pane_context.pane_root(pane, pane.bufnr) == root, "sidepanes root did not use source")
     assert(pane_context.pane_root(pane, ctx.bufnr) == root, "terminal pane root did not use terminal context")
-    assert(pane_context.pane_root(pane, normal_buf) == vim.fn.fnamemodify(other, ":p"), "normal buffer root was wrong")
+    assert(pane_context.pane_root(pane, normal_buf) == other, "normal buffer root was wrong")
 end)
 
 test("context selection metadata uses markdown source and terminal identity", function()

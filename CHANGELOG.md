@@ -17,7 +17,9 @@ but they should be called out clearly in this changelog.
 
 - Project root detection is now configurable with `project.root_markers`,
   `project.fallback`, and `project.resolver`. Sidepanes uses the detected root
-  as the safety boundary for root-scoped Codex and Claude panes.
+  as the safety boundary for root-scoped Codex and Claude panes. On modern
+  Neovim it uses `vim.fs.root()` semantics for both buffers and paths, including
+  string markers, function markers, and nested equal-priority marker groups.
 - Agent recovery can now be made stricter or disabled with
   `terminal.auto_resume`, `terminal.resume.enabled`,
   `terminal.resume.infer_from_transcripts`, and

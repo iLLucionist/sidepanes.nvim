@@ -191,6 +191,8 @@ for _, item in ipairs({
     "terminal.resume.failure_action",
     "project.root_markers",
     "project.resolver",
+    "vim.fs.root()",
+    "nested equal-priority marker groups",
     "[RESUMED]",
     "SidepanesResumed",
     "SessionStart",

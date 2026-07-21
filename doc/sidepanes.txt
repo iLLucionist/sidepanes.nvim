@@ -456,11 +456,12 @@ or Claude session just because one exists. The resume key is always:
     tool name + detected project root
 <
 
-Project roots use Neovim-style root markers. By default, Sidepanes finds the
-nearest parent containing `.git`; if no marker is found, it uses the current
-file's directory. Configure `project.root_markers` to use marker files or
-directories such as `pyproject.toml` or `package.json`, set `project.fallback`
-to `"cwd"` when markerless files should share the current working directory, or
+Project roots use Neovim's `vim.fs.root()` marker model when available. By
+default, Sidepanes finds the nearest parent containing `.git`; if no marker is
+found, it uses the current file's directory. Configure `project.root_markers`
+with strings, functions, or nested equal-priority marker groups such as
+`{ { "pyproject.toml", "package.json" }, ".git" }`. Set `project.fallback` to
+`"cwd"` when markerless files should share the current working directory, or
 provide `project.resolver = function(source, opts) return root end` to delegate
 root detection to your own logic. The resolver receives a buffer number or path
 as `source` and an `opts.kind` of `"buffer"` or `"path"`.

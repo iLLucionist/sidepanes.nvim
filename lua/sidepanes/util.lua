@@ -146,6 +146,20 @@ local function simple_marker_names(markers)
     return result
 end
 
+local function native_marker_root(source, markers)
+    if markers == false or not (vim.fs and vim.fs.root) then
+        return nil
+    end
+
+    local ok, root = pcall(vim.fs.root, source, markers)
+
+    if ok and root then
+        return M.normalize_project_root(root):gsub("/$", "")
+    end
+
+    return nil
+end
+
 local function root_from_marker_path(path)
     if not path or path == "" then
         return nil
@@ -166,16 +180,15 @@ function M.project_root(bufnr, config)
     end
 
     local opts = project_options(config)
+    local name = vim.api.nvim_buf_get_name(bufnr)
+    local source = name ~= "" and name or bufnr
 
-    if opts.markers ~= false and vim.fs and vim.fs.root then
-        local ok, root = pcall(vim.fs.root, bufnr, opts.markers)
+    local root = native_marker_root(source, opts.markers)
 
-        if ok and root then
-            return M.normalize_project_root(root)
-        end
+    if root then
+        return root
     end
 
-    local name = vim.api.nvim_buf_get_name(bufnr)
     local start = name ~= "" and vim.fn.fnamemodify(name, ":p:h") or vim.fn.getcwd()
     local marker_names = simple_marker_names(opts.markers)
 
@@ -205,22 +218,20 @@ function M.project_root_for_path(path, config)
 
     local start = vim.fn.fnamemodify(path, ":p:h")
     local opts = project_options(config)
+    local root = native_marker_root(path, opts.markers)
+
+    if root then
+        return root
+    end
+
     local marker_names = simple_marker_names(opts.markers)
 
-    if #marker_names > 0 and vim.fs and vim.fs.find then
+    if opts.markers ~= false and #marker_names > 0 and vim.fs and vim.fs.find then
         local found = vim.fs.find(marker_names, { path = start, upward = true })[1]
         local root = root_from_marker_path(found)
 
         if root then
             return root
-        end
-    end
-
-    if opts.markers ~= false and #marker_names == 0 and vim.fs and vim.fs.root then
-        local ok, root = pcall(vim.fs.root, path, opts.markers)
-
-        if ok and root then
-            return M.normalize_project_root(root)
         end
     end
 

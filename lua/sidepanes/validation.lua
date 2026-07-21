@@ -198,9 +198,28 @@ end
 
 local function validate_project(diagnostics, config)
     local markers = config.project_root_markers
+    local function valid_marker(value, depth)
+        depth = depth or 0
+
+        if type(value) == "string" or type(value) == "function" then
+            return true
+        elseif type(value) ~= "table" or depth > 4 then
+            return false
+        end
+
+        for _, marker in ipairs(value) do
+            if not valid_marker(marker, depth + 1) then
+                return false
+            end
+        end
+
+        return true
+    end
 
     if markers ~= nil and markers ~= false and type(markers) ~= "string" and type(markers) ~= "table" and type(markers) ~= "function" then
         warn(diagnostics, "Sidepanes config project_root_markers must be a string, table, function, or false.")
+    elseif type(markers) == "table" and not valid_marker(markers) then
+        warn(diagnostics, "Sidepanes config project_root_markers entries must be strings, functions, or nested marker tables.")
     end
 
     if config.project_root_fallback ~= nil and config.project_root_fallback ~= "buffer_dir" and config.project_root_fallback ~= "cwd" then

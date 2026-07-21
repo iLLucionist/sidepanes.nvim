@@ -231,10 +231,12 @@ Codex or Claude session just because one exists. The resume key is always:
 tool name + detected project root
 ```
 
-Project root detection defaults to the nearest `.git` parent, falling back to
-the current file's directory. Configure `project.root_markers`,
-`project.fallback`, or `project.resolver` if your real project boundary is
-different.
+Project root detection uses Neovim's `vim.fs.root()` marker model when
+available. It defaults to the nearest `.git` parent, falling back to the current
+file's directory. Configure `project.root_markers` with strings, functions, or
+nested equal-priority marker groups such as
+`{ { "pyproject.toml", "package.json" }, ".git" }`. Use `project.fallback` or
+`project.resolver` when your real project boundary needs different behavior.
 
 When Codex or Claude is opened, Sidepanes:
 

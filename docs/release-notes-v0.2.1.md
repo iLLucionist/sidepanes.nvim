@@ -27,6 +27,9 @@ Changes:
 - Codex and Claude no longer adopt arbitrary latest project transcripts on first
   open.
 - Remembered sessions are scoped by canonical project root.
+- Project root detection uses Neovim `vim.fs.root()` semantics for buffers and
+  paths, including string markers, function markers, and nested equal-priority
+  marker groups.
 - The Sidepanes agent-session registry uses atomic writes, a stale-recovering
   writer lock, and merge-before-save behavior.
 - Remembered sessions validate hook, PID metadata, or transcript evidence before
