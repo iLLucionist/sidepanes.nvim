@@ -1385,7 +1385,7 @@ Traceability table:
 | Create an ask draft and change target with `M`; confirm status output matches the winbar target. | `ask_status.debug_data()` reports the same target label/root used by the concise winbar after target changes. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement; runtime target-picker/status regression supports it and asserts winbar remains concise. | Existing target docs remain valid because no public status output changed. | Perform this exact workflow; compare internal status data to winbar target until slice 20 exposes the command. | `13e5c6a` | Done |
 | Set `model_picker = "after_open"`, append first context, and confirm status indicates the picker has been shown. | `ask_status.debug_data()` reports `picker_mode = "after_open"` and `after_open_shown = true` after first captured context triggers the picker. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement; runtime `after_open` picker/status regression supports it. | Existing picker docs remain valid because behavior and public output are unchanged. | Perform this exact workflow; compare internal status data until slice 20 exposes the command. | `13e5c6a` | Done |
 | Set `model_picker = "before_send"`, write/send, and confirm the selected target is reflected before the prompt is sent. | `ask_status.debug_data()` reports `picker_mode = "before_send"`, current target/root, `draft_written`, and citation/file counts before the send-time picker runs; runtime send assertion confirms the selected target is used. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement; runtime `before_send` picker/status regression supports it. | Existing picker docs remain valid because behavior and public output are unchanged. | Perform this exact workflow; compare internal status data before send until slice 20 exposes the command. | `13e5c6a` | Done |
-| Confirmation pass gap: re-check top Remaining Implementation Order after removing slice 17. | Verified the top Remaining Implementation Order keeps `Final verification and release-readiness audit` as the final item without duplicating it. | Not Applicable as automated test: roadmap-order correction only; docs contract and `git diff --check` cover Markdown integrity. | This roadmap. | Re-read top Remaining Implementation Order before restarting clean confirmation passes. | Pending | In Progress |
+| Confirmation pass gap: re-check top Remaining Implementation Order after removing slice 17. | Verified the top Remaining Implementation Order keeps `Final verification and release-readiness audit` as the final item without duplicating it. | Docs contract and `git diff --check` passed for the roadmap-order evidence. | This roadmap. | Re-read top Remaining Implementation Order before restarting clean confirmation passes. | `45633c4` | Done |
 
 Verification evidence:
 
@@ -1411,7 +1411,8 @@ Audit gap: clean confirmation pass 2 re-checked the top Remaining
 Implementation Order after slice 17 was removed. Keep the final verification
 and release-readiness audit as the final item without duplicating it, commit
 the roadmap-order evidence, and restart the clean confirmation passes from the
-new HEAD.
+new HEAD. Recorded in `45633c4`; docs contract and `git diff --check` passed
+before the evidence was committed.
 
 ### 18. Target Resolver Refactor
 
