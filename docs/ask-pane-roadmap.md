@@ -39,7 +39,7 @@ remain planned.
 | 17. Ask Target And Picker Status Visibility | Done | Internal ask status/debug formatter exposes target, root, picker, draft, and count facts for the future status command. |
 | 18. Target Resolver Refactor | Done | Target resolution now lives in a pure resolver with traceable active, last-context, default, picker, and before-send decisions plus snapshot-facing target reasons. |
 | 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
-| 20. `SidepanesAskStatus` | In Progress | Add a command/API that reports ask draft state for debugging. |
+| 20. `SidepanesAskStatus` | Done | `ask_status(opts)`, `:SidepanesAskStatus`, and `:Sidepanes ask-status` report ask draft status for debugging. |
 | 21. `SidepanesVersion` | Planned | Add a command/API that reports plugin version and load path. |
 | 22. Interactive Keymap Help | Planned | Add pane-local keybinding help surfaced from the winbar. |
 | 23. Ask Action Policy And Fed-Key Test Discipline | Done | Central ask action predicates, policy tests, and fed-key test guidance are implemented and verified. |
@@ -52,11 +52,10 @@ remain planned.
 The remaining planned slices must be implemented in this order unless the
 roadmap is explicitly updated first with the reason for changing the order.
 
-1. `20. SidepanesAskStatus`
-2. `21. SidepanesVersion`
-3. `22. Interactive Keymap Help`
-4. `19. Interaction-Focused Manual Acceptance Checklist`
-5. Final verification and release-readiness audit
+1. `21. SidepanesVersion`
+2. `22. Interactive Keymap Help`
+3. `19. Interaction-Focused Manual Acceptance Checklist`
+4. Final verification and release-readiness audit
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,
@@ -1551,7 +1550,7 @@ run after every ask-pane change.
 
 ### 20. `SidepanesAskStatus`
 
-Status: `Planned`
+Status: `Done`
 
 User response: yes, add `SidepanesAskStatus`.
 
@@ -1609,11 +1608,36 @@ Traceability:
 | modified/written flags. | `ask_session.status_data()` exposes `modified` and `written`; `ask_status.debug_lines()` prints `Modified:` and `Written:`. | Direct formatter tests cover modified/written true and false; runtime status regression asserts flags before and after writing the draft. | Public docs list modified/written flags in status output. | Modify and write the prompt, then inspect dirty/written facts. | `49c3b7c` | Done |
 | Add docs, help, health/audit smoke coverage, and regression tests. | Docs, health command defaults, audit expected commands, docs-contract command/API lists, and mapping-zone fixture were updated. | Focused regression passed 15 filtered tests; docs contract smoke passed; audit smoke passed; `git diff --check` passed. Health coverage includes `ask_status` in configured command validation. | `README.md`, `doc/sidepanes.md`, `doc/sidepanes.txt`, `CHANGELOG.md`, `docs/release-notes-v0.4.0.md`, and this roadmap were updated. | Review README, help docs, Markdown docs, CHANGELOG, release notes, audit smoke, health smoke, and regression coverage. | `49c3b7c` | Done |
 | Audit gap: remove stale roadmap claims that `SidepanesAskStatus` is still planned or unregistered after slice 20. | Historical slice-16, slice-17, and slice-25 trace rows now distinguish past deferral from current slice-20 command/API implementation. | Docs contract smoke, roadmap grep audit, and `git diff --check` cover the corrected docs state. | This roadmap. | Re-read older roadmap rows that mention `SidepanesAskStatus` and confirm only historical deferral remains. | `590364b` | Done |
-| Re-check implementation, tests, docs, and this roadmap before moving on. | Pending. | Pending. | Pending. | Re-read the slice bullets, traceability, changed implementation, tests, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Pending. | In Progress |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Audit pass 1 checked every slice-20 bullet and trace row, implementation boundaries, public API/command adapters, status formatter architecture, command paths, mapping-zone fixture changes, state transitions, manual acceptance rows, README, CHANGELOG, Neovim help, Markdown docs, release notes, roadmap status/order, AGENTS.md, and `illu.nvim` impact. Final two clean non-mutating confirmation passes are reported in the final response. | Focused regression passed 15 filtered tests; docs contract smoke passed; audit smoke passed; `tests/run_checks.sh fast` passed with 172 regressions; `tests/run_checks.sh full` passed with 172 regressions and real CLI smoke; `illu.nvim` integration smoke passed; `git diff --check` passed. | README, CHANGELOG, Neovim help, Markdown docs, release notes, and this roadmap were updated and audited. | Re-read the slice bullets, traceability, changed implementation, tests, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Pending. | Done |
 | Open an empty ask pane and run `:SidepanesAskStatus`; confirm it reports a ready draft and no citations. | `ask_status(opts)` and `:SidepanesAskStatus` report active ready state and zero counts. | Not Applicable as automated test: this row records a manual acceptance workflow; runtime status regression supports it with active ready API coverage and standalone command notification coverage. | Public docs list `:SidepanesAskStatus` and the ready/count fields. | Perform this exact workflow in Neovim. | `49c3b7c` | Done |
 | Append two selections from different files and run status; confirm file and citation counts are correct. | Status payload reports `citation_count = 2` and `file_count = 2`. | Not Applicable as automated test: this row records a manual acceptance workflow; runtime status regression supports it with two-file append coverage. | Public docs list citation counts in status output. | Perform this exact workflow in Neovim. | `49c3b7c` | Done |
 | Write the prompt and run status; confirm it reports a written draft. | Status payload reports `draft_state = "draft_written"`, `modified = false`, and `written = true`. | Not Applicable as automated test: this row records a manual acceptance workflow; runtime status regression supports it with write/status coverage. | Public docs list draft state and modified/written flags in status output. | Perform this exact workflow in Neovim. | `49c3b7c` | Done |
 | Cancel/send the draft and run status; confirm it reports inactive/no active ask draft. | After cancel, status payload reports `active = false`, `draft_state = "inactive"`, and zero counts. Send inactive status remains covered by existing sent/cancelled snapshot reset behavior. | Not Applicable as automated test: this row records a manual acceptance workflow; runtime status regression supports cancel/inactive coverage. | Public docs list inactive status output. | Perform this exact workflow in Neovim. | `49c3b7c` | Done |
+
+Verification evidence:
+
+- Focused ask status regression passed with 15 filtered tests:
+  `SIDEPANES_TEST_FILTER='module split,ask mapping zone matrix matches active maps by user location,command setup registers configured commands,command registration invokes facade callbacks,root command dispatches subcommands and completes choices,default command names use Sidepanes prefix,ask session snapshot exposes serializable state facts and labels,ask session snapshot covers empty invalid target and picker cases,ask status API and commands report active draft facts,health check reports configured commands, mappings, and tools' nvim -n --headless -u NONE ...`.
+- Docs contract smoke passed.
+- Audit smoke passed.
+- `tests/run_checks.sh fast` passed with 172 regression tests plus audit,
+  help, docs-contract, and checkhealth smokes.
+- `tests/run_checks.sh full` passed with 172 regression tests plus real
+  Codex/Claude CLI smoke.
+- `illu.nvim` `tests/run_sidepanes_checks.sh` passed against the local
+  sidepanes runtime; its pre-existing local changes were not touched.
+- `git diff --check` passed.
+
+Audit pass 1 checked every slice-20 bullet and traceability row,
+implementation correctness and architecture boundaries, public API/command
+adapters, status formatter shape, automated coverage and edge cases, fed-key
+applicability, command paths, mapping zones, state transitions, compatibility
+requirements, manual acceptance rows, README, CHANGELOG, Neovim help, Markdown
+docs, release notes, roadmap status/order, AGENTS.md, and `illu.nvim` impact.
+The pass found stale historical roadmap wording around `SidepanesAskStatus`
+being planned/unregistered; the gap was recorded in the traceability table,
+fixed in `590364b`, traced in `b706680`, and the audit loop restarted from the
+new HEAD.
 
 ### 21. `SidepanesVersion`
 
