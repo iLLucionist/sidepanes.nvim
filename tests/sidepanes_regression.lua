@@ -4347,6 +4347,7 @@ test("ask action policy classifies command lines plain quit mappings and lifecyc
     assert(ask_policy.commandline_intent(":quit") == intents.finish_quit, "quit did not map to finish_quit")
     assert(ask_policy.commandline_intent("q!") == intents.cancel_draft, "q! did not map to cancel_draft")
     assert(ask_policy.commandline_intent(":quit!") == intents.cancel_draft, "quit! did not map to cancel_draft")
+    assert(ask_policy.commandline_intent("w") == intents.write_draft, "w did not map to write_draft")
     assert(ask_policy.commandline_intent("wq") == intents.submit_now, "wq did not map to submit_now")
     assert(ask_policy.commandline_intent("wq!") == intents.submit_now, "wq! did not map to submit_now")
     assert(ask_policy.commandline_intent("x") == intents.submit_now, "x did not map to submit_now")
@@ -4692,6 +4693,10 @@ test("ask command-line adapter builds ask pane and floating compatibility comman
     assert(
         ask_cmdline.ask_pane_command_for_line("q", 12) == '<C-u>lua require("sidepanes.internal").finish_ask_pane(12)<CR>',
         "ask pane q command was wrong"
+    )
+    assert(
+        ask_cmdline.ask_pane_command_for_line("w", 12) == '<C-u>lua require("sidepanes.internal").write_ask_pane(12)<CR>',
+        "ask pane w command was wrong"
     )
     assert(
         ask_cmdline.ask_pane_command_for_line("wq", 12) == '<C-u>lua require("sidepanes.internal").submit_ask_pane(12)<CR>',
@@ -5757,7 +5762,7 @@ test("ask pane command-line mapping cancels q and sends wq through internal call
     assert(not has_map(qbuf, "q"), "plain normal q should not cancel ask pane")
 end)
 
-test("ask pane fed command-line lifecycle covers q and wq user paths", function()
+test("ask pane fed command-line lifecycle covers q w and wq user paths", function()
     reset_pane()
 
     local root = root_fixture("ask-pane-fed-commandline-test")
@@ -5784,9 +5789,21 @@ test("ask pane fed command-line lifecycle covers q and wq user paths", function(
         },
     })
 
+    vim.cmd.edit(root .. "/src/origin.lua")
+
+    local source_win = vim.api.nvim_get_current_win()
+
     pane.open(root .. "/docs/doc.md")
 
     local winid = pane.winid
+
+    local function open_ask_from_source()
+        vim.api.nvim_set_current_win(source_win)
+        vim.cmd.edit(root .. "/src/origin.lua")
+        pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+        return pane.ask_pane.bufnr
+    end
 
     pane.show_ask_pane({ focus = true })
 
@@ -5800,10 +5817,44 @@ test("ask pane fed command-line lifecycle covers q and wq user paths", function(
     assert_pane_window(winid, pane.bufnr, "fed :q ready")
     assert_state_history_contains(pane.ask_pane_state_history, { "ready_empty", "cancelled" }, "fed :q ready")
 
-    vim.cmd.edit(root .. "/src/origin.lua")
-    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+    pane.show_ask_pane({ focus = true })
 
-    local modified_buf = pane.ask_pane.bufnr
+    local ready_write_buf = pane.ask_pane.bufnr
+
+    vim.api.nvim_set_current_win(winid)
+    feed_user_command("w")
+    wait_until("fed :w did not keep ready ask pane active", function()
+        return pane.active_mode == "ask" and pane.ask_pane.bufnr == ready_write_buf
+    end)
+    assert(vim.api.nvim_buf_is_valid(ready_write_buf), "fed :w deleted ready ask buffer")
+    assert(pane.ask_pane.draft_state == "draft_written", "fed :w ready did not record draft_written")
+    assert(pane.ask_pane.written_prompt == "Question:", "fed :w ready cached unexpected prompt")
+    assert(not vim.api.nvim_get_option_value("modified", { buf = ready_write_buf }), "fed :w ready left buffer modified")
+    assert(read_file(out) == "", "fed :w ready sent a prompt")
+    pane.cancel_ask_pane(ready_write_buf)
+
+    local write_buf = open_ask_from_source()
+
+    vim.api.nvim_buf_set_lines(write_buf, 1, 1, false, { "write modified prompt only" })
+    vim.api.nvim_set_option_value("modified", true, { buf = write_buf })
+    vim.api.nvim_set_current_win(winid)
+    assert(vim.api.nvim_win_get_buf(winid) == write_buf, "fed :w modified setup did not focus ask buffer")
+    assert(vim.api.nvim_get_option_value("buftype", { buf = write_buf }) == "acwrite", "fed :w modified setup lost acwrite buffer type")
+    assert(
+        vim.fn.maparg("<CR>", "c", false, true).desc == "Sidepanes ask pane command-line enter",
+        "fed :w modified setup lost ask command-line enter map"
+    )
+    feed_user_command("w")
+    wait_until("fed :w did not keep modified ask pane active", function()
+        return pane.active_mode == "ask" and pane.ask_pane.bufnr == write_buf
+    end)
+    assert(pane.ask_pane.draft_state == "draft_written", "fed :w modified did not record draft_written")
+    assert(pane.ask_pane.written_prompt:find("write modified prompt only", 1, true), pane.ask_pane.written_prompt)
+    assert(not vim.api.nvim_get_option_value("modified", { buf = write_buf }), "fed :w modified left buffer modified")
+    assert(not read_file(out):find("write modified prompt only", 1, true), "fed :w modified sent a prompt")
+    pane.cancel_ask_pane(write_buf)
+
+    local modified_buf = open_ask_from_source()
 
     vim.api.nvim_buf_set_lines(modified_buf, 1, 1, false, { "cancel modified prompt with q" })
     vim.api.nvim_set_option_value("modified", true, { buf = modified_buf })
@@ -5819,10 +5870,7 @@ test("ask pane fed command-line lifecycle covers q and wq user paths", function(
         "fed :q modified"
     )
 
-    vim.cmd.edit(root .. "/src/origin.lua")
-    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
-
-    local written_buf = pane.ask_pane.bufnr
+    local written_buf = open_ask_from_source()
 
     vim.api.nvim_buf_set_lines(written_buf, 1, 1, false, { "send written prompt with q" })
     pane.write_ask_pane(written_buf)
@@ -5838,10 +5886,7 @@ test("ask pane fed command-line lifecycle covers q and wq user paths", function(
     assert(pane.ask_pane_last_state == "sent", "fed :q written did not record sent")
     assert(pane.active_mode == "codex", "fed :q written did not switch to target terminal")
 
-    vim.cmd.edit(root .. "/src/origin.lua")
-    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
-
-    local submit_buf = pane.ask_pane.bufnr
+    local submit_buf = open_ask_from_source()
 
     vim.api.nvim_buf_set_lines(submit_buf, 1, 1, false, { "send modified prompt with wq" })
     vim.api.nvim_set_option_value("modified", true, { buf = submit_buf })

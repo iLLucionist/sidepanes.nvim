@@ -1167,7 +1167,7 @@ Scope rules:
 | `terminal-pane-quit-command` | terminal pane | command/normal | `:q`, `:quit`, guarded plain-quit mappings | command path and guarded personal mappings such as `<leader>qq -> :q<CR>` | Show Markdown instead of closing the Sidepanes pane or triggering ask-pane send behavior. | `tests/sidepanes_regression.lua` "personal quit mapping in terminal pane follows q command path with plain quit guard" and "personal normal quit mappings do not close markdown or terminal side panes" |
 | `ask-pane-target-picker` | ask pane | normal | `ask_model_picker`, `ask_model_picker_alt` | `M`, `<Tab>` | Open ask target/model picker. | `tests/sidepanes_regression.lua` "ask pane target picker mapping updates target and winbar" and zone matrix regression |
 | `ask-pane-submit-and-send` | ask pane | normal/insert | `ask_submit`, `ask_send`, `ask_send_alt` | `<C-CR>`, disabled, disabled | Submit current prompt, or run the quit lifecycle for configured quit-style mappings. | `tests/sidepanes_regression.lua` ask-pane submit tests and "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" |
-| `ask-pane-command-line` | ask pane | command | `:q`, `:q!`, `:w`, `:wq`, `:x`, `:exit` | command-line path | Write, cancel, or submit through ask-pane lifecycle. | `tests/sidepanes_regression.lua` "ask pane fed command-line lifecycle covers q and wq user paths" and command-line adapter tests |
+| `ask-pane-command-line` | ask pane | command | `:q`, `:q!`, `:w`, `:wq`, `:x`, `:exit` | command-line path | Write, cancel, or submit through ask-pane lifecycle. | `tests/sidepanes_regression.lua` "ask pane fed command-line lifecycle covers q w and wq user paths" and command-line adapter tests |
 | `ask-pane-context-navigation` | ask pane | normal | `ask_next_file`, `ask_previous_file`, `ask_next_selection`, `ask_previous_selection`, `ask_source` | `]f`, `[f`, `]s`, `[s`, `gf` | Move through citations or jump to cited source. | `tests/sidepanes_regression.lua` "ask pane navigation mappings move between context headers and source jump opens citation" |
 | `ask-zone-commands` | project buffer, Markdown pane, terminal pane, ask pane | command | `SidepanesAsk`, `SidepanesAskAppend`, `SidepanesSubmitQuestion` | `:SidepanesAsk`, `:SidepanesAskAppend`, `:SidepanesSubmitQuestion` | Range-aware ask, explicit append, or active draft submit. | `tests/sidepanes_regression.lua` command dispatch tests |
 | `ask-zone-planned-commands` | project buffer, Markdown pane, terminal pane, ask pane | command | `SidepanesAskStatus`, `SidepanesVersion` | planned | Reserved for slices 20 and 21. | `tests/sidepanes_docs_contract_smoke.lua` verifies they are documented as planned here, not registered commands. |
@@ -2101,3 +2101,14 @@ Verification results:
 - `illu.nvim` smoke was not applicable because this test-only slice did not
   change defaults, mappings, commands, public API, local config behavior, or
   `illu.nvim` integration.
+
+Audit gaps:
+
+- Audit pass 1 found that the coverage table marked ask-pane `:w` rows as
+  no-fed-key even though Neovim can synthesize the command path, and the
+  `ask-write-draft` row referenced a legacy floating-question test instead of
+  ask-pane write behavior.
+
+| Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Audit gap: cover synthesizeable ask-pane `:w` command paths with fed-key tests and correct `ask-write-draft` coverage evidence. | Planned: extend command-line fed-key coverage and update `tests/ask_pane_mapping_coverage.lua`. | Planned: focused ask regression should feed `:w` for ready and modified ask drafts. | This roadmap and coverage fixture. | Press `:w` on ready and modified ask drafts and compare state to the behavior matrix. | Pending | In Progress |

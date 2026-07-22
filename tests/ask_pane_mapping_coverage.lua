@@ -7,8 +7,7 @@ Architecture: Test fixture only; it keeps callback-only exceptions visible
 without affecting runtime code.
 ]]
 
-local commandline_adapter = "ask command-line adapter builds ask pane and floating compatibility commands"
-local commandline_fed = "ask pane fed command-line lifecycle covers q and wq user paths"
+local commandline_fed = "ask pane fed command-line lifecycle covers q w and wq user paths"
 local policy = "ask action policy classifies command lines plain quit mappings and lifecycle plans"
 local registration = "ask mapping zone matrix matches active maps by user location"
 local submit_command = "submit question command without active ask draft warns and keeps state"
@@ -70,15 +69,15 @@ return {
             zone_rows = { "ask-pane-command-line" },
             registration = registration,
             direct = ready_submit,
-            no_fed_key_reason = "BufWriteCmd is the user path for :w; lifecycle behavior is asserted through write and submit paths.",
+            fed_key = commandline_fed,
         },
         {
             id = "ask-write-draft",
             behavior_row = "ask-write-draft",
             zone_rows = { "ask-pane-command-line" },
             registration = registration,
-            direct = "question write without quit does not send",
-            no_fed_key_reason = "BufWriteCmd is the user path for :w; lifecycle behavior is asserted through write and submit paths.",
+            direct = "pane-mode ask write then quit sends accumulated prompt",
+            fed_key = commandline_fed,
         },
         {
             id = "ask-write-quit-ready",

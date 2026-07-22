@@ -54,6 +54,9 @@ but they should be called out clearly in this changelog.
   `:w` sends the written prompt, and `:q!` cancels the current draft while
   restoring the previous pane state instead of closing the Sidepanes window.
   `:wq`, `:x`, and `:exit` also send the accumulated prompt.
+- Ask pane command-line `:w` now routes through the internal draft-write action
+  consistently, avoiding Neovim scratch-buffer write errors on repeated ask
+  drafts.
 - Ask pane winbar/status state now uses explicit lifecycle labels:
   `ready_empty`, `draft_modified`, `draft_written`, `sending_picker`,
   `sending_terminal`, `send_failed`, `cancelled`, and `sent`.

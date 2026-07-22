@@ -73,6 +73,10 @@ function M.commandline_intent(line)
         return M.INTENTS.cancel_draft
     end
 
+    if command == "w" then
+        return M.INTENTS.write_draft
+    end
+
     if command == "wq" or command == "wq!" or command == "x" or command == "xit" or command == "exit" then
         return M.INTENTS.submit_now
     end
