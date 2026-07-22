@@ -4,6 +4,12 @@ helpers.append_repo_root(1)
 local defaults = require("sidepanes.defaults")
 local agent_session = require("sidepanes.agent_session")
 local api_helpers = require("sidepanes.api")
+local ask_cmdline = require("sidepanes.ask_cmdline")
+local ask_controller = require("sidepanes.ask_controller")
+local ask_executor = require("sidepanes.ask_executor")
+local ask_prompt = require("sidepanes.ask_prompt")
+local ask_policy = require("sidepanes.ask_policy")
+local ask_route = require("sidepanes.ask_route")
 local commands = require("sidepanes.commands")
 local config = require("sidepanes.config")
 local dependencies = require("sidepanes.dependencies")
@@ -46,6 +52,12 @@ local function has_map(bufnr, lhs, mode)
     end
 
     return false
+end
+
+local function expanded_leader(lhs)
+    local leader = vim.g.mapleader or "\\"
+
+    return lhs:gsub("<leader>", leader)
 end
 
 local function has_nowait_map(bufnr, lhs, mode)
@@ -116,6 +128,35 @@ local function wait_for_file(path, needle)
     end, 20)
 
     assert(ok, "did not find " .. needle .. " in " .. path .. ":\n" .. read_file(path))
+end
+
+local function has_state(history, state_name)
+    for _, item in ipairs(history or {}) do
+        if item == state_name then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function assert_state_history_contains(history, states, label)
+    for _, state_name in ipairs(states) do
+        assert(
+            has_state(history, state_name),
+            label .. " missing state " .. state_name .. ": " .. vim.inspect(history)
+        )
+    end
+end
+
+local function plan_actions(plan)
+    local result = {}
+
+    for _, item in ipairs(plan or {}) do
+        table.insert(result, item.action)
+    end
+
+    return result
 end
 
 local function with_options(values, fn)
@@ -228,6 +269,21 @@ end
 
 local function reset_pane()
     pane.shutdown_terminals({ timeout_ms = 50 })
+    local ask_bufnr = pane.ask_pane and pane.ask_pane.bufnr or nil
+    local cmdline_enter = vim.fn.maparg("<CR>", "c", false, true)
+
+    if
+        type(cmdline_enter) == "table"
+        and (cmdline_enter.desc == "Sidepanes ask pane command-line enter" or cmdline_enter.desc == "Sidepanes pane command-line enter")
+    then
+        pcall(vim.keymap.del, "c", "<CR>")
+    end
+
+    pane.ask_pane = {}
+
+    if ask_bufnr and vim.api.nvim_buf_is_valid(ask_bufnr) then
+        pcall(vim.api.nvim_buf_delete, ask_bufnr, { force = true })
+    end
     if pane.markdown_reload_timer then
         pcall(function()
             pane.markdown_reload_timer:stop()
@@ -404,6 +460,7 @@ test("public facade hides mutable state and exposes config copy", function()
         "close",
         "is_open",
         "focus_toggle",
+        "show_ask_pane",
         "toggle_zoom",
         "get_width",
         "set_width",
@@ -426,6 +483,8 @@ test("public facade hides mutable state and exposes config copy", function()
         "restart_ipython",
         "ask",
         "ask_picker",
+        "append_to_ask",
+        "submit_ask_pane",
         "ask_last_coding_agent",
         "ask_current_coding_agent",
         "shutdown_terminals",
@@ -454,6 +513,7 @@ test("public facade hides mutable state and exposes config copy", function()
         "terminals",
         "agent_sessions",
         "question_buffers",
+        "ask_pane",
         "zoomed",
         "config",
         "switch",
@@ -462,6 +522,10 @@ test("public facade hides mutable state and exposes config copy", function()
         "finish_question",
         "write_question",
         "change_question_target",
+        "cancel_ask_pane",
+        "write_ask_pane",
+        "finish_ask_pane",
+        "change_ask_pane_target",
     }
 
     for _, name in ipairs(public_functions) do
@@ -478,7 +542,19 @@ test("public facade hides mutable state and exposes config copy", function()
 
     local internal = require("sidepanes.internal")
 
-    for _, name in ipairs({ "switch", "ask_with_entry", "cancel_question", "finish_question", "write_question", "change_question_target" }) do
+    for _, name in ipairs({
+        "switch",
+        "ask_with_entry",
+        "cancel_question",
+        "finish_question",
+        "write_question",
+        "change_question_target",
+        "cancel_ask_pane",
+        "write_ask_pane",
+        "finish_ask_pane",
+        "submit_ask_pane",
+        "change_ask_pane_target",
+    }) do
         assert(type(internal[name]) == "function", "missing internal function: " .. name)
     end
 
@@ -1850,19 +1926,121 @@ test("pane-local slot maps exist on markdown and terminal panes", function()
 
     pane.open(root .. "/docs/doc.md")
 
-    for _, lhs in ipairs({ " 0", " x", " c", " i", "zz" }) do
+    for _, lhs in ipairs({ " 0", " x", " c", " i", "zz", "ap" }) do
         assert(has_nowait_map(pane.bufnr, lhs), lhs .. " missing on sidepanes")
     end
     assert(has_map(pane.bufnr, "ll", "x"), "ll missing on sidepanes")
 
     local ctx = pane.open_terminal("ipython", nil, { root = root, focus = true })
 
-    for _, lhs in ipairs({ " 0", " x", " c", " i", "zz" }) do
+    for _, lhs in ipairs({ " 0", " x", " c", " i", "zz", "ap" }) do
         assert(has_nowait_map(ctx.bufnr, lhs), lhs .. " missing on terminal pane")
     end
     assert(has_map(ctx.bufnr, "ll", "x"), "ll missing on terminal pane")
     assert(has_nowait_map(ctx.bufnr, "\\gg", "t"), "terminal-mode primary toggle map missing on terminal pane")
     assert(has_nowait_map(ctx.bufnr, "<C-G>", "t"), "terminal-mode toggle map missing on terminal pane")
+end)
+
+test("ask mapping zone matrix matches active maps by user location", function()
+    reset_pane()
+
+    local root = root_fixture("ask-mapping-zone-matrix-test")
+
+    write(root .. "/docs/doc.md", { "# Doc" })
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        commands = true,
+        ask = {
+            ui = "pane",
+        },
+        mappings = {
+            global = {
+                ask_pane = "<leader>pa",
+                ask = "<leader>pa",
+                ask_last = "aa",
+                ask_codex = "ax",
+                ask_claude = "ac",
+            },
+            pane = {
+                ask_send = "qq",
+                ask_send_alt = "<leader>qq",
+            },
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "one", label = "One", args = {} } },
+            },
+            claude = {
+                label = "Claude",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "one", label = "One", args = {} } },
+            },
+            ipython = {
+                label = "IPython",
+                ask = false,
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+
+    assert(global_map("<leader>pa", "n").callback, "project normal ask-pane map missing")
+    assert(global_map("<leader>pa", "x").callback, "project visual ask map missing")
+    assert(global_map("aa", "x").callback, "project visual ask-last map missing")
+    assert(global_map("ax", "x").callback, "project visual ask-codex map missing")
+    assert(global_map("ac", "x").callback, "project visual ask-claude map missing")
+
+    pane.open(root .. "/docs/doc.md")
+
+    assert(has_map(pane.bufnr, "fm"), "Markdown pane heading picker map missing")
+    assert(has_nowait_map(pane.bufnr, "ap"), "Markdown pane ask-pane map missing")
+    assert(has_map(pane.bufnr, "aa", "x"), "Markdown pane visual ask-last map missing")
+    assert(has_map(pane.bufnr, "ax", "x"), "Markdown pane visual ask-codex map missing")
+    assert(has_map(pane.bufnr, "ac", "x"), "Markdown pane visual ask-claude map missing")
+    assert(has_map(pane.bufnr, "\\gg"), "Markdown pane terminal toggle map missing")
+    assert(has_map(pane.bufnr, "<C-G>"), "Markdown pane terminal toggle alt map missing")
+
+    local ctx = pane.open_terminal("codex", "one", { root = root, focus = true })
+    local alt_lhs = expanded_leader("<leader>qq")
+
+    assert(has_nowait_map(ctx.bufnr, "ap"), "terminal pane ask-pane map missing")
+    assert(has_map(ctx.bufnr, "\\gg"), "terminal pane normal toggle map missing")
+    assert(has_map(ctx.bufnr, "<C-G>"), "terminal pane normal toggle alt map missing")
+    assert(has_nowait_map(ctx.bufnr, "\\gg", "t"), "terminal pane terminal-mode toggle map missing")
+    assert(has_nowait_map(ctx.bufnr, "<C-G>", "t"), "terminal pane terminal-mode toggle alt map missing")
+    assert(not has_map(ctx.bufnr, alt_lhs), "terminal pane should not own ask-send-alt/personal quit lhs")
+    assert(not has_map(ctx.bufnr, alt_lhs, "t"), "terminal-input pane should not own ask-send-alt/personal quit lhs")
+
+    pane.show_ask_pane({ focus = true })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    assert(has_map(qbuf, "M"), "ask pane model picker map missing")
+    assert(has_map(qbuf, "<Tab>"), "ask pane model picker alt map missing")
+    assert(has_map(qbuf, "<C-CR>", "n"), "ask pane normal submit map missing")
+    assert(has_map(qbuf, "<C-CR>", "i"), "ask pane insert submit map missing")
+    assert(has_map(qbuf, "qq"), "ask pane send map missing")
+    assert(has_map(qbuf, alt_lhs), "ask pane send alt map missing")
+    assert(has_map(qbuf, "]f"), "ask pane next file map missing")
+    assert(has_map(qbuf, "[f"), "ask pane previous file map missing")
+    assert(has_map(qbuf, "]s"), "ask pane next selection map missing")
+    assert(has_map(qbuf, "[s"), "ask pane previous selection map missing")
+    assert(has_map(qbuf, "gf"), "ask pane source map missing")
+
+    local command_table = vim.api.nvim_get_commands({})
+
+    assert(command_table.SidepanesAsk, "SidepanesAsk command missing")
+    assert(command_table.SidepanesAskAppend, "SidepanesAskAppend command missing")
+    assert(command_table.SidepanesSubmitQuestion, "SidepanesSubmitQuestion command missing")
+    assert(not command_table.SidepanesAskStatus, "SidepanesAskStatus should remain planned until its slice")
+    assert(not command_table.SidepanesVersion, "SidepanesVersion should remain planned until its slice")
 end)
 
 test("pane-local mappings are configurable", function()
@@ -1892,9 +2070,11 @@ test("pane-local mappings are configurable", function()
                 toggle_terminal = "mt",
                 toggle_terminal_alt = false,
                 ipython_alt = false,
+                headings = "mh",
                 gf = "mf",
                 send_ipython = "ml",
                 zoom = "mz",
+                ask_pane = "mp",
                 ask_last = "ma",
                 ask_codex = "mx",
                 ask_claude = "mc",
@@ -1903,8 +2083,14 @@ test("pane-local mappings are configurable", function()
         pane_root = function()
             return map_root
         end,
+        pick_headings = function()
+            calls.headings = true
+        end,
         show_markdown = function()
             calls.markdown = true
+        end,
+        show_ask_pane = function(opts)
+            calls.ask_pane = opts
         end,
         send_ipython = function(opts)
             calls.send_ipython = opts
@@ -1928,9 +2114,11 @@ test("pane-local mappings are configurable", function()
     assert(has_nowait_map(bufnr, "mc"), "custom Claude pane map missing")
     assert(has_nowait_map(bufnr, "mi"), "custom IPython pane map missing")
     assert(has_map(bufnr, "mt"), "custom toggle-terminal pane map missing")
+    assert(has_map(bufnr, "mh"), "custom markdown headings pane map missing")
     assert(has_map(bufnr, "mf"), "custom smart-gf pane map missing")
     assert(has_map(bufnr, "ml", "x"), "custom send-IPython pane map missing")
     assert(has_map(bufnr, "mz"), "custom zoom pane map missing")
+    assert(has_map(bufnr, "mp"), "custom ask-pane map missing")
     assert(has_map(bufnr, "ma", "x"), "custom ask-last pane map missing")
     assert(has_map(bufnr, "mx", "x"), "custom ask-Codex pane map missing")
     assert(has_map(bufnr, "mc", "x"), "custom ask-Claude pane map missing")
@@ -1949,10 +2137,14 @@ test("pane-local mappings are configurable", function()
     assert(calls.open_terminal.tool_name == "ipython", "custom IPython pane map used wrong tool")
     call_map(bufnr, "mt")
     assert(calls.toggle_terminal == true, "custom toggle-terminal pane map did not call toggle")
+    call_map(bufnr, "mh")
+    assert(calls.headings == true, "custom markdown headings pane map did not call pick_headings")
     call_map(bufnr, "ml", "x")
     assert(calls.send_ipython.bufnr == bufnr and calls.send_ipython.visual == true, "custom send-IPython pane map did not pass visual opts")
     call_map(bufnr, "mz")
     assert(calls.zoom == true, "custom zoom pane map did not call zoom")
+    call_map(bufnr, "mp")
+    assert(calls.ask_pane.focus == true, "custom ask-pane map did not focus ask pane")
     call_map(bufnr, "ma", "x")
     assert(calls.ask_last.bufnr == bufnr and calls.ask_last.visual == true, "custom ask-last pane map did not pass visual opts")
     call_map(bufnr, "mx", "x")
@@ -2101,6 +2293,8 @@ test("document picker can focus selected markdown pane", function()
         end,
     }
 
+    local original_getcmdline
+    local original_getcmdtype
     local ok, err = xpcall(function()
         local origin = vim.api.nvim_get_current_win()
 
@@ -2291,6 +2485,12 @@ test("command registration invokes facade callbacks", function()
         ask_picker = function(opts)
             calls.ask = opts
         end,
+        append_to_ask = function(opts)
+            calls.ask_append = opts
+        end,
+        submit_ask_pane = function()
+            calls.submit_question = true
+        end,
         ask = function(tool_name, preset_name, opts)
             calls.ask_tool = { tool_name = tool_name, preset_name = preset_name, opts = opts }
         end,
@@ -2310,6 +2510,8 @@ test("command registration invokes facade callbacks", function()
         width = "SidepanesTestWidth",
         width_picker = "SidepanesTestWidthPick",
         ask = "SidepanesTestAsk",
+        ask_append = "SidepanesTestAskAppend",
+        submit_question = "SidepanesTestSubmitQuestion",
         ask_codex = "SidepanesTestAskCodex",
         ask_claude = "SidepanesTestAskClaude",
     })
@@ -2359,6 +2561,10 @@ test("command registration invokes facade callbacks", function()
     assert(calls.width_picker == true, "width picker command did not call picker")
     vim.cmd("2,4SidepanesTestAsk")
     assert(calls.ask.bufnr == bufnr and calls.ask.line1 == 2 and calls.ask.line2 == 4, "ask command did not forward range")
+    vim.cmd("2,5SidepanesTestAskAppend")
+    assert(calls.ask_append.bufnr == bufnr and calls.ask_append.line1 == 2 and calls.ask_append.line2 == 5, "ask append command did not forward range")
+    vim.cmd("SidepanesTestSubmitQuestion")
+    assert(calls.submit_question == true, "submit question command did not submit ask pane")
     vim.cmd("3,5SidepanesTestAskCodex gpt55_high_fast")
     assert(calls.ask_tool.tool_name == "codex", "ask codex command used wrong tool")
     assert(calls.ask_tool.preset_name == "gpt55_high_fast", "ask codex command did not forward preset")
@@ -2430,6 +2636,12 @@ test("root command dispatches subcommands and completes choices", function()
         end,
         ask_picker = function(opts)
             calls.ask = opts
+        end,
+        append_to_ask = function(opts)
+            calls.ask_append = opts
+        end,
+        submit_ask_pane = function()
+            calls.submit_question = true
         end,
         ask = function(tool_name, preset_name, opts)
             calls.ask_tool = { tool_name = tool_name, preset_name = preset_name, opts = opts }
@@ -2517,6 +2729,10 @@ test("root command dispatches subcommands and completes choices", function()
     assert(calls.width_picker == true, "root width-pick subcommand did not call picker")
     vim.cmd("2,4SidepanesRootTest ask")
     assert(calls.ask.bufnr == bufnr and calls.ask.line1 == 2 and calls.ask.line2 == 4, "root ask subcommand did not forward range")
+    vim.cmd("3,6SidepanesRootTest ask-append")
+    assert(calls.ask_append.bufnr == bufnr and calls.ask_append.line1 == 3 and calls.ask_append.line2 == 6, "root ask-append subcommand did not forward range")
+    vim.cmd("SidepanesRootTest submit-question")
+    assert(calls.submit_question == true, "root submit-question subcommand did not submit ask pane")
     vim.cmd("3,5SidepanesRootTest ask-codex gpt55_high_fast")
     assert(calls.ask_tool.tool_name == "codex", "root ask-codex subcommand used wrong tool")
     assert(calls.ask_tool.preset_name == "gpt55_high_fast", "root ask-codex subcommand did not forward preset")
@@ -2527,12 +2743,16 @@ test("root command dispatches subcommands and completes choices", function()
     assert(calls.ask_tool.opts.line1 == 6 and calls.ask_tool.opts.line2 == 7, "root ask-claude subcommand did not forward range")
 
     local subcommands = vim.fn.getcompletion("SidepanesRootTest co", "cmdline")
+    local ask_subcommands = vim.fn.getcompletion("SidepanesRootTest ask", "cmdline")
+    local submit_subcommands = vim.fn.getcompletion("SidepanesRootTest submit", "cmdline")
     local width_subcommands = vim.fn.getcompletion("SidepanesRootTest width", "cmdline")
     local tool_names = vim.fn.getcompletion("SidepanesRootTest tool c", "cmdline")
     local codex_presets = vim.fn.getcompletion("SidepanesRootTest codex g", "cmdline")
     local claude_presets = vim.fn.getcompletion("SidepanesRootTest claude s", "cmdline")
 
     assert(vim.tbl_contains(subcommands, "codex"), "root completion did not include codex")
+    assert(vim.tbl_contains(ask_subcommands, "ask-append"), "root completion did not include ask-append")
+    assert(vim.tbl_contains(submit_subcommands, "submit-question"), "root completion did not include submit-question")
     assert(vim.tbl_contains(width_subcommands, "width-pick"), "root completion did not include width-pick")
     assert(vim.tbl_contains(width_subcommands, "width"), "root completion did not include width")
     local width_args = vim.fn.getcompletion("SidepanesRootTest width n", "cmdline")
@@ -2559,6 +2779,7 @@ test("default command names use Sidepanes prefix", function()
         adjust_width = function() end,
         width_picker = function() end,
         ask_picker = function() end,
+        append_to_ask = function() end,
         ask = function() end,
     }
 
@@ -2582,6 +2803,8 @@ test("default command names use Sidepanes prefix", function()
         "SidepanesWidth",
         "SidepanesWidthPick",
         "SidepanesAsk",
+        "SidepanesAskAppend",
+        "SidepanesSubmitQuestion",
         "SidepanesAskCodex",
         "SidepanesAskClaude",
     }
@@ -2597,6 +2820,7 @@ test("default command names use Sidepanes prefix", function()
         "PaneZoom",
         "PaneWidth",
         "PaneAsk",
+        "PaneAskAppend",
         "PaneAskCodex",
         "PaneAskClaude",
     }
@@ -2662,6 +2886,9 @@ test("global map registration invokes facade callbacks", function()
         switch_picker = function()
             calls.switch = true
         end,
+        show_ask_pane = function(opts)
+            calls.ask_pane = opts
+        end,
         ask_picker = function(opts)
             calls.ask = opts
         end,
@@ -2689,6 +2916,7 @@ test("global map registration invokes facade callbacks", function()
         width_picker = "<leader>zw",
         sticky_relative_width = "<leader>z%",
         switch = "<leader>zs",
+        ask_pane = "<leader>za",
         ask = "<leader>za",
         ask_last = "zA",
         ask_codex = "zX",
@@ -2731,6 +2959,8 @@ test("global map registration invokes facade callbacks", function()
     assert(calls.sticky_relative_width == true, "sticky relative width map did not call toggle")
     global_map("<leader>zs").callback()
     assert(calls.switch == true, "switch map did not call switch picker")
+    global_map("<leader>za").callback()
+    assert(calls.ask_pane.focus == true, "normal ask-pane map did not focus ask pane")
     global_map("<leader>za", "x").callback()
     assert(calls.ask.bufnr == bufnr and calls.ask.visual == true, "ask map did not use visual opts")
     global_map("zA", "x").callback()
@@ -2841,6 +3071,12 @@ test("config normalizes ergonomic markdown and tool setup", function()
                 return root_fixture("setup-project-resolver-root")
             end,
         },
+        ask = {
+            ui = "pane",
+            auto_append = false,
+            duplicate_policy = "allow",
+            model_picker = "before_send",
+        },
         validation = {
             enabled = false,
         },
@@ -2895,6 +3131,16 @@ test("config normalizes ergonomic markdown and tool setup", function()
     assert(pane.config.project_root_markers[2] == "pyproject.toml", "project.root_markers did not map")
     assert(pane.config.project_root_fallback == "cwd", "project.fallback did not map")
     assert(type(pane.config.project_root_resolver) == "function", "project.resolver did not map")
+    assert(pane.config.ask.ui == "pane", "ask.ui did not map")
+    assert(pane.config.ask.auto_append == false, "ask.auto_append did not map")
+    assert(pane.config.ask.duplicate_policy == "allow", "ask.duplicate_policy did not map")
+    assert(pane.config.ask.model_picker == "before_send", "ask.model_picker did not map")
+    assert(pane.config.mappings.pane.headings == "fm", "pane heading picker mapping default was lost")
+    assert(pane.config.mappings.pane.ask_submit == "<C-CR>", "ask submit mapping default was lost")
+    assert(pane.config.mappings.pane.ask_send == false, "ask send mapping default was lost")
+    assert(pane.config.mappings.pane.ask_send_alt == false, "ask send alt mapping default was lost")
+    assert(pane.config.mappings.pane.ask_model_picker == "M", "ask model picker mapping default was lost")
+    assert(pane.config.mappings.pane.ask_model_picker_alt == "<Tab>", "ask model picker alt mapping default was lost")
     assert(pane.config.validate == false, "validation.enabled did not map to validate")
     assert(pane.config.tools.claude == nil, "disabled tool was still present")
     assert(pane.config.tools.codex.cmd[1] == "sh", "generated tool lost explicit command override")
@@ -2972,6 +3218,8 @@ test("canonical default setup normalizes to runtime defaults", function()
     assert(setup.terminal.resume.failure_action == defaults.config.agent_resume_failure_action, "default setup resume failure action was wrong")
     assert(setup.terminal.agent_resume_badge_ms == defaults.config.agent_resume_badge_ms, "default setup resume badge timeout was wrong")
     assert(vim.deep_equal(setup.terminal.agent_resume_badge, defaults.config.agent_resume_badge), "default setup resume badge was wrong")
+    assert(vim.deep_equal(setup.ask, defaults.config.ask), "default setup ask config was wrong")
+    assert(setup.ask.ui == "float", "default setup ask ui was not float")
     assert(setup.validation.enabled == defaults.config.validate, "default setup validation was wrong")
     assert(vim.deep_equal(normalized, defaults.config), "canonical default setup did not round-trip to runtime defaults")
 end)
@@ -3039,6 +3287,12 @@ test("runtime config converts to canonical setup shape", function()
         project_root_resolver = function()
             return "/tmp/sidepanes-project-root"
         end,
+        ask = {
+            ui = "pane",
+            auto_append = false,
+            duplicate_policy = "allow",
+            model_picker = "after_open",
+        },
         validate = false,
     })
     local setup = config.to_setup(runtime)
@@ -3082,6 +3336,10 @@ test("runtime config converts to canonical setup shape", function()
     assert(setup.project.root_markers[2] == "package.json", "to_setup lost project root markers")
     assert(setup.project.fallback == "cwd", "to_setup lost project fallback")
     assert(type(setup.project.resolver) == "function", "to_setup lost project resolver")
+    assert(setup.ask.ui == "pane", "to_setup lost ask ui")
+    assert(setup.ask.auto_append == false, "to_setup lost ask auto_append")
+    assert(setup.ask.duplicate_policy == "allow", "to_setup lost ask duplicate policy")
+    assert(setup.ask.model_picker == "after_open", "to_setup lost ask model picker")
     assert(setup.validation.enabled == false, "to_setup lost validation flag")
     assert(vim.deep_equal(normalized, runtime), "canonical setup did not round-trip custom runtime config")
 end)
@@ -3362,6 +3620,13 @@ test("setup validation reports malformed config and implied dependency gaps", fu
         project_root_markers = 42,
         project_root_fallback = "never",
         project_root_resolver = "rooter",
+        ask = {
+            ui = "popup",
+            auto_append = "yes",
+            duplicate_policy = "confirm",
+            model_picker = "always",
+            mystery = true,
+        },
         agent_auto_resume = "yes",
         agent_resume_infer_from_transcripts = "no",
         agent_resume_use_claude_pid_metadata = "maybe",
@@ -3414,6 +3679,11 @@ test("setup validation reports malformed config and implied dependency gaps", fu
     assert(joined:find("Sidepanes config project_root_markers must be a string, table, function, or false.", 1, true), joined)
     assert(joined:find("Sidepanes config project_root_fallback must be 'buffer_dir' or 'cwd'.", 1, true), joined)
     assert(joined:find("Sidepanes config project_root_resolver must be a function.", 1, true), joined)
+    assert(joined:find("Unknown Sidepanes ask config key: mystery", 1, true), joined)
+    assert(joined:find("Sidepanes config ask.ui must be 'float' or 'pane'.", 1, true), joined)
+    assert(joined:find("Sidepanes config ask.auto_append must be a boolean.", 1, true), joined)
+    assert(joined:find("Sidepanes config ask.duplicate_policy must be 'skip' or 'allow'.", 1, true), joined)
+    assert(joined:find("Sidepanes config ask.model_picker must be 'manual', 'after_open', or 'before_send'.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_auto_resume must be a boolean.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_infer_from_transcripts must be a boolean.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_use_claude_pid_metadata must be a boolean.", 1, true), joined)
@@ -3458,6 +3728,28 @@ test("setup validation accepts native project marker groups and warns on invalid
     end, invalid), "\n")
 
     assert(joined:find("Sidepanes config project_root_markers entries must be strings, functions, or nested marker tables.", 1, true), joined)
+end)
+
+test("setup validation accepts ask config and rejects malformed ask tables", function()
+    local valid = validation.diagnostics({
+        ask = {
+            ui = "pane",
+            auto_append = true,
+            duplicate_policy = "skip",
+            model_picker = "manual",
+        },
+    })
+
+    assert(#valid == 0, "valid ask config produced diagnostics: " .. vim.inspect(valid))
+
+    local invalid = validation.diagnostics({
+        ask = true,
+    })
+    local joined = table.concat(vim.tbl_map(function(item)
+        return item.message
+    end, invalid), "\n")
+
+    assert(joined:find("Sidepanes config ask must be a table.", 1, true), joined)
 end)
 
 test("setup validation can be disabled", function()
@@ -3958,6 +4250,361 @@ test("old terminal helper names remain compatibility aliases", function()
     assert(pane.toggle_markdown_agent == pane.toggle_markdown_terminal, "toggle_markdown_agent is not an internal alias")
 end)
 
+test("ask action policy classifies command lines plain quit mappings and lifecycle plans", function()
+    local intents = ask_policy.INTENTS
+    local actions = ask_policy.ACTIONS
+
+    assert(ask_policy.commandline_intent("q") == intents.finish_quit, "q did not map to finish_quit")
+    assert(ask_policy.commandline_intent(":quit") == intents.finish_quit, "quit did not map to finish_quit")
+    assert(ask_policy.commandline_intent("q!") == intents.cancel_draft, "q! did not map to cancel_draft")
+    assert(ask_policy.commandline_intent(":quit!") == intents.cancel_draft, "quit! did not map to cancel_draft")
+    assert(ask_policy.commandline_intent("wq") == intents.submit_now, "wq did not map to submit_now")
+    assert(ask_policy.commandline_intent("wq!") == intents.submit_now, "wq! did not map to submit_now")
+    assert(ask_policy.commandline_intent("x") == intents.submit_now, "x did not map to submit_now")
+    assert(ask_policy.commandline_intent("xit") == intents.submit_now, "xit did not map to submit_now")
+    assert(ask_policy.commandline_intent("exit") == intents.submit_now, "exit did not map to submit_now")
+    assert(ask_policy.commandline_intent("write") == nil, "write should not map to lifecycle intent")
+    assert(intents.append_context == "append_context", "append context intent missing")
+    assert(intents.change_target == "change_target", "change target intent missing")
+    assert(intents.open_picker == "open_picker", "open picker intent missing")
+
+    assert(actions.resolve_target == "resolve_target", "resolve target action missing")
+    assert(actions.preserve_draft == "preserve_draft", "preserve draft action missing")
+    assert(actions.restore_previous == "restore_previous", "restore previous action missing")
+
+    assert(ask_policy.is_plain_quit_command(":q"), ":q was not recognized as plain quit")
+    assert(ask_policy.is_plain_quit_command("quit"), "quit was not recognized as plain quit")
+    assert(not ask_policy.is_plain_quit_command("q!"), "q! should not be a plain quit")
+
+    assert(ask_policy.is_plain_quit_rhs(":q<CR>"), ":q<CR> was not recognized as plain quit RHS")
+    assert(ask_policy.is_plain_quit_rhs(":quit\r"), ":quit carriage return was not recognized as plain quit RHS")
+    assert(ask_policy.is_plain_quit_rhs("<cmd>q<cr>"), "<cmd>q<cr> was not recognized as plain quit RHS")
+    assert(ask_policy.is_plain_quit_rhs("<cmd>quit<CR>"), "<cmd>quit<CR> was not recognized as plain quit RHS")
+    assert(not ask_policy.is_plain_quit_rhs(":q!<CR>"), ":q!<CR> should not be plain quit RHS")
+    assert(not ask_policy.is_plain_quit_rhs(":write<CR>"), ":write<CR> should not be plain quit RHS")
+
+    assert(
+        vim.deep_equal(ask_policy.lhs_candidates("<leader>qq", { leader = " " }), { "<leader>qq", " qq" }),
+        "leader lhs candidates were wrong"
+    )
+
+    local facts = ask_policy.normalize_facts({
+        active_target = "codex",
+        dirty_buffer = true,
+        live_prompt = "live",
+        picker_mode = "before_send",
+        previous_pane = "markdown",
+        terminal_available = true,
+        valid_buffer = true,
+        written_prompt = "written",
+    })
+
+    assert(facts.valid_buffer == true and facts.valid_buf == true, "valid buffer facts were wrong")
+    assert(facts.dirty_buffer == true and facts.modified == true, "dirty buffer facts were wrong")
+    assert(facts.picker_mode == "before_send" and facts.model_picker == "before_send", "picker facts were wrong")
+    assert(facts.active_target == "codex", "active target fact was lost")
+    assert(facts.previous_pane == "markdown", "previous pane fact was lost")
+    assert(facts.terminal_available == true, "terminal availability fact was lost")
+
+    assert(
+        vim.deep_equal(plan_actions(ask_policy.plan(intents.finish_quit, { valid_buf = false })), { actions.noop }),
+        "finish invalid buffer plan was wrong"
+    )
+    assert(
+        vim.deep_equal(
+            plan_actions(ask_policy.plan(intents.finish_quit, { valid_buffer = true, dirty_buffer = true })),
+            { actions.mark_draft_modified, actions.cancel_draft }
+        ),
+        "finish modified plan was wrong"
+    )
+    assert(
+        vim.deep_equal(plan_actions(ask_policy.plan(intents.finish_quit, { valid_buf = true, written_prompt = "Question:" })), { actions.cancel_draft }),
+        "finish empty written prompt plan was wrong"
+    )
+    assert(
+        vim.deep_equal(
+            plan_actions(ask_policy.plan(intents.finish_quit, { valid_buffer = true, written_prompt = "send", picker_mode = "before_send" })),
+            { actions.open_before_send_picker }
+        ),
+        "finish before-send plan was wrong"
+    )
+    assert(
+        vim.deep_equal(
+            plan_actions(ask_policy.plan(intents.finish_quit, { valid_buf = true, written_prompt = "send", model_picker = "manual" })),
+            { actions.send_prompt }
+        ),
+        "finish send plan was wrong"
+    )
+    assert(
+        vim.deep_equal(plan_actions(ask_policy.plan(intents.submit_now, { valid_buf = false })), { actions.notify_no_prompt }),
+        "submit invalid buffer plan was wrong"
+    )
+    assert(
+        vim.deep_equal(plan_actions(ask_policy.plan(intents.submit_now, { valid_buf = true, live_prompt = "Question:" })), { actions.write_draft, actions.cancel_draft }),
+        "submit empty prompt plan was wrong"
+    )
+    assert(
+        vim.deep_equal(
+            plan_actions(ask_policy.plan(intents.submit_now, { valid_buffer = true, live_prompt = "send", picker_mode = "before_send" })),
+            { actions.write_draft, actions.open_before_send_picker }
+        ),
+        "submit before-send plan was wrong"
+    )
+    assert(
+        vim.deep_equal(
+            plan_actions(ask_policy.plan(intents.submit_now, { valid_buf = true, live_prompt = "send", model_picker = "manual" })),
+            { actions.write_draft, actions.send_prompt }
+        ),
+        "submit send plan was wrong"
+    )
+    assert(
+        vim.deep_equal(plan_actions(ask_policy.plan(intents.cancel_draft, { valid_buf = true })), { actions.cancel_draft }),
+        "cancel draft plan was wrong"
+    )
+    assert(
+        vim.deep_equal(plan_actions(ask_policy.plan(intents.write_draft, { valid_buf = true })), { actions.write_draft }),
+        "write draft plan was wrong"
+    )
+end)
+
+test("ask functional core modules do not call Neovim APIs directly", function()
+    for _, module in ipairs({ "sidepanes.ask_policy", "sidepanes.ask_cmdline", "sidepanes.ask_controller", "sidepanes.ask_executor", "sidepanes.ask_route" }) do
+        local path = vim.fn.getcwd() .. "/lua/" .. module:gsub("%.", "/") .. ".lua"
+        local source = table.concat(vim.fn.readfile(path), "\n")
+
+        assert(not source:find("vim%.", 1, false), module .. " contains a direct vim.* call")
+    end
+end)
+
+test("ask route keeps current pane-mode default target decisions explicit", function()
+    local active = { label = "Active" }
+    local last = { label = "Last" }
+    local default = { label = "Default" }
+    local entry, reason = ask_route.default_entry({
+        active_entry = active,
+        last_entry = last,
+        target_entries = { default },
+    })
+
+    assert(entry == active and reason == "active_ask_target", "active ask target was not preferred")
+
+    entry, reason = ask_route.default_entry({
+        last_entry = last,
+        target_entries = { default },
+    })
+    assert(entry == last and reason == "last_coding_agent", "last coding agent was not preferred")
+
+    entry, reason = ask_route.default_entry({
+        target_entries = { default },
+    })
+    assert(entry == default and reason == "default_ask_target", "default ask target was not preferred")
+
+    entry, reason = ask_route.default_entry({})
+    assert(entry == nil and reason == "no_target", "missing target route was wrong")
+
+    assert(
+        ask_route.auto_append_blocked({ auto_append = false, active_buf = 10, citation_count = 1 }),
+        "auto_append=false with existing citations should focus the current draft"
+    )
+    assert(
+        not ask_route.auto_append_blocked({ auto_append = false, active_buf = 10, citation_count = 0 }),
+        "empty draft should still allow first append"
+    )
+    assert(
+        not ask_route.auto_append_blocked({ auto_append = true, active_buf = 10, citation_count = 1 }),
+        "auto_append=true should allow append"
+    )
+end)
+
+test("ask command-line adapter builds ask pane and floating compatibility commands", function()
+    assert(
+        ask_cmdline.markdown_return_command() == '<C-u>lua require("sidepanes.internal").show_markdown()<CR>',
+        "markdown return command changed"
+    )
+
+    assert(
+        ask_cmdline.ask_pane_command_for_line("q!", 12) == '<C-u>lua require("sidepanes.internal").cancel_ask_pane(12)<CR>',
+        "ask pane q! command was wrong"
+    )
+    assert(
+        ask_cmdline.ask_pane_command_for_line("q", 12) == '<C-u>lua require("sidepanes.internal").finish_ask_pane(12)<CR>',
+        "ask pane q command was wrong"
+    )
+    assert(
+        ask_cmdline.ask_pane_command_for_line("wq", 12) == '<C-u>lua require("sidepanes.internal").submit_ask_pane(12)<CR>',
+        "ask pane wq command was wrong"
+    )
+    assert(ask_cmdline.ask_pane_command_for_line("write", 12) == nil, "ask pane write command should pass through")
+
+    assert(
+        ask_cmdline.floating_question_command_for_line("q!", 34) == '<C-u>lua require("sidepanes.internal").finish_question(34)<CR>',
+        "floating question q! compatibility command changed"
+    )
+    assert(
+        ask_cmdline.floating_question_command_for_line("wq", 34)
+            == '<C-u>lua require("sidepanes.internal").write_question(34); require("sidepanes.internal").finish_question(34)<CR>',
+        "floating question wq compatibility command changed"
+    )
+end)
+
+test("ask lifecycle executor runs policy actions through fake handlers", function()
+    local calls = {}
+    local actions = ask_policy.ACTIONS
+    local result = ask_executor.run({
+        { action = actions.mark_draft_modified },
+        { action = actions.write_draft },
+        { action = actions.send_prompt, prompt = "hello" },
+    }, {
+        mark_draft_modified = function()
+            table.insert(calls, "mark")
+        end,
+        write_draft = function()
+            table.insert(calls, "write")
+        end,
+        send_prompt = function(prompt)
+            table.insert(calls, "send:" .. prompt)
+            return true
+        end,
+    })
+
+    assert(result == true, "executor did not return send result")
+    assert(vim.deep_equal(calls, { "mark", "write", "send:hello" }), "executor calls were wrong: " .. vim.inspect(calls))
+
+    calls = {}
+    result = ask_executor.run({
+        { action = actions.open_before_send_picker, prompt = "pick" },
+        { action = actions.send_prompt, prompt = "should not run" },
+    }, {
+        open_before_send_picker = function(prompt)
+            table.insert(calls, "picker:" .. prompt)
+        end,
+        send_prompt = function(prompt)
+            table.insert(calls, "send:" .. prompt)
+            return true
+        end,
+    })
+
+    assert(result == true, "open picker should stop as handled")
+    assert(vim.deep_equal(calls, { "picker:pick" }), "picker plan did not stop before send: " .. vim.inspect(calls))
+
+    calls = {}
+    result = ask_executor.run({
+        { action = actions.notify_no_prompt },
+        { action = actions.cancel_draft },
+    }, {
+        notify_no_prompt = function()
+            table.insert(calls, "notify")
+        end,
+        cancel_draft = function()
+            table.insert(calls, "cancel")
+        end,
+    })
+
+    assert(result == false, "notify_no_prompt should stop as unhandled")
+    assert(vim.deep_equal(calls, { "notify" }), "notify plan did not stop: " .. vim.inspect(calls))
+end)
+
+test("ask controller composes facts policy and executor handlers", function()
+    local calls = {}
+    local controller = ask_controller.create({
+        facts = function()
+            return {
+                valid_buf = true,
+                live_prompt = "send through controller",
+                model_picker = "manual",
+            }
+        end,
+        handlers = {
+            write_draft = function()
+                table.insert(calls, "write")
+            end,
+            send_prompt = function(prompt)
+                table.insert(calls, "send:" .. prompt)
+                return true
+            end,
+            change_target = function(target)
+                table.insert(calls, "target:" .. target)
+            end,
+            append_context = function(context)
+                table.insert(calls, "append:" .. context)
+            end,
+        },
+    })
+
+    assert(controller.submit_now() == true, "controller submit did not return executor result")
+    controller.change_target("codex")
+    controller.append_context("selection")
+
+    assert(
+        vim.deep_equal(calls, { "write", "send:send through controller", "target:codex", "append:selection" }),
+        "controller calls were wrong: " .. vim.inspect(calls)
+    )
+end)
+
+test("ask pane opens reusable ready scratch buffer in the side split", function()
+    reset_pane()
+
+    pane.setup({ wrap = true })
+
+    local bufnr, winid = pane.show_ask_pane({ focus = true })
+
+    assert(vim.api.nvim_buf_is_valid(bufnr), "ask pane buffer was not created")
+    assert(vim.api.nvim_win_is_valid(winid), "ask pane window was not created")
+    assert(pane.active_mode == "ask", "ask pane did not become active mode")
+    assert(vim.api.nvim_win_get_buf(winid) == bufnr, "ask pane window did not show ask buffer")
+    assert(vim.api.nvim_get_current_win() == winid, "ask pane did not focus when requested")
+    assert(vim.api.nvim_get_option_value("buftype", { buf = bufnr }) == "acwrite", "ask buffer buftype was wrong")
+    assert(vim.api.nvim_get_option_value("bufhidden", { buf = bufnr }) == "hide", "ask buffer hidden behavior was wrong")
+    assert(vim.api.nvim_get_option_value("filetype", { buf = bufnr }) == "markdown", "ask buffer filetype was wrong")
+    assert(vim.deep_equal(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), { "Question:", "" }), "ask buffer did not start ready")
+    assert(vim.api.nvim_get_option_value("number", { win = winid }) == true, "ask pane did not enable line numbers")
+    assert(vim.api.nvim_get_option_value("wrap", { win = winid }) == true, "ask pane did not use markdown-like wrap")
+    assert(vim.api.nvim_get_option_value("conceallevel", { win = winid }) == 0, "ask pane should not conceal editable markdown")
+
+    local winbar = vim.api.nvim_get_option_value("winbar", { win = winid })
+
+    assert(winbar:find("Ask: No target %- ready_empty"), winbar)
+    assert(pane.ask_pane.draft_state == "ready_empty", "ask pane did not record ready_empty state")
+    assert_state_history_contains(pane.ask_pane_state_history, { "ready_empty" }, "open ask pane")
+
+    local again = pane.show_ask_pane({ focus = true })
+
+    assert(again == bufnr, "ask pane did not reuse existing buffer")
+end)
+
+test("ask pane captures previous markdown and terminal pane state", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-previous-state-test")
+
+    write(root .. "/docs/doc.md", { "# Doc" })
+    pane.setup({
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    pane.open(root .. "/docs/doc.md")
+    pane.show_markdown()
+    pane.show_ask_pane({ focus = true })
+
+    assert(pane.ask_pane.previous.active_mode == "markdown", "ask pane did not remember markdown mode")
+    assert(pane.ask_pane.previous.bufnr == pane.bufnr, "ask pane did not remember markdown buffer")
+
+    pane.open_terminal("codex", nil, { root = root, focus = true })
+
+    local terminal_key = pane.active_terminal_key
+
+    pane.show_ask_pane({ focus = true })
+
+    assert(pane.ask_pane.previous.active_mode == "codex", "ask pane did not remember terminal mode")
+    assert(pane.ask_pane.previous.active_terminal_key == terminal_key, "ask pane did not remember terminal key")
+end)
+
 test("public IPython send captures current line through terminal deps", function()
     reset_pane()
 
@@ -4043,6 +4690,145 @@ test("visual IPython send exits visual mode after capture", function()
     assert(exited, "visual mode remained active after send")
 end)
 
+test("ask prompt helper preserves current prompt shape without visible metadata", function()
+    local prompt = ask_prompt.prompt_template({
+        root = "/tmp/project",
+        file = "src/main.lua",
+        path = "/tmp/project/src/main.lua",
+        start_lnum = 4,
+        end_lnum = 6,
+        text = "local value = 42",
+        filetype = "lua",
+        snippet_filetype = "lua",
+    })
+
+    assert(prompt:find("^Question:\n\n\nFile:\nsrc/main%.lua\n\nSelection:\nlines 4%-6\n\n```lua\nlocal value = 42\n```$"), prompt)
+    assert(not prompt:find("Target:", 1, true), "prompt exposed target metadata")
+    assert(not prompt:find("Model:", 1, true), "prompt exposed model metadata")
+end)
+
+test("ask prompt helper appends new file blocks and skips duplicate ranges", function()
+    local first = {
+        root = "/tmp/project",
+        file = "src/one.lua",
+        path = "/tmp/project/src/one.lua",
+        start_lnum = 10,
+        end_lnum = 12,
+        text = "first()",
+        snippet_filetype = "lua",
+    }
+    local second = {
+        root = "/tmp/project",
+        file = "src/two.lua",
+        path = "/tmp/project/src/two.lua",
+        start_lnum = 3,
+        end_lnum = 4,
+        text = "second()",
+        snippet_filetype = "lua",
+    }
+    local lines = vim.split(ask_prompt.prompt_template(first), "\n", { plain = true })
+    local duplicate_result, duplicate_meta = ask_prompt.add_citation(lines, first, { duplicate_policy = "skip" })
+
+    assert(duplicate_meta.added == false, "duplicate citation was added")
+    assert(duplicate_meta.reason == "duplicate", "duplicate citation reason was wrong")
+    assert(vim.deep_equal(duplicate_result, lines), "duplicate citation mutated prompt lines")
+
+    local updated, meta = ask_prompt.add_citation(lines, second)
+    local prompt = table.concat(updated, "\n")
+
+    assert(meta.added == true and meta.reason == "new_file", "new file citation did not report new_file")
+    assert(prompt:find("File:\nsrc/one%.lua", 1, false), prompt)
+    assert(prompt:find("File:\nsrc/two%.lua", 1, false), prompt)
+    assert(prompt:find("lines 3%-4", 1, false), prompt)
+end)
+
+test("ask prompt helper inserts same-file citations by line when machine-shaped", function()
+    local first = {
+        root = "/tmp/project",
+        file = "src/one.lua",
+        path = "/tmp/project/src/one.lua",
+        start_lnum = 30,
+        end_lnum = 35,
+        text = "later()",
+        snippet_filetype = "lua",
+    }
+    local earlier = vim.tbl_extend("force", first, {
+        start_lnum = 5,
+        end_lnum = 8,
+        text = "earlier()",
+    })
+    local lines = vim.split(ask_prompt.prompt_template(first), "\n", { plain = true })
+    local updated, meta = ask_prompt.add_citation(lines, earlier)
+    local prompt = table.concat(updated, "\n")
+    local earlier_at = prompt:find("lines 5%-8", 1, false)
+    local later_at = prompt:find("lines 30%-35", 1, false)
+
+    assert(meta.reason == "same_file_ordered", "same-file insertion did not report ordered")
+    assert(earlier_at and later_at and earlier_at < later_at, prompt)
+    assert(select(2, prompt:gsub("File:\nsrc/one%.lua", "")) == 1, "same-file citation created another file block")
+end)
+
+test("ask prompt helper appends same-file citations when block was manually edited", function()
+    local first = {
+        root = "/tmp/project",
+        file = "src/one.lua",
+        path = "/tmp/project/src/one.lua",
+        start_lnum = 30,
+        end_lnum = 35,
+        text = "later()",
+        snippet_filetype = "lua",
+    }
+    local earlier = vim.tbl_extend("force", first, {
+        start_lnum = 5,
+        end_lnum = 8,
+        text = "earlier()",
+    })
+    local lines = vim.split(ask_prompt.prompt_template(first), "\n", { plain = true })
+
+    for index, line in ipairs(lines) do
+        if line == "lines 30-35" then
+            lines[index] = "manually described range"
+            break
+        end
+    end
+
+    local updated, meta = ask_prompt.add_citation(lines, earlier)
+    local prompt = table.concat(updated, "\n")
+    local manual_at = prompt:find("manually described range", 1, true)
+    local earlier_at = prompt:find("lines 5%-8", 1, false)
+
+    assert(meta.reason == "same_file_appended", "edited block did not force append fallback")
+    assert(manual_at and earlier_at and manual_at < earlier_at, prompt)
+end)
+
+test("ask prompt helper labels cross-root citations without changing same-root paths", function()
+    local same_root = ask_prompt.format_file_block({
+        root = "/tmp/project",
+        file = "src/one.lua",
+        path = "/tmp/project/src/one.lua",
+        start_lnum = 1,
+        end_lnum = 1,
+        text = "same()",
+        snippet_filetype = "lua",
+    }, {
+        target_root = "/tmp/project",
+    })
+    local cross_root = ask_prompt.format_file_block({
+        root = "/tmp/other",
+        file = "src/two.lua",
+        path = "/tmp/other/src/two.lua",
+        start_lnum = 2,
+        end_lnum = 2,
+        text = "other()",
+        snippet_filetype = "lua",
+    }, {
+        target_root = "/tmp/project",
+    })
+
+    assert(same_root:find("File:\nsrc/one%.lua\n", 1, false), same_root)
+    assert(cross_root:find("File:\nsrc/two%.lua %(root: /tmp/other%)\n", 1, false), cross_root)
+end)
+
 test("visual-line ask captures all selected lines", function()
     reset_pane()
 
@@ -4090,6 +4876,1359 @@ test("visual-line ask captures all selected lines", function()
     assert(captured:find("lines 2%-3"), captured)
     assert(captured:find("from pipio%.core%.ir import Value, Binding, ErrorSpec"), captured)
     assert(captured:find("assert Value%(1%)%.value==1 and Binding"), captured)
+end)
+
+test("pane-mode ask creates ask pane prompt and appends same-file selections", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-append-same-file-test")
+
+    write(root .. "/src/origin.lua", {
+        "local later = 2",
+        "local middle = 3",
+        "local first = 1",
+    })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    local origin_buf = vim.api.nvim_get_current_buf()
+
+    pane.ask("codex", nil, { bufnr = origin_buf, line1 = 3, line2 = 3 })
+    pane.ask("codex", nil, { bufnr = origin_buf, line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+    local prompt = table.concat(vim.api.nvim_buf_get_lines(qbuf, 0, -1, false), "\n")
+    local first_at = prompt:find("lines 1%-1", 1, false)
+    local later_at = prompt:find("lines 3%-3", 1, false)
+
+    assert(pane.active_mode == "ask", "pane ask did not switch to ask mode")
+    assert(pane.ask_pane.entry.tool_name == "codex", "pane ask did not store target entry")
+    assert(first_at and later_at and first_at < later_at, prompt)
+    assert(select(2, prompt:gsub("File:\nsrc/origin%.lua", "")) == 1, "same-file append created duplicate file block")
+end)
+
+test("pane-mode first selection preserves question typed in ready ask pane", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-preserve-ready-question-test")
+
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    pane.show_ask_pane({ focus = true })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "Please explain this before editing.", "Keep the answer short." })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", nil, { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local prompt = table.concat(vim.api.nvim_buf_get_lines(qbuf, 0, -1, false), "\n")
+
+    assert(prompt:find("Please explain this before editing%.", 1, false), prompt)
+    assert(prompt:find("Keep the answer short%.", 1, false), prompt)
+    assert(prompt:find("File:\nsrc/origin%.lua", 1, false), prompt)
+end)
+
+test("pane-mode ask appends different files and skips exact duplicates", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-append-different-file-test")
+
+    write(root .. "/src/one.lua", { "one()" })
+    write(root .. "/src/two.lua", { "two()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+            duplicate_policy = "skip",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/one.lua")
+    local one_buf = vim.api.nvim_get_current_buf()
+
+    pane.ask("codex", nil, { bufnr = one_buf, line1 = 1, line2 = 1 })
+
+    local messages = capture_notify(function()
+        pane.ask("codex", nil, { bufnr = one_buf, line1 = 1, line2 = 1 })
+    end)
+
+    vim.cmd.edit(root .. "/src/two.lua")
+    pane.append_to_ask({ bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local prompt = table.concat(vim.api.nvim_buf_get_lines(pane.ask_pane.bufnr, 0, -1, false), "\n")
+
+    assert(has_notify(messages, "Duplicate ask citation skipped"), "duplicate ask citation did not notify")
+    assert(select(2, prompt:gsub("File:\nsrc/one%.lua", "")) == 1, "duplicate citation added another first file block")
+    assert(prompt:find("File:\nsrc/two%.lua", 1, false), prompt)
+end)
+
+test("pane-mode visual ask mappings reuse active ask target without reopening picker", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-visual-reuse-target-test")
+
+    write(root .. "/src/origin.lua", {
+        "first()",
+        "second()",
+    })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                    { name = "two", label = "Two", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    local origin_buf = vim.api.nvim_get_current_buf()
+
+    pane._test_next_choice = "2"
+    pane.ask_picker({ bufnr = origin_buf, line1 = 1, line2 = 1 })
+
+    pane._test_next_choice = "2"
+    pane.ask_picker({ bufnr = origin_buf, line1 = 2, line2 = 2 })
+
+    local prompt = table.concat(vim.api.nvim_buf_get_lines(pane.ask_pane.bufnr, 0, -1, false), "\n")
+
+    assert(pane.ask_pane.entry.preset_name == "one", "visual ask picker reopened instead of reusing active ask target")
+    assert(prompt:find("lines 1%-1", 1, false), prompt)
+    assert(prompt:find("lines 2%-2", 1, false), prompt)
+
+    pane._test_next_choice = "2"
+    pane.ask_last_coding_agent({ bufnr = origin_buf, line1 = 2, line2 = 2 })
+
+    assert(pane.ask_pane.entry.preset_name == "one", "ask-last reopened picker instead of reusing active ask target")
+end)
+
+test("pane-mode ask-last first capture uses default target without picker", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-ask-last-default-target-test")
+
+    write(root .. "/src/origin.lua", {
+        "first()",
+        "second()",
+    })
+    pane.setup({
+        ask = {
+            ui = "pane",
+            model_picker = "before_send",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                    { name = "two", label = "Two", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane._test_next_choice = "2"
+    pane.ask_last_coding_agent({ bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local prompt = table.concat(vim.api.nvim_buf_get_lines(pane.ask_pane.bufnr, 0, -1, false), "\n")
+
+    assert(pane.ask_pane.entry.preset_name == "one", "ask-last first capture opened picker instead of using default target")
+    assert(prompt:find("lines 1%-1", 1, false), prompt)
+end)
+
+test("pane-mode duplicate detection respects edited ask draft text", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-edited-duplicate-test")
+
+    write(root .. "/src/one.lua", { "one()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+            duplicate_policy = "skip",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/one.lua")
+    local one_buf = vim.api.nvim_get_current_buf()
+
+    pane.ask("codex", nil, { bufnr = one_buf, line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    vim.api.nvim_buf_set_lines(qbuf, 2, -1, false, {})
+
+    local messages = capture_notify(function()
+        pane.ask("codex", nil, { bufnr = one_buf, line1 = 1, line2 = 1 })
+    end)
+    local prompt = table.concat(vim.api.nvim_buf_get_lines(qbuf, 0, -1, false), "\n")
+
+    assert(not has_notify(messages, "Duplicate ask citation skipped"), "stale citation registry skipped an edited-out citation")
+    assert(prompt:find("File:\nsrc/one%.lua", 1, false), prompt)
+    assert(prompt:find("lines 1%-1", 1, false), prompt)
+end)
+
+test("pane-mode explicit append works when auto append is disabled", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-explicit-append-test")
+
+    write(root .. "/src/origin.lua", {
+        "first()",
+        "second()",
+    })
+    pane.setup({
+        ask = {
+            ui = "pane",
+            auto_append = false,
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    local origin_buf = vim.api.nvim_get_current_buf()
+
+    pane.ask("codex", nil, { bufnr = origin_buf, line1 = 1, line2 = 1 })
+    pane.ask("codex", nil, { bufnr = origin_buf, line1 = 2, line2 = 2 })
+
+    local after_auto = table.concat(vim.api.nvim_buf_get_lines(pane.ask_pane.bufnr, 0, -1, false), "\n")
+
+    assert(not after_auto:find("lines 2%-2", 1, false), "disabled auto append still mutated prompt")
+
+    pane.append_to_ask({ bufnr = origin_buf, line1 = 2, line2 = 2 })
+
+    local after_explicit = table.concat(vim.api.nvim_buf_get_lines(pane.ask_pane.bufnr, 0, -1, false), "\n")
+
+    assert(after_explicit:find("lines 2%-2", 1, false), "explicit append did not mutate prompt")
+end)
+
+test("pane-mode ask write then quit sends accumulated prompt", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-send-test")
+    local out = helpers.tmp_path("sidepanes-ask-pane-send.txt")
+
+    pcall(vim.fn.delete, out)
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "tee -a " .. out },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", nil, { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send accumulated prompt" })
+    pane.write_ask_pane(qbuf)
+    assert(pane.ask_pane.draft_state == "draft_written", "ask write did not record draft_written")
+    pane.finish_ask_pane(qbuf)
+
+    wait_for_file(out, "send accumulated prompt")
+    wait_for_file(out, "selected()")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "draft_written", "sending_terminal", "sent" },
+        "accumulated prompt send"
+    )
+    assert(pane.ask_pane_last_state == "sent", "ask send did not leave sent as last state")
+    assert(pane.active_mode == "codex", "ask pane send did not focus target terminal")
+    assert(not pane.ask_pane.bufnr, "ask pane state was not cleared after send")
+    assert(
+        vim.fn.maparg("<CR>", "c", false, true).desc ~= "Sidepanes ask pane command-line enter",
+        "ask pane send leaked command-line enter mapping"
+    )
+end)
+
+test("pane-mode ask preserves prompt when target terminal fails to open", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-send-open-failure-test")
+
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sidepanes-missing-executable-for-test" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", nil, { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "do not lose this draft" })
+
+    local messages = capture_notify(function()
+        pane.submit_ask_pane(qbuf)
+    end)
+
+    local prompt = table.concat(vim.api.nvim_buf_get_lines(qbuf, 0, -1, false), "\n")
+
+    assert(has_notify(messages, "Pane tool executable not found"), "terminal-open failure did not notify")
+    assert(has_notify(messages, "Ask prompt was not sent; target terminal did not open"), "ask pane did not warn about preserved draft")
+    assert(pane.ask_pane.bufnr == qbuf, "failed send cleared ask pane state")
+    assert(pane.ask_pane.draft_state == "send_failed", "failed send did not record send_failed")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "draft_written", "sending_terminal", "send_failed" },
+        "failed terminal send"
+    )
+    assert(vim.api.nvim_buf_is_valid(qbuf), "failed send deleted ask buffer")
+    assert(prompt:find("do not lose this draft", 1, true), prompt)
+    assert(pane.active_mode == "ask", "failed send should leave ask pane active")
+end)
+
+test("pane-mode ask cancel restores previous markdown and terminal modes", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-cancel-restore-test")
+
+    write(root .. "/docs/doc.md", { "# Doc" })
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    pane.open(root .. "/docs/doc.md")
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", nil, { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+    pane.cancel_ask_pane(pane.ask_pane.bufnr)
+
+    assert(pane.active_mode == "markdown", "ask pane cancel did not restore markdown mode")
+    assert(vim.api.nvim_win_get_buf(pane.winid) == pane.bufnr, "ask pane cancel did not restore markdown buffer")
+
+    pane.open_terminal("codex", nil, { root = root, focus = true })
+
+    local terminal_key = pane.active_terminal_key
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", nil, { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+    pane.cancel_ask_pane(pane.ask_pane.bufnr)
+
+    assert(pane.active_mode == "codex", "ask pane cancel did not restore terminal mode")
+    assert(pane.active_terminal_key == terminal_key, "ask pane cancel did not restore terminal key")
+end)
+
+test("pane-mode ask cancel restores claude ipython and custom terminal modes", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-cancel-all-terminals-test")
+
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+            claude = {
+                label = "Claude",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+            ipython = {
+                label = "IPython",
+                ask = false,
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+            shell = {
+                label = "Shell",
+                ask = true,
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    local origin_buf = vim.api.nvim_get_current_buf()
+
+    local function assert_restore(tool_name, ask_tool)
+        pane.open_terminal(tool_name, nil, { root = root, focus = true })
+
+        local terminal_key = pane.active_terminal_key
+
+        pane.ask(ask_tool or "codex", nil, { bufnr = origin_buf, line1 = 1, line2 = 1 })
+
+        vim.api.nvim_buf_set_lines(pane.ask_pane.bufnr, 1, 1, false, { "modified before cancel" })
+        assert(vim.api.nvim_get_option_value("modified", { buf = pane.ask_pane.bufnr }), "ask buffer was not modified before cancel")
+
+        pane.cancel_ask_pane(pane.ask_pane.bufnr)
+
+        assert(pane.active_mode == tool_name, "ask pane cancel did not restore " .. tool_name .. " mode")
+        assert(pane.active_terminal_key == terminal_key, "ask pane cancel did not restore " .. tool_name .. " terminal key")
+    end
+
+    assert_restore("claude")
+    assert_restore("ipython")
+    assert_restore("shell", "shell")
+end)
+
+test("ask pane command-line mapping cancels q and sends wq through internal callbacks", function()
+    reset_pane()
+
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+    })
+    pane.show_ask_pane({ focus = true })
+
+    local qbuf = pane.ask_pane.bufnr
+    local enter_map = vim.fn.maparg("<CR>", "c", false, true)
+    original_getcmdline = vim.fn.getcmdline
+    original_getcmdtype = vim.fn.getcmdtype
+
+    assert(enter_map.callback, "ask pane command-line enter map has no callback")
+    assert(enter_map.desc == "Sidepanes ask pane command-line enter", "ask pane command-line enter map had wrong desc")
+
+    vim.fn.getcmdtype = function()
+        return ":"
+    end
+
+    local function mapped(command)
+        vim.fn.getcmdline = function()
+            return command
+        end
+
+        return enter_map.callback()
+    end
+
+    local quit = mapped("q!")
+    local finish_quit = mapped("q")
+    local quit_long = mapped("quit")
+    local quit_bang = mapped("quit!")
+    local write_and_quit = mapped("wq")
+    local write_and_quit_bang = mapped("wq!")
+    local exit = mapped("exit")
+    local xit = mapped("xit")
+    local x = mapped("x")
+
+    vim.fn.getcmdline = original_getcmdline
+    vim.fn.getcmdtype = original_getcmdtype
+
+    assert(quit:find('require%("sidepanes%.internal"%)%.cancel_ask_pane', 1, false), quit)
+    assert(finish_quit:find('require%("sidepanes%.internal"%)%.finish_ask_pane', 1, false), finish_quit)
+    assert(quit_long:find('require%("sidepanes%.internal"%)%.finish_ask_pane', 1, false), quit_long)
+    assert(quit_bang:find('require%("sidepanes%.internal"%)%.cancel_ask_pane', 1, false), quit_bang)
+    assert(write_and_quit:find('require%("sidepanes%.internal"%)%.submit_ask_pane', 1, false), write_and_quit)
+    assert(write_and_quit_bang:find('require%("sidepanes%.internal"%)%.submit_ask_pane', 1, false), write_and_quit_bang)
+    assert(exit:find('require%("sidepanes%.internal"%)%.submit_ask_pane', 1, false), exit)
+    assert(xit:find('require%("sidepanes%.internal"%)%.submit_ask_pane', 1, false), xit)
+    assert(x:find('require%("sidepanes%.internal"%)%.submit_ask_pane', 1, false), x)
+    assert(not has_map(qbuf, "q"), "plain normal q should not cancel ask pane")
+end)
+
+test("ask pane command-line q sends after write", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-written-q-test")
+
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+    local enter_map = vim.fn.maparg("<CR>", "c", false, true)
+    local original_getcmdline = vim.fn.getcmdline
+    local original_getcmdtype = vim.fn.getcmdtype
+
+    assert(enter_map.callback, "ask pane command-line enter map has no callback")
+    assert(enter_map.desc == "Sidepanes ask pane command-line enter", "ask pane command-line enter map had wrong desc")
+
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send after write then quit" })
+    pane.write_ask_pane(qbuf)
+
+    vim.fn.getcmdtype = function()
+        return ":"
+    end
+    vim.fn.getcmdline = function()
+        return "q"
+    end
+
+    local quit_after_write = enter_map.callback()
+
+    vim.fn.getcmdline = original_getcmdline
+    vim.fn.getcmdtype = original_getcmdtype
+
+    assert(quit_after_write:find('require%("sidepanes%.internal"%)%.finish_ask_pane', 1, false), quit_after_write)
+    assert(pane.ask_pane.draft_state == "draft_written", "written command-line q setup lost draft_written state")
+end)
+
+test("ask pane empty ready draft writes then submit cancels without sending", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-ready-submit-test")
+
+    write(root .. "/docs/doc.md", { "# Doc" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+    })
+
+    pane.open(root .. "/docs/doc.md")
+    pane.show_ask_pane({ focus = true })
+
+    local winid = pane.winid
+    local qbuf = pane.ask_pane.bufnr
+
+    pane.write_ask_pane(qbuf)
+
+    assert(vim.api.nvim_buf_is_valid(qbuf), "ready write deleted ask buffer")
+    assert(pane.active_mode == "ask", "ready write left ask pane")
+    assert(pane.ask_pane.written_prompt == "Question:", "ready write cached unexpected prompt")
+    assert(pane.ask_pane.draft_state == "draft_written", "ready write did not record draft_written")
+    assert(not vim.api.nvim_get_option_value("modified", { buf = qbuf }), "ready write left buffer modified")
+
+    pane.submit_ask_pane(qbuf)
+
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_written", "cancelled" },
+        "empty ready submit"
+    )
+    assert(pane.ask_pane_last_state == "cancelled", "empty ready submit did not record cancelled")
+    assert(pane.active_mode == "markdown", "ready submit did not restore markdown")
+    assert(vim.api.nvim_win_is_valid(winid), "ready submit closed side pane")
+    assert(vim.api.nvim_win_get_buf(winid) == pane.bufnr, "ready submit did not restore markdown buffer")
+    assert(vim.wait(1000, function()
+        return not vim.api.nvim_buf_is_valid(qbuf)
+    end), "ready submit did not clear ask buffer")
+end)
+
+test("submit question command without active ask draft warns and keeps state", function()
+    reset_pane()
+
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+    })
+
+    local current_buf = vim.api.nvim_get_current_buf()
+    local messages = capture_notify(function()
+        vim.cmd("SidepanesSubmitQuestion")
+    end)
+
+    assert(has_notify(messages, "No ask pane prompt to submit"), "submit command without draft did not warn")
+    assert(vim.api.nvim_get_current_buf() == current_buf, "submit command without draft changed current buffer")
+    assert(not pane.ask_pane or not pane.ask_pane.bufnr, "submit command without draft created ask state")
+end)
+
+test("direct ask pane command-line fallback cancels without missing pane deps", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-direct-fallback-cancel-test")
+
+    write(root .. "/docs/doc.md", { "# Doc" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+    })
+
+    pane.open(root .. "/docs/doc.md")
+    pane.show_ask_pane({ focus = true })
+
+    local winid = pane.winid
+    local qbuf = pane.ask_pane.bufnr
+
+    pane.ask_pane.last_cmdline = "q"
+    vim.api.nvim_exec_autocmds("CmdlineLeave", {})
+
+    assert(vim.wait(1000, function()
+        return pane.active_mode == "markdown"
+    end), "direct ask pane fallback :q did not restore markdown")
+    assert(vim.api.nvim_win_is_valid(winid), "direct ask pane fallback :q closed the side pane")
+    assert(vim.api.nvim_win_get_buf(winid) == pane.bufnr, "direct ask pane fallback :q did not restore markdown buffer")
+    assert(vim.wait(1000, function()
+        return not vim.api.nvim_buf_is_valid(qbuf)
+    end), "direct ask pane fallback :q did not clear ask buffer")
+    assert_state_history_contains(pane.ask_pane_state_history, { "ready_empty", "cancelled" }, "direct ask pane :q fallback")
+    assert(pane.ask_pane_last_state == "cancelled", "direct ask pane fallback :q did not record cancelled")
+end)
+
+test("ask pane typed q bang cancels without closing the side pane", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-typed-quit-test")
+
+    write(root .. "/docs/doc.md", { "# Doc" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+    })
+
+    pane.open(root .. "/docs/doc.md")
+    pane.show_ask_pane({ focus = true })
+
+    local winid = pane.winid
+    local qbuf = pane.ask_pane.bufnr
+
+    vim.cmd("stopinsert")
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
+    vim.api.nvim_set_current_win(winid)
+    assert(vim.wait(1000, function()
+        return vim.api.nvim_get_mode().mode == "n"
+    end), "typed :q! test did not reach normal mode")
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(":q!<CR>", true, false, true), "mx", false)
+
+    assert(vim.wait(1000, function()
+        return pane.active_mode == "markdown"
+    end), "typed :q! did not cancel ask pane")
+    assert(vim.api.nvim_win_is_valid(winid), "typed :q! closed the side pane")
+    assert(vim.api.nvim_win_get_buf(winid) == pane.bufnr, "typed :q! did not restore markdown buffer")
+    assert(vim.wait(1000, function()
+        return not vim.api.nvim_buf_is_valid(qbuf)
+    end), "typed :q! did not clear ask buffer")
+    assert_state_history_contains(pane.ask_pane_state_history, { "ready_empty", "cancelled" }, "typed :q!")
+    assert(pane.ask_pane_last_state == "cancelled", "typed :q! did not record cancelled")
+    assert(
+        vim.fn.maparg("<CR>", "c", false, true).desc ~= "Sidepanes ask pane command-line enter",
+        "ask pane cancel leaked command-line enter mapping"
+    )
+end)
+
+test("ask pane target picker mapping updates target and winbar", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-target-picker-test")
+
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+            model_picker = "manual",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                    { name = "two", label = "Two", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    pane._test_next_choice = "2"
+    call_map(qbuf, "M")
+
+    local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+    assert(pane.ask_pane.entry.preset_name == "two", "ask pane target picker did not update preset")
+    assert(winbar:find("Codex: Two", 1, true), winbar)
+end)
+
+test("ask pane target picker mapping is configurable", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-configurable-picker-map-test")
+
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        mappings = {
+            pane = {
+                ask_model_picker = "K",
+                ask_model_picker_alt = false,
+            },
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                    { name = "two", label = "Two", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    assert(has_map(qbuf, "K"), "custom ask model picker mapping missing")
+    assert(not has_map(qbuf, "<Tab>"), "disabled ask model picker alt mapping was installed")
+
+    pane._test_next_choice = "2"
+    call_map(qbuf, "K")
+
+    assert(pane.ask_pane.entry.preset_name == "two", "custom ask model picker mapping did not update target")
+end)
+
+test("ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-send-map-test")
+    local out = helpers.tmp_path("sidepanes-ask-pane-send-map.txt")
+
+    pcall(vim.fn.delete, out)
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        mappings = {
+            pane = {
+                ask_send = "qq",
+                ask_send_alt = "<leader>qq",
+            },
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "tee -a " .. out },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    local function open_ask()
+        vim.cmd.edit(root .. "/src/origin.lua")
+        pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+        return pane.ask_pane.bufnr
+    end
+
+    local qbuf = open_ask()
+
+    assert(has_map(qbuf, "qq"), "custom ask send mapping missing")
+    local alt_lhs = expanded_leader("<leader>qq")
+
+    assert(has_map(qbuf, alt_lhs), "custom ask send alt mapping missing")
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "cancel from qq" })
+
+    local messages = capture_notify(function()
+        call_map(qbuf, "qq")
+    end)
+
+    assert(not has_notify(messages, "Write the ask prompt before sending"), "unwritten ask send mapping warned instead of quitting")
+    assert(read_file(out) == "", "unwritten ask send mapping sent prompt")
+    assert(not pane.ask_pane.bufnr, "unwritten ask send mapping did not cancel ask state")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "cancelled" },
+        "unwritten qq"
+    )
+    assert(pane.ask_pane_last_state == "cancelled", "unwritten qq did not record cancelled")
+
+    qbuf = open_ask()
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send from qq" })
+
+    pane.write_ask_pane(qbuf)
+    call_map(qbuf, "qq")
+    wait_for_file(out, "send from qq")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "draft_written", "sending_terminal", "sent" },
+        "written qq"
+    )
+    assert(pane.ask_pane_last_state == "sent", "written qq did not record sent")
+    assert(pane.active_mode == "codex", "ask send mapping did not switch to target terminal")
+    assert(not pane.ask_pane.bufnr, "ask send mapping did not clear ask state")
+
+    qbuf = open_ask()
+
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "cancel from leader qq" })
+    messages = capture_notify(function()
+        call_map(qbuf, alt_lhs)
+    end)
+
+    assert(not has_notify(messages, "Write the ask prompt before sending"), "unwritten ask send alt mapping warned instead of quitting")
+    assert(not read_file(out):find("cancel from leader qq", 1, true), "unwritten ask send alt mapping sent prompt")
+    assert(not pane.ask_pane.bufnr, "unwritten ask send alt mapping did not cancel ask state")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "cancelled" },
+        "unwritten leader qq"
+    )
+    assert(pane.ask_pane_last_state == "cancelled", "unwritten leader qq did not record cancelled")
+
+    qbuf = open_ask()
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send from leader qq" })
+
+    pane.write_ask_pane(qbuf)
+    call_map(qbuf, alt_lhs)
+    wait_for_file(out, "send from leader qq")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "draft_written", "sending_terminal", "sent" },
+        "written leader qq"
+    )
+    assert(pane.ask_pane_last_state == "sent", "written leader qq did not record sent")
+    assert(pane.active_mode == "codex", "ask send alt mapping did not switch to target terminal")
+    assert(not pane.ask_pane.bufnr, "ask send alt mapping did not clear ask state")
+end)
+
+test("personal quit mapping in terminal pane follows q command path with plain quit guard", function()
+    reset_pane()
+
+    local root = root_fixture("personal-quit-command-terminal-test")
+
+    write(root .. "/docs/doc.md", { "# Doc" })
+    write(root .. "/src/origin.lua", { "selected()" })
+    vim.keymap.set("n", "<leader>qq", ":q<CR>", { silent = true, desc = "Personal quit mapping" })
+
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        mappings = {
+            pane = {
+                ask_send_alt = "<leader>qq",
+            },
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    local original_getcmdline
+    local original_getcmdtype
+    local ok, err = xpcall(function()
+        pane.open(root .. "/docs/doc.md")
+
+        local winid = pane.winid
+        local ctx = pane.open_terminal("codex", "one", { root = root, focus = true })
+        local alt_lhs = expanded_leader("<leader>qq")
+
+        assert(has_map(ctx.bufnr, alt_lhs), "terminal pane did not guard personal ask_send_alt/global quit lhs")
+        assert(not has_map(ctx.bufnr, alt_lhs, "t"), "terminal-input pane should not own personal ask_send_alt/global quit lhs")
+
+        original_getcmdline = vim.fn.getcmdline
+        original_getcmdtype = vim.fn.getcmdtype
+
+        vim.fn.getcmdtype = function()
+            return ":"
+        end
+
+        local function assert_quit_command_path(command, label)
+            local enter_map = vim.fn.maparg("<CR>", "c", false, true)
+
+            assert(enter_map.callback, label .. " Sidepanes command-line enter map has no callback")
+
+            vim.fn.getcmdline = function()
+                return command
+            end
+
+            local messages = capture_notify(function()
+                local mapped = enter_map.callback()
+
+                assert(mapped:find('require%("sidepanes%.internal"%)%.show_markdown', 1, false), mapped)
+            end)
+
+            assert(not has_notify(messages, "Write the ask prompt before sending"), label .. " command-line quit called ask send")
+
+            pane.show_markdown()
+            assert(vim.api.nvim_win_is_valid(winid), label .. " command-line quit closed side pane")
+            assert(pane.active_mode == "markdown", label .. " command-line quit did not return to markdown")
+            assert(vim.api.nvim_win_get_buf(winid) == pane.bufnr, label .. " command-line quit did not restore markdown buffer")
+        end
+
+        vim.api.nvim_set_current_win(winid)
+        assert_quit_command_path("q", "terminal without active ask draft")
+
+        ctx = pane.open_terminal("codex", "one", { root = root, focus = true })
+        vim.cmd.edit(root .. "/src/origin.lua")
+        pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+        ctx = pane.open_terminal("codex", "one", { root = root, focus = true })
+
+        assert(has_map(ctx.bufnr, alt_lhs), "terminal pane did not guard personal ask_send_alt/global quit lhs while ask draft is active")
+        assert(not has_map(ctx.bufnr, alt_lhs, "t"), "terminal-input pane should not own personal ask_send_alt/global quit lhs while ask draft is active")
+
+        vim.api.nvim_set_current_win(winid)
+        assert_quit_command_path("q", "terminal with active ask draft")
+
+        vim.api.nvim_set_current_win(winid)
+        assert_quit_command_path("quit", "Markdown pane with active ask draft")
+
+    end, debug.traceback)
+
+    if original_getcmdline then
+        vim.fn.getcmdline = original_getcmdline
+    end
+    if original_getcmdtype then
+        vim.fn.getcmdtype = original_getcmdtype
+    end
+    pcall(vim.keymap.del, "n", "<leader>qq")
+
+    if not ok then
+        error(err)
+    end
+end)
+
+test("personal normal quit mappings do not close markdown or terminal side panes", function()
+    reset_pane()
+
+    local root = root_fixture("personal-normal-quit-map-pane-test")
+
+    write(root .. "/docs/doc.md", { "# Doc" })
+    write(root .. "/src/origin.lua", { "selected()" })
+    vim.keymap.set("n", "qq", ":q<CR>", { silent = true, desc = "Personal quit mapping" })
+    vim.keymap.set("n", "<leader>qq", ":q<CR>", { silent = true, desc = "Personal leader quit mapping" })
+
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        mappings = {
+            pane = {
+                ask_send = "qq",
+                ask_send_alt = "<leader>qq",
+            },
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    local ok, err = xpcall(function()
+        pane.open(root .. "/docs/doc.md")
+
+        local winid = pane.winid
+        local markdown_bufnr = pane.bufnr
+        local alt_lhs = expanded_leader("<leader>qq")
+
+        assert(has_map(markdown_bufnr, "qq"), "Markdown pane did not guard personal qq quit mapping")
+        assert(has_map(markdown_bufnr, alt_lhs), "Markdown pane did not guard personal leader quit mapping")
+
+        vim.api.nvim_set_current_win(winid)
+        vim.api.nvim_feedkeys("qq", "mx", false)
+
+        assert(vim.wait(500, function()
+            return vim.api.nvim_win_is_valid(winid) and vim.api.nvim_win_get_buf(winid) == markdown_bufnr
+        end, 10), "personal qq closed the Markdown side pane")
+
+        pane.open_terminal("codex", "one", { root = root, focus = true })
+
+        local ctx = pane.terminals[util.terminal_key("codex", root)]
+
+        assert(ctx and vim.api.nvim_buf_is_valid(ctx.bufnr), "Codex pane did not open")
+        assert(has_map(ctx.bufnr, "qq"), "terminal pane did not guard personal qq quit mapping")
+        assert(has_map(ctx.bufnr, alt_lhs), "terminal pane did not guard personal leader quit mapping")
+
+        vim.cmd.stopinsert()
+        vim.api.nvim_set_current_win(winid)
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(alt_lhs, true, false, true), "mx", false)
+
+        assert(vim.wait(500, function()
+            return vim.api.nvim_win_is_valid(winid) and pane.active_mode == "markdown" and vim.api.nvim_win_get_buf(winid) == pane.bufnr
+        end, 10), "personal leader quit mapping closed the terminal side pane")
+    end, debug.traceback)
+
+    pcall(vim.keymap.del, "n", "qq")
+    pcall(vim.keymap.del, "n", "<leader>qq")
+
+    if not ok then
+        error(err)
+    end
+end)
+
+test("ask pane submit mapping sends modified prompt from normal and insert modes", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-submit-map-test")
+    local out = helpers.tmp_path("sidepanes-ask-pane-submit-map.txt")
+
+    pcall(vim.fn.delete, out)
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "tee -a " .. out },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    assert(has_map(qbuf, "<C-CR>", "n"), "ask submit normal mapping missing")
+    assert(has_map(qbuf, "<C-CR>", "i"), "ask submit insert mapping missing")
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "submit from ctrl enter" })
+    call_map(qbuf, "<C-CR>", "n")
+
+    wait_for_file(out, "submit from ctrl enter")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "draft_written", "sending_terminal", "sent" },
+        "normal ctrl-enter submit"
+    )
+    assert(pane.ask_pane_last_state == "sent", "normal ctrl-enter submit did not record sent")
+    assert(pane.active_mode == "codex", "ask submit mapping did not switch to target terminal")
+    assert(not pane.ask_pane.bufnr, "ask submit mapping did not clear ask state")
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    qbuf = pane.ask_pane.bufnr
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "submit from insert ctrl enter" })
+    call_map(qbuf, "<C-CR>", "i")
+
+    wait_for_file(out, "submit from insert ctrl enter")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "draft_written", "sending_terminal", "sent" },
+        "insert ctrl-enter submit"
+    )
+    assert(pane.ask_pane_last_state == "sent", "insert ctrl-enter submit did not record sent")
+    assert(pane.active_mode == "codex", "ask submit insert mapping did not switch to target terminal")
+    assert(not pane.ask_pane.bufnr, "ask submit insert mapping did not clear ask state")
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    qbuf = pane.ask_pane.bufnr
+    assert(has_map(qbuf, "<C-J>", "n"), "ask submit normal Ctrl+Enter fallback mapping missing")
+    assert(has_map(qbuf, "<C-J>", "i"), "ask submit insert Ctrl+Enter fallback mapping missing")
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "submit from ctrl enter fallback" })
+    vim.api.nvim_set_current_win(pane.winid)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-J>", true, false, true), "mx", false)
+
+    wait_for_file(out, "submit from ctrl enter fallback")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "draft_written", "sending_terminal", "sent" },
+        "ctrl-enter fallback submit"
+    )
+    assert(pane.ask_pane_last_state == "sent", "ctrl-enter fallback submit did not record sent")
+    assert(pane.active_mode == "codex", "ask submit fallback mapping did not switch to target terminal")
+    assert(not pane.ask_pane.bufnr, "ask submit fallback mapping did not clear ask state")
+end)
+
+test("ask pane automatic model picker modes update target", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-model-picker-mode-test")
+    local out = helpers.tmp_path("sidepanes-ask-pane-model-picker.txt")
+
+    pcall(vim.fn.delete, out)
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+            model_picker = "after_open",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "tee -a " .. out },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                    { name = "two", label = "Two", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane._test_next_choice = "2"
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    assert(pane.ask_pane.entry.preset_name == "two", "after_open model picker did not update target")
+
+    pane._test_next_choice = "1"
+    pane.show_markdown()
+    pane.show_ask_pane({ focus = true })
+    assert(pane.ask_pane.entry.preset_name == "two", "after_open picker reran when refocusing an active draft")
+
+    pane.cancel_ask_pane(pane.ask_pane.bufnr)
+    pane.setup({
+        ask = {
+            ui = "pane",
+            model_picker = "before_send",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "tee -a " .. out },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                    { name = "two", label = "Two", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send with changed model" })
+    pane.write_ask_pane(qbuf)
+    pane._test_next_choice = "2"
+    pane.finish_ask_pane(qbuf)
+
+    wait_for_file(out, "send with changed model")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "draft_written", "sending_picker", "sending_terminal", "sent" },
+        "before-send picker"
+    )
+    assert(pane.ask_pane_last_state == "sent", "before-send picker did not record sent")
+    assert(pane.terminals[util.terminal_key("codex", root)].preset_name == "two", "before_send model picker did not send to selected preset")
+end)
+
+test("ask pane navigation mappings move between context headers and source jump opens citation", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-navigation-test")
+
+    write(root .. "/src/one.lua", {
+        "one_a()",
+        "one_b()",
+    })
+    write(root .. "/src/two.lua", {
+        "two_a()",
+        "two_b()",
+    })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/one.lua")
+    local source_win = vim.api.nvim_get_current_win()
+    local one_buf = vim.api.nvim_get_current_buf()
+
+    pane.ask("codex", nil, { bufnr = one_buf, line1 = 2, line2 = 2 })
+    vim.cmd.edit(root .. "/src/two.lua")
+    pane.append_to_ask({ bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    assert(has_map(qbuf, "]f"), "ask next file mapping missing")
+    assert(has_map(qbuf, "[f"), "ask previous file mapping missing")
+    assert(has_map(qbuf, "]s"), "ask next selection mapping missing")
+    assert(has_map(qbuf, "[s"), "ask previous selection mapping missing")
+    assert(has_map(qbuf, "gf"), "ask source jump mapping missing")
+
+    vim.api.nvim_set_current_win(pane.winid)
+    vim.api.nvim_win_set_cursor(pane.winid, { 1, 0 })
+    call_map(qbuf, "]s")
+
+    local first_selection_line = vim.api.nvim_win_get_cursor(pane.winid)[1]
+
+    assert(vim.api.nvim_buf_get_lines(qbuf, first_selection_line - 1, first_selection_line, false)[1] == "Selection:", "next selection did not land on selection header")
+
+    call_map(qbuf, "]f")
+
+    local second_file_line = vim.api.nvim_win_get_cursor(pane.winid)[1]
+
+    assert(vim.api.nvim_buf_get_lines(qbuf, second_file_line - 1, second_file_line, false)[1] == "File:", "next file did not land on file header")
+
+    call_map(qbuf, "[f")
+
+    local first_file_line = vim.api.nvim_win_get_cursor(pane.winid)[1]
+
+    assert(first_file_line < second_file_line, "previous file did not move backward")
+
+    vim.api.nvim_win_set_cursor(pane.winid, { first_file_line, 0 })
+    call_map(qbuf, "gf")
+
+    assert(vim.api.nvim_get_current_win() == source_win, "ask file source jump did not return to source window")
+    assert(vim.api.nvim_buf_get_name(0) == root .. "/src/one.lua", "ask file source jump opened wrong file")
+    assert(vim.api.nvim_win_get_cursor(0)[1] == 2, "ask file source jump opened wrong line")
+
+    vim.api.nvim_set_current_win(pane.winid)
+    vim.api.nvim_win_set_cursor(pane.winid, { first_selection_line, 0 })
+    call_map(qbuf, "gf")
+
+    assert(vim.api.nvim_get_current_win() == source_win, "ask source jump did not return to source window")
+    assert(vim.api.nvim_buf_get_name(0) == root .. "/src/one.lua", "ask source jump opened wrong file")
+    assert(vim.api.nvim_win_get_cursor(0)[1] == 2, "ask source jump opened wrong line")
 end)
 
 test("question quit cancels unwritten changes and restores origin", function()
@@ -4702,6 +6841,56 @@ test("show markdown from terminal reloads changed markdown source", function()
     assert(pane.active_mode == "markdown", "show_markdown did not activate markdown")
     assert(vim.api.nvim_buf_get_lines(pane.bufnr, 0, 1, false)[1] == "# Changed", "show_markdown did not reload changed markdown source")
     assert(vim.api.nvim_get_option_value("winbar", { win = pane.winid }):find("%#SidepanesReloaded# [RELOADED] ", 1, true), "show_markdown reload did not update winbar")
+end)
+
+test("show markdown from codex keeps previously reloaded badge visible", function()
+    reset_pane()
+
+    local root = root_fixture("viewer-show-markdown-hidden-reload-badge-test")
+    local doc = root .. "/docs/doc.md"
+
+    write(doc, { "# Original", "", "old body" })
+    pane.setup({
+        auto_reflow = false,
+        focus_on_switch = true,
+        markdown = {
+            auto_reload = true,
+            reload_badge = {
+                min_display_ms = 250,
+            },
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+        },
+    })
+
+    pane.open(doc)
+    pane.open_terminal("codex", nil, { root = root, focus = true })
+    write(doc, { "# Changed", "", "Reloaded while Codex was visible" })
+    vim.cmd("doautocmd CursorHold")
+
+    assert(vim.api.nvim_buf_get_lines(pane.bufnr, 0, 1, false)[1] == "# Changed", "hidden markdown reload did not update buffer")
+    assert(pane.markdown_reloaded == true, "hidden markdown reload did not set badge state")
+    assert(vim.wait(500, function()
+        return pane.markdown_reload_badge_armed == true
+    end, 10), "hidden markdown reload badge did not arm before switching back")
+
+    pane.show_markdown()
+
+    local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+    assert(pane.active_mode == "markdown", "show_markdown did not activate markdown")
+    assert(winbar:find("%#SidepanesReloaded# [RELOADED] ", 1, true), winbar)
+    assert(pane.markdown_reload_badge_armed == false, "show_markdown did not restart visible reload badge delay")
+
+    assert(vim.wait(500, function()
+        return pane.markdown_reload_badge_armed == true
+    end, 10), "visible reload badge did not arm after switching back")
+    assert(pane.markdown_reloaded == true, "switch-back reload badge did not remain visible through minimum display delay")
 end)
 
 test("toggle closes pane and reopens last markdown source", function()

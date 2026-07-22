@@ -38,6 +38,13 @@ Status: released.
 
 Released as `v0.2.0` on 2026-07-21.
 
+## v0.4.0 Ask Pane Workflow
+
+Status: implemented and verified on `feat/ask-pane`; not released yet.
+
+Goal: add a configurable ask pane for multi-selection, multi-file agent prompts.
+See `docs/ask-pane-roadmap.md`.
+
 Follow-up candidate work:
 
 - Define stable, advanced, and internal API tiers for plugin authors.

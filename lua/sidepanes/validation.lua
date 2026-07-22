@@ -27,6 +27,8 @@ local known_commands = {
     width = true,
     width_picker = true,
     ask = true,
+    ask_append = true,
+    submit_question = true,
     ask_codex = true,
     ask_claude = true,
 }
@@ -235,6 +237,48 @@ local function validate_project(diagnostics, config)
     end
 end
 
+local function validate_ask(diagnostics, config)
+    local ask = config.ask
+
+    if ask == nil then
+        return
+    end
+
+    if type(ask) ~= "table" then
+        warn(diagnostics, "Sidepanes config ask must be a table.")
+        return
+    end
+
+    local known_keys = {
+        ui = true,
+        auto_append = true,
+        duplicate_policy = true,
+        model_picker = true,
+    }
+
+    for key in pairs(ask) do
+        if not known_keys[key] then
+            warn(diagnostics, "Unknown Sidepanes ask config key: " .. tostring(key))
+        end
+    end
+
+    if ask.ui ~= nil and ask.ui ~= "float" and ask.ui ~= "pane" then
+        warn(diagnostics, "Sidepanes config ask.ui must be 'float' or 'pane'.")
+    end
+
+    if ask.auto_append ~= nil and type(ask.auto_append) ~= "boolean" then
+        warn(diagnostics, "Sidepanes config ask.auto_append must be a boolean.")
+    end
+
+    if ask.duplicate_policy ~= nil and ask.duplicate_policy ~= "skip" and ask.duplicate_policy ~= "allow" then
+        warn(diagnostics, "Sidepanes config ask.duplicate_policy must be 'skip' or 'allow'.")
+    end
+
+    if ask.model_picker ~= nil and ask.model_picker ~= "manual" and ask.model_picker ~= "after_open" and ask.model_picker ~= "before_send" then
+        warn(diagnostics, "Sidepanes config ask.model_picker must be 'manual', 'after_open', or 'before_send'.")
+    end
+end
+
 --- Validate terminal recovery badge config shape.
 local function validate_terminal(diagnostics, config)
     local known_resume_mechanisms = {
@@ -365,6 +409,7 @@ function M.diagnostics(config)
     validate_layout(diagnostics, config or {})
     validate_markdown(diagnostics, config or {})
     validate_project(diagnostics, config or {})
+    validate_ask(diagnostics, config or {})
     validate_terminal(diagnostics, config or {})
     validate_tools(diagnostics, config or {})
 

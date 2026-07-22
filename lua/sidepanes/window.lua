@@ -69,15 +69,16 @@ function M.set_options(state, deps, winid, mode)
     mode = mode or state.active_mode
 
     local wrap = M.effective_wrap(state)
+    local markdown_like = mode == "markdown" or mode == "ask"
 
     vim.api.nvim_set_option_value("winfixwidth", true, { win = winid })
-    vim.api.nvim_set_option_value("number", mode == "markdown", { win = winid })
+    vim.api.nvim_set_option_value("number", markdown_like, { win = winid })
     vim.api.nvim_set_option_value("relativenumber", false, { win = winid })
-    vim.api.nvim_set_option_value("wrap", mode == "markdown" and wrap or false, { win = winid })
-    vim.api.nvim_set_option_value("linebreak", mode == "markdown" and wrap or false, { win = winid })
-    vim.api.nvim_set_option_value("breakindent", mode == "markdown" and wrap or false, { win = winid })
+    vim.api.nvim_set_option_value("wrap", markdown_like and wrap or false, { win = winid })
+    vim.api.nvim_set_option_value("linebreak", markdown_like and wrap or false, { win = winid })
+    vim.api.nvim_set_option_value("breakindent", markdown_like and wrap or false, { win = winid })
     vim.api.nvim_set_option_value("showbreak", "  ", { win = winid })
-    vim.api.nvim_set_option_value("cursorline", mode == "markdown", { win = winid })
+    vim.api.nvim_set_option_value("cursorline", markdown_like, { win = winid })
     vim.api.nvim_set_option_value("signcolumn", "no", { win = winid })
     vim.api.nvim_set_option_value("foldcolumn", "0", { win = winid })
     vim.api.nvim_set_option_value("colorcolumn", "", { win = winid })

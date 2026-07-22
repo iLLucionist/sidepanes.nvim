@@ -113,6 +113,10 @@ function M.setup(api, mappings)
         api.switch_picker()
     end, "Switch sidepanes")
 
+    map("n", mappings.ask_pane, function()
+        api.show_ask_pane({ focus = true })
+    end, "Show ask pane")
+
     map("x", mappings.ask, function()
         api.ask_picker(visual_opts())
     end, "Ask sidepanes target")

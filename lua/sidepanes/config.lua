@@ -280,6 +280,7 @@ function M.to_setup(runtime_config)
             fallback = config.project_root_fallback,
             resolver = config.project_root_resolver,
         },
+        ask = vim.deepcopy(config.ask),
         validation = {
             enabled = config.validate,
         },

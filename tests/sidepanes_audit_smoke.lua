@@ -60,6 +60,7 @@ sidepanes.setup({
             width_picker = "<leader>pw",
             sticky_relative_width = "<leader>p%",
             switch = "<leader>ps",
+            ask_pane = "<leader>pa",
             ask = "<leader>pa",
             ask_last = "aa",
             ask_codex = "ax",
@@ -169,6 +170,8 @@ local expected_commands = {
     "SidepanesWidth",
     "SidepanesWidthPick",
     "SidepanesAsk",
+    "SidepanesAskAppend",
+    "SidepanesSubmitQuestion",
     "SidepanesAskCodex",
     "SidepanesAskClaude",
     "MarkdownReflow",
@@ -185,6 +188,7 @@ local forbidden_commands = {
     "PaneFocus",
     "PaneZoom",
     "PaneAsk",
+    "PaneAskAppend",
     "PaneAskCodex",
     "PaneAskClaude",
 }
@@ -209,6 +213,7 @@ local expected_maps = {
     { "n", "<leader>pw" },
     { "n", "<leader>p%" },
     { "n", "<leader>ps" },
+    { "n", "<leader>pa" },
     { "x", "<leader>pa" },
     { "x", "aa" },
     { "x", "ax" },
@@ -251,6 +256,7 @@ assert(pane_config.tools.codex.presets[1].name == "gpt55_high_fast", "configured
 assert(#pane_config.tools.claude.presets == 5, "configured Claude preset count changed")
 assert(pane_config.tools.claude.presets[1].name == "sonnet", "configured Claude default changed")
 assert(pane_config.tools.ipython.exit_command == "quit()\r", "configured IPython exit command changed")
+assert(pane_config.ask.ui == "float", "configured ask UI default changed")
 
 local reports = capture_health(function()
     require("sidepanes.health").check({ config = pane_config })

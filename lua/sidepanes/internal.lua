@@ -42,4 +42,34 @@ function M.change_question_target(bufnr)
     return state().change_question_target(bufnr)
 end
 
+--- Cancel and restore the ask pane.
+function M.cancel_ask_pane(bufnr)
+    return state().cancel_ask_pane(bufnr)
+end
+
+--- Mark the ask pane prompt as written.
+function M.write_ask_pane(bufnr)
+    return state().write_ask_pane(bufnr)
+end
+
+--- Finish and send the ask pane prompt.
+function M.finish_ask_pane(bufnr)
+    return state().finish_ask_pane(bufnr)
+end
+
+--- Submit the ask pane prompt, writing it first when needed.
+function M.submit_ask_pane(bufnr)
+    return state().submit_ask_pane(bufnr)
+end
+
+--- Open the target picker from inside the ask pane.
+function M.change_ask_pane_target(bufnr)
+    return state().change_ask_pane_target(bufnr)
+end
+
+--- Return to the Markdown viewer pane.
+function M.show_markdown()
+    return state().show_markdown()
+end
+
 return M

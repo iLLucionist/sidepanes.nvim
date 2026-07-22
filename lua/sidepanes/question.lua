@@ -7,6 +7,9 @@ Architecture: Orchestrates selection, picker, and terminal callbacks while keepi
 
 local util = require("sidepanes.util")
 local selection = require("sidepanes.selection")
+local ask_pane = require("sidepanes.ask_pane")
+local ask_cmdline = require("sidepanes.ask_cmdline")
+local ask_route = require("sidepanes.ask_route")
 
 local M = {}
 
@@ -81,6 +84,42 @@ local function pick_target(state, deps, prompt, context, callback)
             callback(choice)
         end
     end)
+end
+
+local function ask_uses_pane(state)
+    return type(state.config.ask) == "table" and state.config.ask.ui == "pane"
+end
+
+local function ask_pane_deps(deps)
+    if deps.ask_pane_deps then
+        return deps.ask_pane_deps()
+    end
+
+    return deps
+end
+
+local function ask_pane_default_entry(state, deps, context)
+    local ask = ask_pane.session(state)
+
+    local ctx = deps.last_coding_agent_context(context.root)
+    local last_entry = ctx and deps.entry_for_terminal_context(ctx) or nil
+
+    return ask_route.default_entry({
+        active_entry = ask.entry,
+        last_entry = last_entry,
+        target_entries = deps.tool_shortcut_entries(context.root, { ask_only = true }),
+    })
+end
+
+local function ask_pane_existing_or_default(state, deps, context, origin)
+    local entry = ask_pane_default_entry(state, deps, context)
+
+    if entry then
+        M.ask_with_entry(state, deps, entry, { context = context, origin = origin })
+        return true
+    end
+
+    return false
 end
 
 --- Open the editable ask prompt scratch buffer.
@@ -252,23 +291,10 @@ local function open_buffer(state, deps, entry, context, origin)
 
     local function commandline_enter()
         local line = util.trim(vim.fn.getcmdline())
+        local command = ask_cmdline.floating_question_command_for_line(line, scratch)
 
-        if line == "q" or line == "q!" or line == "quit" or line == "quit!" then
-            return vim.api.nvim_replace_termcodes(
-                '<C-u>lua require("sidepanes.internal").finish_question(' .. scratch .. ')<CR>',
-                true,
-                false,
-                true
-            )
-        end
-
-        if line == "wq" or line == "wq!" or line == "x" or line == "xit" or line == "exit" then
-            return vim.api.nvim_replace_termcodes(
-                '<C-u>lua require("sidepanes.internal").write_question(' .. scratch .. '); require("sidepanes.internal").finish_question(' .. scratch .. ')<CR>',
-                true,
-                false,
-                true
-            )
+        if command then
+            return vim.api.nvim_replace_termcodes(command, true, false, true)
         end
 
         return vim.api.nvim_replace_termcodes("<CR>", true, false, true)
@@ -370,7 +396,51 @@ function M.ask_with_entry(state, deps, entry, opts)
         return
     end
 
+    if ask_uses_pane(state) then
+        local ask = ask_pane.session(state)
+        local pane_deps = ask_pane_deps(deps)
+
+        if
+            ask_route.auto_append_blocked({
+                auto_append = state.config.ask.auto_append,
+                active_buf = ask.bufnr,
+                citation_count = #(ask.citations or {}),
+            })
+        then
+            ask_pane.show(state, pane_deps, { focus = state.config.focus_on_ask })
+            return
+        end
+
+        ask_pane.add_context(state, pane_deps, entry, context, { origin = opts.origin })
+        return
+    end
+
     open_buffer(state, deps, entry, context, opts.origin)
+end
+
+--- Append the current selection to the ask pane, creating one if needed.
+function M.append_to_ask(state, deps, opts)
+    opts = opts or {}
+
+    local origin = capture_origin(state)
+    local context = deps.selection_context(opts)
+
+    if not context then
+        return
+    end
+
+    if ask_uses_pane(state) then
+        local entry = ask_pane_default_entry(state, deps, context)
+
+        if entry then
+            ask_pane.add_context(state, ask_pane_deps(deps), entry, context, { origin = origin })
+            return
+        end
+    end
+
+    pick_target(state, deps, "Ask", context, function(choice)
+        ask_pane.add_context(state, ask_pane_deps(deps), choice, context, { origin = origin })
+    end)
 end
 
 --- Capture selection and ask via the target picker.
@@ -381,6 +451,10 @@ function M.ask_picker(state, deps, opts)
     local context = deps.selection_context(opts)
 
     if not context then
+        return
+    end
+
+    if ask_uses_pane(state) and ask_pane_existing_or_default(state, deps, context, origin) then
         return
     end
 
@@ -397,6 +471,10 @@ function M.ask_last_coding_agent(state, deps, opts)
     local context = deps.selection_context(opts)
 
     if not context then
+        return
+    end
+
+    if ask_uses_pane(state) and ask_pane_existing_or_default(state, deps, context, origin) then
         return
     end
 

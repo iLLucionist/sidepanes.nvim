@@ -168,6 +168,25 @@ local function terminal_title(state)
     return ctx.tool_label .. ": " .. ctx.preset_label .. " - " .. util.root_label(ctx.root)
 end
 
+local function ask_title(state)
+    local ask = state.ask_pane or {}
+    local entry = ask.entry
+    local target = entry and entry.label or "No target"
+    local draft = ask.draft_state or "ready_empty"
+
+    if not ask.draft_state then
+        if util.valid_buf(ask.bufnr) and vim.api.nvim_get_option_value("modified", { buf = ask.bufnr }) then
+            draft = "draft_modified"
+        elseif ask.written_prompt then
+            draft = "draft_written"
+        elseif ask.ready == false or (ask.citations and #ask.citations > 0) then
+            draft = "draft_modified"
+        end
+    end
+
+    return "Ask: " .. target .. " - " .. draft
+end
+
 --- Refresh the pane winbar for markdown heading or terminal identity.
 function M.update(state)
     if not util.valid_win(state.winid) then
@@ -176,6 +195,20 @@ function M.update(state)
 
     if not state.config.sticky_heading then
         vim.api.nvim_set_option_value("winbar", "", { win = state.winid })
+        return
+    end
+
+    if state.active_mode == "ask" then
+        local max_width = math.max(10, vim.api.nvim_win_get_width(state.winid) - 4)
+        local title = ask_title(state)
+
+        if state.zoomed then
+            title = title .. " [zoom]"
+        end
+
+        local label = heading.truncate_display(title, max_width)
+
+        vim.api.nvim_set_option_value("winbar", "%#WinBar# " .. heading.statusline_escape(label) .. " %*", { win = state.winid })
         return
     end
 

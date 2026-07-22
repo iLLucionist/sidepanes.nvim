@@ -108,6 +108,12 @@ reflow.
         -- Override this for wildcard, glob, monorepo, or non-file project logic.
         resolver = nil,
       },
+      ask = {
+        ui = "float",
+        auto_append = true,
+        duplicate_policy = "skip",
+        model_picker = "manual",
+      },
       lifecycle = {
         focus_on_pick = true,
       },
@@ -131,6 +137,7 @@ reflow.
           width_picker = "<leader>pw",
           sticky_relative_width = "<leader>p%",
           switch = "<leader>ps",
+          ask_pane = "<leader>pa",
           ask = "<leader>pa",
           ask_last = "aa",
           ask_codex = "ax",
@@ -144,9 +151,21 @@ reflow.
           toggle_terminal = "<leader>gg",
           toggle_terminal_alt = "<C-g>",
           ipython_alt = "<leader>gi",
+          headings = "fm",
           gf = "gf",
           send_ipython = "ll",
           zoom = "zz",
+          ask_pane = "ap",
+          ask_submit = "<C-CR>",
+          ask_send = false,
+          ask_send_alt = false,
+          ask_next_file = "]f",
+          ask_previous_file = "[f",
+          ask_next_selection = "]s",
+          ask_previous_selection = "[s",
+          ask_source = "gf",
+          ask_model_picker = "M",
+          ask_model_picker_alt = "<Tab>",
           ask_last = "aa",
           ask_codex = "ax",
           ask_claude = "ac",
@@ -199,10 +218,16 @@ are available in your environment.
    pane intact.
 
 4. As you are coding or reading reference material, you might want to ask a
-   question about it using a coding agent. Select the relevant lines and press
-   `<leader>pa` from any buffer, or `aa` inside the Sidepanes panel. Sidepanes
-   opens an editable prompt buffer. Notice that it automatically prefills the
-   filename, line numbers, and snippet from your selection.
+   question about it using a coding agent. With the default `ask.ui = "float"`,
+   select the relevant lines and press `<leader>pa` from any buffer, or `aa`
+   inside the Sidepanes panel. Sidepanes opens an editable prompt buffer with the
+   filename, line numbers, and snippet from your selection. With `ask.ui =
+   "pane"`, normal `<leader>pa` or pane-local `ap` opens a persistent ask pane,
+   while visual `<leader>pa`, `aa`, or `:SidepanesAskAppend` adds selections to
+   that prompt. Same-file selections are grouped, duplicate ranges can be
+   skipped, and `gf` inside the ask pane jumps back to the cited source.
+   Command-line `:q` / `:quit` in non-ask Sidepanes buffers returns to Markdown,
+   so personal quit mappings that expand to `:q<CR>` do not close the pane.
 
 5. You may also want to interact with your Python code live. As with asking
    questions, select code in visual mode and press `<leader>pl` from any buffer,
@@ -350,6 +375,7 @@ Global mappings are not enabled by default. Configure them with
 | `width_picker` | `<leader>pw` | Pick width. |
 | `sticky_relative_width` | `<leader>p%` | Toggle sticky relative width. |
 | `switch` | `<leader>ps` | Open switcher. |
+| `ask_pane` | `<leader>pa` | Show or focus the ask pane in normal mode. |
 | `ask` | `<leader>pa` | Ask picker from visual selection. |
 | `ask_last` | `aa` | Ask last coding agent from visual selection. |
 | `ask_codex` | `ax` | Ask Codex from visual selection. |
@@ -370,12 +396,34 @@ them with `mappings.pane`.
 | `toggle_terminal` | `<leader>gg` | Toggle Markdown and last terminal, including from terminal-input mode. |
 | `toggle_terminal_alt` | `<C-g>` | Faster toggle between Markdown and last terminal, including from terminal-input mode. |
 | `ipython_alt` | `<leader>gi` | Show IPython. |
+| `headings` | `fm` | Pick a Markdown heading from the Markdown pane. |
 | `gf` | `gf` | Smart go-to-file from the pane into the last non-pane window. |
 | `send_ipython` | `ll` | Send visual selection to IPython. |
 | `zoom` | `zz` | Toggle zoom. |
+| `ask_pane` | `ap` | Show or focus the ask pane. |
+| `ask_submit` | `<C-CR>` | Submit the active ask pane prompt from normal or insert mode. |
+| `ask_send` | disabled | Run the ask-pane quit lifecycle: cancel unwritten drafts and send written drafts. |
+| `ask_send_alt` | disabled | Alternate ask-pane quit-lifecycle shortcut. |
+| `ask_next_file` | `]f` | Jump to next ask prompt `File:` block. |
+| `ask_previous_file` | `[f` | Jump to previous ask prompt `File:` block. |
+| `ask_next_selection` | `]s` | Jump to next ask prompt `Selection:` block. |
+| `ask_previous_selection` | `[s` | Jump to previous ask prompt `Selection:` block. |
+| `ask_source` | `gf` | Open the ask citation source in the last non-pane window. |
+| `ask_model_picker` | `M` | Change the ask pane target/model. |
+| `ask_model_picker_alt` | `<Tab>` | Change the ask pane target/model. |
 | `ask_last` | `aa` | Ask last coding agent from visual selection. |
 | `ask_codex` | `ax` | Ask Codex from visual selection. |
 | `ask_claude` | `ac` | Ask Claude from visual selection. |
+
+The ask pane winbar shows the current target/model and explicit draft state:
+`ready_empty`, `draft_modified`, `draft_written`, `sending_picker`,
+`sending_terminal`, `send_failed`, `cancelled`, or `sent`.
+
+When the default `ask_submit = "<C-CR>"` is used, the ask pane also maps
+`<C-J>` as a submit fallback for terminals that report Ctrl+Enter that way.
+In non-ask Sidepanes buffers, personal normal-mode mappings such as
+`qq -> :q<CR>` or `<leader>qq -> :q<CR>` are guarded only when their RHS is a
+plain quit command, so they return the pane to Markdown instead of closing it.
 
 Set a mapping entry to `false` to disable it.
 
@@ -406,6 +454,8 @@ in the previous window after `<leader>mP` or `:Sidepanes pick`.
 :Sidepanes width -
 :Sidepanes width pick
 :Sidepanes ask
+:Sidepanes ask-append
+:Sidepanes submit-question
 :MarkdownReflow
 ```
 

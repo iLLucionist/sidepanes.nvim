@@ -6,6 +6,7 @@ Architecture: Pure context builder used by context.lua, question.lua, and termin
 ]]
 
 local util = require("sidepanes.util")
+local ask_prompt = require("sidepanes.ask_prompt")
 
 local M = {}
 
@@ -118,6 +119,7 @@ function M.context(opts, deps)
 
     selection.bufnr = bufnr
     selection.root = root
+    selection.path = path
     selection.file = terminal_ctx and ("Terminal: " .. terminal_ctx.tool_label .. " / " .. terminal_ctx.preset_label) or util.relative_path(path, root)
     selection.filetype = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
     selection.snippet_filetype = selection.filetype
@@ -131,28 +133,12 @@ end
 
 --- Format a complete editable prompt from context and a question body.
 function M.format_prompt(context, question)
-    local filetype = context.snippet_filetype ~= "" and context.snippet_filetype or nil
-    local fence = util.fence_for(context.text)
-
-    return table.concat({
-        "Question:",
-        question,
-        "",
-        "File:",
-        context.file,
-        "",
-        "Selection:",
-        "lines " .. context.start_lnum .. "-" .. context.end_lnum,
-        "",
-        fence .. (filetype and filetype or ""),
-        context.text,
-        fence,
-    }, "\n")
+    return ask_prompt.format_prompt(context, question)
 end
 
 --- Format the initial editable prompt with an empty question.
 function M.prompt_template(context)
-    return M.format_prompt(context, "")
+    return ask_prompt.prompt_template(context)
 end
 
 return M

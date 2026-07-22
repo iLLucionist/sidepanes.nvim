@@ -68,6 +68,7 @@ Minimal setup:
           width_picker = "<leader>pw",
           sticky_relative_width = "<leader>p%",
           send_ipython = "<leader>pl",
+          ask_pane = "<leader>pa",
           ask = "<leader>pa",
         },
       },
@@ -122,6 +123,8 @@ subcommands:
     :Sidepanes width pick
     :Sidepanes width-pick
     :Sidepanes ask
+    :Sidepanes ask-append
+    :Sidepanes submit-question
     :Sidepanes ask-codex [preset]
     :Sidepanes ask-claude [preset]
 <
@@ -143,6 +146,8 @@ Standalone commands:
     :SidepanesWidth [value]
     :SidepanesWidthPick
     :SidepanesAsk
+    :SidepanesAskAppend
+    :SidepanesSubmitQuestion
     :SidepanesAskCodex [preset]
     :SidepanesAskClaude [preset]
 <
@@ -166,6 +171,7 @@ Ask commands are range-aware, so they can be used with visual selections or
 explicit ranges:
 >
     :'<,'>SidepanesAsk
+    :'<,'>SidepanesAskAppend
     :'<,'>SidepanesAskCodex gpt55_high_fast
 <
 
@@ -193,6 +199,7 @@ Example global mappings:
     <leader>pw       pick width
     <leader>p%       toggle sticky relative width
     <leader>ps       switch pane
+    <leader>pa       show ask pane in normal mode
     <leader>pa       ask picker from visual selection
 <
 
@@ -205,9 +212,20 @@ Pane-local mappings are installed inside Sidepanes buffers:
     <leader>gg       toggle Markdown and last terminal, including terminal-input mode
     <C-g>            toggle Markdown and last terminal, including terminal-input mode
     <leader>gi       show IPython
+    fm               pick Markdown heading from the Markdown pane
     gf               smart go-to-file in the last non-pane window
     ll               send visual selection to IPython
     zz               toggle pane zoom
+    ap               show ask pane
+    <C-CR>           submit the active ask pane prompt
+    ask_send         disabled by default; ask-pane quit-lifecycle shortcut
+    ask_send_alt     disabled by default; alternate quit-lifecycle shortcut
+    ]f               next ask File block
+    [f               previous ask File block
+    ]s               next ask Selection block
+    [s               previous ask Selection block
+    M                change ask pane target/model
+    <Tab>            change ask pane target/model
     aa               ask last coding agent from visual selection
     ax               ask Codex from visual selection
     ac               ask Claude from visual selection
@@ -296,6 +314,12 @@ runtime config.
         -- Override this for wildcard, glob, monorepo, or non-file project logic.
         resolver = nil,
       },
+      ask = {
+        ui = "float",
+        auto_append = true,
+        duplicate_policy = "skip",
+        model_picker = "manual",
+      },
       validation = {
         enabled = true,
       },
@@ -324,7 +348,10 @@ Sidepanes Markdown pane after a 3000ms minimum display delay. Set
 `markdown.reload_badge.min_display_ms` to change that delay, set
 `markdown.reload_badge.clear_on_interaction` to false to disable interaction
 clearing, or set `markdown.reload_badge_ms` to a positive millisecond value to
-also hide it on a timer. `markdown.reload_badge.text` changes the label.
+also hide it on a timer. When a reload happens while a terminal pane such as
+Codex is visible, switching back to Markdown restarts the visible minimum
+display delay so the switch gesture does not immediately clear the badge.
+`markdown.reload_badge.text` changes the label.
 `markdown.reload_badge.hl.fg` and `.bg` accept hex colors or Neovim highlight
 group names such as `CursorFG` and `WarningMsg`; group names
 resolve to their configured colors for the generated `SidepanesReloaded`
@@ -400,6 +427,7 @@ Stable public functions:
     pick()
     pick_headings()
     switch_picker()
+    show_ask_pane(opts)
     switch_to(target, opts)
     make_switch_entry(target, opts)
     open_terminal(tool_name, preset_name, opts)
@@ -413,6 +441,8 @@ Stable public functions:
     ask_picker(opts)
     ask_last_coding_agent(opts)
     ask_current_coding_agent(tool_name, opts)
+    append_to_ask(opts)
+    submit_ask_pane()
     shutdown_terminals(opts)
 <
 
@@ -606,13 +636,63 @@ Ask mappings and commands capture file name, project root, selected text, and a
 snippet language. Markdown code fences are detected so a Python fenced block is
 sent as Python rather than generic Markdown.
 
-Asking opens a scratch prompt buffer. The prompt is sent only after the buffer
-has been written and then quit. Quitting an unchanged prompt cancels and returns
-to the previous pane/window state.
+By default, `ask.ui = "float"` keeps the v0.3 scratch floating prompt behavior.
+Set `ask.ui = "pane"` to use a persistent editable ask pane in the Sidepanes
+window. In pane mode, normal-mode `ask_pane` opens or focuses the draft, while
+visual ask mappings append selections according to `ask.auto_append`.
+
+The ask pane groups citations by `File:` and keeps one or more `Selection:`
+blocks per file. Same-file selections patch the existing file block when the
+block still has the generated shape. Exact duplicate file/range citations are
+skipped when `ask.duplicate_policy = "skip"`. Visual ask mappings use the
+default ask target for the first capture and reuse the active draft target while
+appending more context, so picker timing is controlled only by
+`ask.model_picker` and manual picker mappings. If a citation comes from another
+project root, the file heading includes root context so the target agent can
+disambiguate it.
+
+The prompt is sent only after the buffer has been written and then quit. In the
+ask pane, command-line `:q` cancels an unwritten draft, while `:q` after `:w`
+sends the written prompt. `:q!` always cancels the draft. Cancellation restores
+the previous pane state, such as Codex, Claude, IPython, a custom terminal, or
+Markdown. Plain normal-mode `q` is not mapped. `:wq`, `:x`, and `:exit` write
+and send the accumulated prompt. Cancellation restores the previous pane before
+deleting the draft buffer so the Sidepanes split stays visually stable.
+
+`ask.model_picker` controls model selection in pane mode:
+
+- `"manual"` keeps selection manual.
+- `"after_open"` shows the picker once when a new draft receives its first
+  selection.
+- `"before_send"` shows the picker before the prompt is sent.
+
+Inside the ask pane, `M` and `<Tab>` open the model picker. `<C-CR>` submits the
+current prompt from normal or insert mode. Set `mappings.pane.ask_send` or
+`mappings.pane.ask_send_alt` to bind additional pane-local quit-lifecycle
+shortcuts, for example `qq` and `<leader>qq`; those shortcuts cancel unwritten
+drafts and send written drafts. The winbar shows the current target/model and
+explicit draft state: `ready_empty`, `draft_modified`, `draft_written`,
+`sending_picker`, `sending_terminal`, `send_failed`, `cancelled`, or `sent`.
+When the default `ask_submit = "<C-CR>"` is used, the ask pane also maps
+`<C-J>` as a submit fallback for terminals that report Ctrl+Enter that way.
+In non-ask Sidepanes buffers, command-line `:q` / `:quit` returns to Markdown.
+This keeps personal mappings that expand to `:q<CR>` from closing the Sidepanes
+window or triggering ask-pane send shortcuts while a terminal pane is focused.
+If a personal normal-mode mapping such as `qq` or `<leader>qq` has a plain quit
+RHS, Sidepanes guards that mapping pane-locally in non-ask panes so it returns
+to Markdown instead of closing the pane.
+`]f`, `[f`, `]s`, and `[s` move between file and selection headings. On a
+generated citation heading, `gf` jumps to the source file and line.
+
+Use `:SidepanesAskAppend`, `:'<,'>SidepanesAskAppend`, or `:Sidepanes
+ask-append` to append the current range explicitly. The public API
+`append_to_ask(opts)` does the same and appends even when `ask.auto_append` is
+disabled.
 
 Useful calls:
 >
     require("sidepanes").ask_picker({ visual = true })
+    require("sidepanes").append_to_ask({ visual = true })
     require("sidepanes").ask("codex", "gpt55_high_fast", { visual = true })
     require("sidepanes").ask_current_coding_agent("claude", { visual = true })
     require("sidepanes").ask_last_coding_agent({ visual = true })

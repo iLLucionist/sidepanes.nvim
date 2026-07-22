@@ -46,6 +46,57 @@ tests/run_checks.sh full
 
 If a check cannot be run, mention that clearly in the final response.
 
+For larger feature branches, write tests deep enough to exercise every user
+visible behavior and edge case that the implementation introduces. After each
+implementation slice, review the code, the tests, and all affected documentation
+before moving on. Keep iterating on that slice until no obvious implementation,
+test, or documentation gaps remain. Also append manual acceptance tests under
+the relevant implementation step or roadmap note so the user can verify the
+behavior directly in Neovim.
+
+For behavior-sensitive key mappings, callback tests are only registration
+coverage. Also include real fed-key coverage for the user path whenever a
+mapping decides or triggers lifecycle behavior, mode changes, pane/window
+survival, sends, cancels, writes, or command-line expansion.
+
+For roadmap-driven work, the review must be literal and bullet-by-bullet. Before
+marking a numbered roadmap slice complete, create or update a traceability table
+for every bullet in that slice with implementation references, automated test
+references, documentation references, manual acceptance tests, and status. Do
+not substitute a slice-level summary for this check. Re-read the implementation,
+tests, docs, roadmap, help docs, README, CHANGELOG, release notes, and any
+personal `illu.nvim` notes that are affected until no missing bullet,
+contradiction, stale behavior claim, or untested edge case remains.
+
+## Internal Architecture
+
+Prefer a functional core with an imperative Neovim shell. This fits Lua and
+Neovim well when applied pragmatically: keep UI-facing modules imperative where
+they must call `vim.*`, but push decisions, predicates, state snapshots,
+normalization, and formatting into small pure functions whenever practical.
+
+Keep modules compact and boundary-focused:
+
+- Each module should have a clear public surface and private internal helpers.
+- Public functions are boundary functions: they adapt config, state, keymaps,
+  commands, or UI events into explicit inputs for lower-level helpers.
+- Internal helper functions should be pure when they can be, especially for
+  state predicates, action planning, target resolution, path/label formatting,
+  status snapshots, and mapping classification.
+- Use higher-order functions and composition only when they simplify dependency
+  injection, handler construction, or repeated adapter plumbing. Avoid clever
+  chains that hide Neovim side effects or make control flow harder to audit.
+- Keep keymap and command-line modules thin. They should register handlers,
+  collect user input, and submit intents; they should not own lifecycle
+  decisions.
+- Keep lifecycle executors explicit. Policy decides what should happen;
+  executors perform `vim.*`, window, buffer, picker, terminal, notification, and
+  mutation effects.
+- Treat line count as a design smell during feature work. Before adding a new
+  module, large helper, or broad test block, check whether an existing pure
+  helper, table-driven policy, or smaller boundary function can express the same
+  behavior more simply.
+
 ## Documentation
 
 Keep user-facing behavior documented in the public docs:

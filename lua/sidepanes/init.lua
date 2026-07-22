@@ -12,6 +12,7 @@ Architecture: Uses an internal state table for focused submodules and returns a 
 
 local defaults = require("sidepanes.defaults")
 local agent_session = require("sidepanes.agent_session")
+local ask_pane = require("sidepanes.ask_pane")
 local api_helpers = require("sidepanes.api")
 local commands = require("sidepanes.commands")
 local context = require("sidepanes.context")
@@ -61,6 +62,7 @@ local M = {
     markdown_reload_timer = nil,
     terminals = {},
     agent_sessions = {},
+    ask_pane = {},
     question_buffers = {},
     config = vim.deepcopy(defaults.config),
 }
@@ -209,10 +211,12 @@ end
 
 local render_markview
 local setup_pane_maps
+local ask_pane_deps
 local window_deps
 local viewer_deps
 local render_deps
 local switcher_deps
+local question_deps
 
 --- Reload the markdown viewer if its source file changed on disk.
 local function check_markdown_reload()
@@ -254,8 +258,13 @@ end
 --- Install pane-local mappings on a markdown or terminal pane buffer.
 setup_pane_maps = function(bufnr)
     maps.setup(bufnr, {
+        ask_bufnr = function()
+            return M.ask_pane and M.ask_pane.bufnr
+        end,
         ask_current_coding_agent = M.ask_current_coding_agent,
+        ask_jump_header = M.ask_pane_jump_header,
         ask_last_coding_agent = M.ask_last_coding_agent,
+        ask_source_jump = M.ask_pane_source_jump,
         markdown_bufnr = function()
             return M.bufnr
         end,
@@ -264,7 +273,9 @@ setup_pane_maps = function(bufnr)
             return M.config.mappings and M.config.mappings.pane
         end,
         pane_root = pane_root,
+        pick_headings = M.pick_headings,
         send_ipython = M.send_ipython,
+        show_ask_pane = M.show_ask_pane,
         show_markdown = M.show_markdown,
         toggle_markdown_terminal = M.toggle_markdown_terminal,
         toggle_markdown_agent = M.toggle_markdown_terminal,
@@ -288,6 +299,7 @@ window_deps = function()
         ensure_buf = ensure_buf,
         is_pane_buf = is_pane_buf,
         open_markdown = M.open,
+        remember_terminal_context = remember_terminal_context,
         reflow_pane_buffer = reflow_pane_buffer,
         render_markview = render_markview,
         restore_markdown_view = restore_markdown_view,
@@ -370,6 +382,11 @@ end
 --- Toggle focus between the pane and the last normal window.
 function M.focus_toggle()
     pane_window.focus_toggle(M, window_deps())
+end
+
+--- Open or focus the persistent ask pane.
+function M.show_ask_pane(opts)
+    return ask_pane.show(M, ask_pane_deps(), opts)
 end
 
 --- Toggle the pane between normal width and zoom width.
@@ -633,17 +650,47 @@ end
 
 
 --- Build question-editor callbacks that still belong to pane/window state.
-local function question_deps()
+ask_pane_deps = function()
     return {
+        ensure_win = ensure_win,
+        numbered_select = numbered_select,
+        open_terminal = M.open_terminal,
+        pane_mappings = function()
+            return M.config.mappings and M.config.mappings.pane
+        end,
+        remember_terminal_context = remember_terminal_context,
+        save_markdown_view = save_markdown_view,
+        send_prompt_to_terminal = send_prompt_to_terminal,
+        set_window_options = set_window_options,
+        setup_pane_maps = setup_pane_maps,
+        show_markdown = M.show_markdown,
+        terminal_entries = terminal_entries,
+        tool_shortcut_entries = tool_shortcut_entries,
+        update_sticky_heading = update_sticky_heading,
+    }
+end
+
+--- Build question-editor callbacks that still belong to pane/window state.
+question_deps = function()
+    return {
+        ask_pane_deps = ask_pane_deps,
         entry_for_terminal_context = entry_for_terminal_context,
         is_coding_agent_tool = is_coding_agent_tool,
         last_coding_agent_context = last_coding_agent_context,
         numbered_select = numbered_select,
         open_terminal = M.open_terminal,
+        pane_mappings = function()
+            return M.config.mappings and M.config.mappings.pane
+        end,
         preset_by_name = preset_by_name,
+        ensure_win = ensure_win,
+        remember_terminal_context = remember_terminal_context,
+        save_markdown_view = save_markdown_view,
         selection_context = selection_context,
         send_prompt_to_terminal = send_prompt_to_terminal,
         set_window_options = set_window_options,
+        setup_pane_maps = setup_pane_maps,
+        show_markdown = M.show_markdown,
         statusline_escape = statusline_escape,
         terminal_context_for_tool = terminal_context_for_tool,
         terminal_entries = terminal_entries,
@@ -672,9 +719,49 @@ function M.change_question_target(bufnr)
     question.change_target(M, bufnr)
 end
 
+--- Cancel the active ask pane and restore the previous pane mode.
+function M.cancel_ask_pane(bufnr)
+    ask_pane.cancel_draft(M, ask_pane_deps(), bufnr)
+end
+
+--- Mark the active ask pane as written and update its cached prompt.
+function M.write_ask_pane(bufnr)
+    ask_pane.write_draft(M, ask_pane_deps(), bufnr)
+end
+
+--- Finish an ask pane prompt, sending only after a write.
+function M.finish_ask_pane(bufnr)
+    ask_pane.finish_quit(M, ask_pane_deps(), bufnr)
+end
+
+--- Submit an ask pane prompt, writing it first when needed.
+function M.submit_ask_pane(bufnr)
+    return ask_pane.submit_now(M, ask_pane_deps(), bufnr)
+end
+
+--- Change the target for the active ask pane.
+function M.change_ask_pane_target(bufnr)
+    ask_pane.change_target(M, ask_pane_deps(), bufnr)
+end
+
+--- Jump between context headers inside the ask pane.
+function M.ask_pane_jump_header(kind, direction)
+    ask_pane.jump_header(M, kind, direction)
+end
+
+--- Open the source file referenced by the ask citation under the cursor.
+function M.ask_pane_source_jump()
+    ask_pane.source_jump(M)
+end
+
 --- Ask a specific internal picker entry using a captured or fresh context.
 function M.ask_with_entry(entry, opts)
     question.ask_with_entry(M, question_deps(), entry, opts)
+end
+
+--- Append the current selection to the ask pane.
+function M.append_to_ask(opts)
+    question.append_to_ask(M, question_deps(), opts)
 end
 
 --- Capture selection and ask via the target picker.
@@ -748,6 +835,7 @@ local public_functions = {
     "toggle",
     "is_open",
     "focus_toggle",
+    "show_ask_pane",
     "toggle_zoom",
     "get_width",
     "set_width",
@@ -771,6 +859,8 @@ local public_functions = {
     "restart_ipython",
     "shutdown_terminals",
     "ask_picker",
+    "append_to_ask",
+    "submit_ask_pane",
     "ask_last_coding_agent",
     "ask_current_coding_agent",
     "ask",

@@ -233,9 +233,7 @@ function M.clear_reload_badge(state, deps)
     return true
 end
 
---- Show a temporary reloaded marker in the pane winbar.
-local function mark_reloaded(state, deps)
-    state.markdown_reloaded = true
+local function arm_reload_badge(state, deps)
     state.markdown_reload_badge_armed = false
     state.markdown_reload_token = (state.markdown_reload_token or 0) + 1
 
@@ -305,6 +303,12 @@ local function start_reload_watcher(state, deps, path)
             end
         end
     end
+end
+
+--- Show a temporary reloaded marker in the pane winbar.
+local function mark_reloaded(state, deps)
+    state.markdown_reloaded = true
+    arm_reload_badge(state, deps)
 end
 
 --- Resolve the default markdown file for the current working tree.
@@ -526,6 +530,9 @@ function M.show_markdown(state, deps)
 
     deps.set_window_options(winid, "markdown")
     local reloaded = M.check_reload(state, deps)
+    if not reloaded and state.markdown_reloaded then
+        arm_reload_badge(state, deps)
+    end
     deps.update_sticky_heading()
     deps.render_markview(state.bufnr)
     if not reloaded then

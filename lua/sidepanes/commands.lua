@@ -24,14 +24,18 @@ local default_names = {
     width = "SidepanesWidth",
     width_picker = "SidepanesWidthPick",
     ask = "SidepanesAsk",
+    ask_append = "SidepanesAskAppend",
+    submit_question = "SidepanesSubmitQuestion",
     ask_codex = "SidepanesAskCodex",
     ask_claude = "SidepanesAskClaude",
 }
 
 local subcommand_names = {
     "ask",
+    "ask-append",
     "ask-claude",
     "ask-codex",
+    "submit-question",
     "claude",
     "codex",
     "focus",
@@ -292,6 +296,10 @@ local function dispatch_root(api, opts)
         api.width_picker()
     elseif subcommand == "ask" then
         api.ask_picker(range_opts(opts))
+    elseif subcommand == "ask-append" then
+        api.append_to_ask(range_opts(opts))
+    elseif subcommand == "submit-question" then
+        api.submit_ask_pane()
     elseif subcommand == "ask-codex" then
         api.ask("codex", parts[2], range_opts(opts))
     elseif subcommand == "ask-claude" then
@@ -398,6 +406,14 @@ function M.setup(api, config)
     command(names.ask, function(opts)
         api.ask_picker(range_opts(opts))
     end, { range = true })
+
+    command(names.ask_append, function(opts)
+        api.append_to_ask(range_opts(opts))
+    end, { range = true })
+
+    command(names.submit_question, function()
+        api.submit_ask_pane()
+    end, {})
 
     command(names.ask_codex, function(opts)
         local preset = opts.args ~= "" and opts.args or nil

@@ -13,14 +13,86 @@ but they should be called out clearly in this changelog.
 
 ## Unreleased
 
+### Added
+
+- Added an optional `ask.ui = "pane"` workflow for `v0.4.0` with a persistent
+  editable ask pane for multi-file, multi-selection agent prompts while keeping
+  the plugin default at the existing floating prompt UI.
+- The ask pane can be opened or focused with `show_ask_pane(opts)`, normal-mode
+  `mappings.global.ask_pane`, pane-local `mappings.pane.ask_pane`, or
+  `:Sidepanes ask` before a selection exists.
+- Visual ask capture can now build a grouped prompt with one or more `File:`
+  headings and one or more `Selection:` citations per file. Same-file
+  selections patch the existing file block, and exact duplicate file/range
+  citations are skipped by default through `ask.duplicate_policy = "skip"`.
+- Added `:SidepanesAskAppend`, `:Sidepanes ask-append`, and
+  `append_to_ask(opts)` for explicit ask-pane appends that work even when
+  `ask.auto_append = false`.
+- Ask pane editing now has target/model visibility in the winbar, manual model
+  picker mappings, configurable `ask.model_picker` timing, citation navigation
+  with `]f`, `[f`, `]s`, `[s`, and source jumps from generated citation
+  headings with `gf`.
+- Added a Markdown-pane-local heading picker mapping through
+  `mappings.pane.headings` (`fm` by default).
+- Added disabled-by-default `mappings.pane.ask_send` and `ask_send_alt` so users
+  can bind buffer-local ask-pane quit-lifecycle shortcuts such as `qq` or
+  `<leader>qq`.
+- Added `submit_ask_pane()`, `:SidepanesSubmitQuestion`,
+  `:Sidepanes submit-question`, and the default ask-pane `<C-CR>` mapping for
+  explicit prompt submission from normal or insert mode.
+- Added a formal ask-pane behavior matrix in the roadmap plus docs-contract
+  smoke coverage so quit, write, send, submit, shortcut, zone, and draft-state
+  expectations stay aligned with tests.
+- Added a mapping and command zone matrix for project buffers, Markdown panes,
+  terminal panes, and the ask pane, with regression and docs-contract coverage
+  for active ask mappings, command paths, planned command slots, and
+  collision-prone shortcuts.
+
+### Changed
+
+- In ask pane mode, command-line `:q` cancels an unwritten draft, `:q` after
+  `:w` sends the written prompt, and `:q!` cancels the current draft while
+  restoring the previous pane state instead of closing the Sidepanes window.
+  `:wq`, `:x`, and `:exit` also send the accumulated prompt.
+- Ask pane winbar/status state now uses explicit lifecycle labels:
+  `ready_empty`, `draft_modified`, `draft_written`, `sending_picker`,
+  `sending_terminal`, `send_failed`, `cancelled`, and `sent`.
+- The default ask-pane submit mapping also installs a `<C-J>` fallback for
+  terminals that report Ctrl+Enter that way.
+- Ask-pane lifecycle decisions now flow through a central action policy so
+  keymaps, command-line handlers, and tests share one set of predicates for
+  write, submit, quit, cancel, picker, and send behavior.
+- Ask pane cancellation now restores the previous pane before deleting the draft
+  buffer, reducing visual flicker in the Sidepanes window.
+- `ask.model_picker = "after_open"` now opens the picker only once per active
+  draft instead of each time the draft is refocused.
+
 ### Fixed
 
+- In ask pane mode, visual ask mappings such as global `<leader>pa` and
+  pane-local `aa` now use the default ask target for the first capture and reuse
+  the active draft target when appending more context, instead of reopening the
+  target/model picker on captured selections.
+- Failed ask pane sends now preserve the draft and show a warning when the
+  target terminal cannot be opened.
+- Configured ask-pane quit-lifecycle shortcuts such as `qq` and `<leader>qq`
+  now cancel unwritten drafts without warning and send only after the draft has
+  been written.
+- In non-ask Sidepanes buffers, command-line `:q` / `:quit` now returns to
+  Markdown, so personal quit mappings like `<leader>qq -> :q<CR>` do not close
+  the Sidepanes window or trigger an ask-pane send warning from a Codex or
+  Claude pane.
+- Non-ask Sidepanes buffers now guard configured ask-send lhs values such as
+  `qq` or `<leader>qq` when an existing personal normal-mode mapping resolves
+  to plain `:q<CR>` / `:quit<CR>`, so real keypresses do not close the pane.
 - Returning focus to an already-open Markdown side pane now immediately reloads
   the source file when it changed on disk, instead of waiting for the next
   polling or idle check.
 - Markdown reload badges now wait `markdown.reload_badge.min_display_ms`
   milliseconds before key interaction can clear them, so pane-switch gestures do
-  not immediately hide a freshly shown `[RELOADED]` badge.
+  not immediately hide a freshly shown `[RELOADED]` badge. If a Markdown file is
+  reloaded while Codex, Claude, IPython, or another terminal pane is visible,
+  switching back to Markdown now restarts that visible minimum-display window.
 
 ## v0.3.0 - 2026-07-21
 
