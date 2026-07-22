@@ -37,7 +37,7 @@ remain planned.
 | 15. Formal Behavior Matrix | Done | Source-of-truth matrix plus machine-readable fixture and docs-contract coverage are present. |
 | 16. Mapping And Command Zone Matrix | Done | Source-of-truth mapping/command zone matrix plus fixture, docs-contract checks, runtime mapping regression, corrected non-ask `:q` command-path ownership, and ask-pane quit-lifecycle shortcuts are present. |
 | 17. Ask Target And Picker Status Visibility | Planned | Add status/debug visibility for active target, picker mode, and picker timing. |
-| 18. Target Resolver Refactor | Planned | Move target-resolution order into a dedicated resolver after the ask architecture boundaries and state snapshot are cleaned up. |
+| 18. Target Resolver Refactor | In Progress | Move target-resolution order into a dedicated resolver after the ask architecture boundaries and state snapshot are cleaned up. |
 | 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
 | 20. `SidepanesAskStatus` | Planned | Add a command/API that reports ask draft state for debugging. |
 | 21. `SidepanesVersion` | Planned | Add a command/API that reports plugin version and load path. |
@@ -1284,13 +1284,24 @@ opening real terminals.
 
 ### 18. Target Resolver Refactor
 
-Status: `Planned`
+Status: `In Progress`
 
 User response: yes, do that.
 
 Goal: isolate ask target resolution from ask routing after the ask policy,
 state snapshot, and test architecture are clean enough to absorb the change
 without another mapping/lifecycle tangle.
+
+Remaining implementation order, restated before starting this slice:
+
+1. `18. Target Resolver Refactor`
+2. `14. Ask Pane Module Split`
+3. `17. Ask Target And Picker Status Visibility`
+4. `20. SidepanesAskStatus`
+5. `21. SidepanesVersion`
+6. `22. Interactive Keymap Help`
+7. `19. Interaction-Focused Manual Acceptance Checklist`
+8. Final verification and release-readiness audit
 
 - Add a dedicated resolver module, likely
   `lua/sidepanes/panes/ask/target_resolver.lua`.
@@ -1322,6 +1333,27 @@ Manual acceptance tests:
 
 Refinement note: this is a high-value refactor because target timing caused
 multiple regressions.
+
+Traceability table:
+
+| Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Add a dedicated resolver module, likely `lua/sidepanes/panes/ask/target_resolver.lua`. | Planned: add a boundary-focused target resolver module or document an equivalent local-path decision if the final module location differs. | Planned: direct resolver tests will cover pure decisions. | This roadmap; public docs change only if behavior changes. | Review module boundary and public surface before moving on. | Pending | Planned |
+| Encode target resolution order in one place: | Planned: central resolver owns the resolution order instead of scattered ask routing/keymap logic. | Planned: direct resolver tests will assert ordered fallbacks. | This roadmap; public docs change only if behavior changes. | Exercise first capture, append, manual picker, and send flows. | Pending | Planned |
+| active ask draft target. | Planned: resolver returns/reuses the active draft target before consulting external context/defaults. | Planned: direct resolver tests plus append regression coverage. | This roadmap; public docs change only if behavior changes. | Append another selection and confirm the active draft target is reused. | Pending | Planned |
+| last coding-agent context for the relevant root. | Planned: resolver consults the last relevant root-scoped coding-agent context after active draft target. | Planned: direct resolver tests will cover root-scoped last-target selection and cross-root behavior. | This roadmap; public docs change only if behavior changes. | Start a capture from a project with prior agent context and confirm the expected target. | Pending | Planned |
+| default ask-capable target for the root. | Planned: resolver falls back to root-appropriate default ask-capable target when no active/last target applies. | Planned: direct resolver tests will cover default target fallback. | This roadmap; public docs change only if behavior changes. | Start a first capture without prior context and confirm the default target is selected. | Pending | Planned |
+| picker only when no automatic/default target is available or when the user explicitly requests target change. | Planned: resolver output distinguishes automatic target decisions from manual picker requirements. | Planned: direct resolver tests plus fed-key coverage for manual `M` if behavior-sensitive path is affected. | This roadmap; public docs change only if behavior changes. | Press `M` in the ask pane and confirm the picker still opens manually. | Pending | Planned |
+| `before_send` picker just before send. | Planned: resolver preserves `before_send` timing so initial capture does not show the picker. | Planned: direct resolver tests plus existing/focused send regression coverage. | This roadmap; public docs change only if behavior changes. | Write/send with `before_send` and confirm the picker appears only then. | Pending | Planned |
+| Feed resolver output into the ask action policy/state snapshot instead of letting keymaps or command-line handlers pick targets directly. | Planned: ask routing/keymap/command-line paths consume resolver decisions through existing policy/state boundaries. | Planned: focused regression tests will cover affected routing paths; direct tests will cover policy/snapshot integration if changed. | This roadmap; public docs change only if behavior changes. | Compare behavior for visual capture, append, picker, and send workflows. | Pending | Planned |
+| Keep resolver functions pure where possible: input is session/config/UI facts, output is a target decision, picker requirement, or explicit error. | Planned: resolver API accepts explicit facts and returns data-only decisions where practical. | Planned: direct pure resolver tests without real terminals/windows. | This roadmap; no public docs change applies for internal architecture. | Review resolver API for Neovim side-effect boundaries. | Pending | Planned |
+| Add tests for first visual capture, later append, explicit append with `auto_append = false`, missing target, cross-root target, manual picker, and `before_send`. | Planned: add direct and regression coverage for every listed scenario. | Planned: focused resolver/regression tests will name each scenario. | This roadmap; public docs change only if behavior changes. | Run the listed workflows manually in Neovim. | Pending | Planned |
+| Add fed-key coverage for any user-visible mapping path whose behavior changes because of target resolution. | Planned: assess mapping impact after implementation; add fed-key coverage or explicitly record no behavior change. | Planned: fed-key tests required for any changed behavior-sensitive mapping path. | This roadmap; public docs change only if behavior changes. | Press affected mappings and compare with the behavior and mapping-zone matrices. | Pending | Planned |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Planned: complete restarting audit passes and two clean non-mutating confirmation passes after the last commit. | Planned: audit will include focused, fast/full as applicable, and `git diff --check`. | This roadmap records audit evidence; README/CHANGELOG/help/docs/release notes update only if behavior/docs change. | Review implementation, traceability table, docs, and manual checklist before moving on. | Pending | Planned |
+| Start a first visual ask capture with `model_picker = "before_send"` and confirm no picker appears. | Planned: preserve before-send picker timing during initial capture. | Not Applicable as automated test: this bullet is a manual acceptance requirement, supported by resolver/regression coverage where possible. | Existing public docs already describe `before_send`; update only if behavior changes. | Perform this exact manual workflow. | Pending | Planned |
+| Append another selection and confirm the active draft target is reused. | Planned: preserve active-draft target reuse for later appends. | Not Applicable as automated test: this bullet is a manual acceptance requirement, supported by append regression coverage. | Existing public docs already describe active draft target reuse; update only if behavior changes. | Perform this exact manual workflow. | Pending | Planned |
+| Press `M` in the ask pane and confirm the picker still opens manually. | Planned: preserve explicit picker request behavior. | Not Applicable as automated test: this bullet is a manual acceptance requirement, supported by fed-key coverage if this path is affected. | Existing mapping docs already list model picker behavior; update only if behavior changes. | Perform this exact manual workflow. | Pending | Planned |
+| Write/send with `before_send` and confirm the picker appears only then. | Planned: preserve send-time picker behavior. | Not Applicable as automated test: this bullet is a manual acceptance requirement, supported by send regression coverage. | Existing public docs already describe `before_send`; update only if behavior changes. | Perform this exact manual workflow. | Pending | Planned |
 
 ### 19. Interaction-Focused Manual Acceptance Checklist
 
