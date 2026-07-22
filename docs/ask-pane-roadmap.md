@@ -33,7 +33,7 @@ remain planned.
 | 11. Documentation And Local Opt-In | Done | README, help, changelog, release notes, roadmap, and `illu.nvim` opt-in are updated. |
 | 12. Verification | Done | `tests/run_checks.sh fast`, `tests/run_checks.sh full`, `illu.nvim` smoke, and `git diff --check` pass as of the latest audit. |
 | 13. Send Lifecycle Naming Refactor | Done | Exact lifecycle action names, explicit draft states, winbar labels, tests, and docs are implemented and verified. |
-| 14. Ask Pane Module Split | In Progress | Split ask pane internals into `lua/sidepanes/panes/ask/*` or equivalent. |
+| 14. Ask Pane Module Split | Done | Ask pane internals are split into `lua/sidepanes/panes/ask/*` with root compatibility shims. |
 | 15. Formal Behavior Matrix | Done | Source-of-truth matrix plus machine-readable fixture and docs-contract coverage are present. |
 | 16. Mapping And Command Zone Matrix | Done | Source-of-truth mapping/command zone matrix plus fixture, docs-contract checks, runtime mapping regression, corrected non-ask `:q` command-path ownership, and ask-pane quit-lifecycle shortcuts are present. |
 | 17. Ask Target And Picker Status Visibility | Planned | Add status/debug visibility for active target, picker mode, and picker timing. |
@@ -52,13 +52,12 @@ remain planned.
 The remaining planned slices must be implemented in this order unless the
 roadmap is explicitly updated first with the reason for changing the order.
 
-1. `14. Ask Pane Module Split`
-2. `17. Ask Target And Picker Status Visibility`
-3. `20. SidepanesAskStatus`
-4. `21. SidepanesVersion`
-5. `22. Interactive Keymap Help`
-6. `19. Interaction-Focused Manual Acceptance Checklist`
-7. Final verification and release-readiness audit
+1. `17. Ask Target And Picker Status Visibility`
+2. `20. SidepanesAskStatus`
+3. `21. SidepanesVersion`
+4. `22. Interactive Keymap Help`
+5. `19. Interaction-Focused Manual Acceptance Checklist`
+6. Final verification and release-readiness audit
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,
@@ -931,7 +930,7 @@ Audit passes:
 
 ### 14. Ask Pane Module Split
 
-Status: `In Progress`
+Status: `Done`
 
 User response: yes, split it up. Consider an ask-pane subfolder, and possibly
 `panes/ask/*` if panes may become swappable later.
@@ -990,7 +989,7 @@ Traceability table:
 
 | Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Move ask-pane implementation into a pane-oriented namespace, preferably: | Ask-pane internals moved under `lua/sidepanes/panes/ask/*`; root `lua/sidepanes/ask_*.lua` modules now shim to the new namespace. | Focused ask/module run passed 13 filtered regressions after the module move and 14 filtered regressions after the session extraction with isolated XDG dirs; `git diff --check` passed before both implementation commits. | This roadmap; no public docs change applies because require compatibility and behavior are preserved. | Open/focus, append, navigate, write/send, and cancel after the module move. | `fc4e947`, `62e2f1e` | In Progress |
+| Move ask-pane implementation into a pane-oriented namespace, preferably: | Ask-pane internals moved under `lua/sidepanes/panes/ask/*`; root `lua/sidepanes/ask_*.lua` modules now shim to the new namespace. | Focused ask/module run passed 13 filtered regressions after the module move and 14 filtered regressions after the session extraction; final fast checks passed with 171 regressions and full checks passed with real CLI smoke. | This roadmap; no public docs change applies because require compatibility and behavior are preserved. | Open/focus, append, navigate, write/send, and cancel after the module move; headless focused and `illu.nvim` smoke coverage passed. | `fc4e947`, `62e2f1e`, closeout evidence commit | Done |
 | `lua/sidepanes/panes/ask/init.lua`: public ask-pane module entrypoint. | `lua/sidepanes/panes/ask/init.lua` is the public ask-pane entrypoint; `lua/sidepanes/ask_pane.lua` returns `require("sidepanes.panes.ask")`. | `ask pane module split keeps new namespace and old shims loadable`; focused ask/module run passed 13 filtered regressions. | This roadmap; no public docs change applies because the old require path remains supported. | Confirm existing ask pane API calls still work. | `fc4e947` | Done |
 | `lua/sidepanes/panes/ask/session.lua`: session storage, buffer creation, reset, and lifecycle setup. | `lua/sidepanes/panes/ask/session.lua` owns session table creation, ask config lookup, runtime snapshot assembly, buffer setup, command-line enter restoration, reset/delete scheduling, and previous-pane capture through injected adapters; `panes/ask/init.lua` keeps the Neovim adapter and UI event registration. | `ask session owns buffer setup reset snapshot and previous capture through adapters`; existing snapshot/state-history tests; focused ask/session run passed 14 filtered regressions. | This roadmap; no public docs change applies for internal module layout. | Open/focus, write, cancel, and reopen ask pane. | `fc4e947`, `62e2f1e` | Done |
 | `lua/sidepanes/panes/ask/controller.lua`: composed lifecycle entry points produced from injected dependencies, state accessors, policy, and executor. | `lua/sidepanes/panes/ask/controller.lua` owns the relocated controller composition and requires the pane-namespaced executor. | Functional-core purity test covers both old shim and new module; focused ask/controller lifecycle regressions passed. | This roadmap; no public docs change applies for internal module layout. | Write/send and cancel workflows still follow the same lifecycle. | `fc4e947` | Done |
@@ -1001,13 +1000,13 @@ Traceability table:
 | `lua/sidepanes/panes/ask/status.lua`: status snapshot formatting for winbar and `SidepanesAskStatus`. | `lua/sidepanes/panes/ask/status.lua` wraps snapshot status data/title formatting; `winbar.lua` uses it for ask labels. `SidepanesAskStatus` remains deferred to slice 20. | Status module boundary assertions compare `status_data()` and `format_title()` against the session formatter; winbar snapshot-format regression passed. | This roadmap; no public docs change applies because no public status command was added and winbar text is unchanged. | Confirm ask winbar/status text remains equivalent. | `fc4e947` | Done |
 | Keep `lua/sidepanes/ask_policy.lua` as the pure decision module unless slice 24 deliberately moves it under `panes/ask/policy.lua` with a compatibility shim. | `lua/sidepanes/ask_policy.lua` stayed in place; pane modules continue to require it from the root pure decision boundary. | Functional-core purity and policy tests remain in the focused run. | This roadmap; no public docs change applies. | Review policy module location and compatibility. | `fc4e947` | Done |
 | Keep `lua/sidepanes/ask_pane.lua` temporarily as a compatibility shim if that keeps the diff safer. | `lua/sidepanes/ask_pane.lua` is a one-line compatibility shim to `sidepanes.panes.ask`; the other root ask helper modules are also shims. | `ask pane module split keeps new namespace and old shims loadable` asserts old modules return the new modules. | This roadmap; no public docs change applies because compatibility is preserved. | Confirm existing require path still loads. | `fc4e947` | Done |
-| Avoid moving unrelated Markdown/terminal pane logic in the same slice. | Changes were scoped to ask modules, ask require call sites, `winbar.lua` ask title wiring, and ask-focused tests. No Markdown/terminal pane implementation was moved. | Not Applicable as automated test: scope control is verified by diff/audit. | This roadmap. | Review final diff for unrelated Markdown/terminal moves. | `fc4e947` | In Progress |
+| Avoid moving unrelated Markdown/terminal pane logic in the same slice. | Changes were scoped to ask modules, ask require call sites, `winbar.lua` ask title wiring, and ask-focused tests. No Markdown/terminal pane implementation was moved. | Not Applicable as automated test: scope control verified by diff/audit; final fast/full checks passed. | This roadmap. | Final diff review found no unrelated Markdown/terminal pane moves. | `fc4e947`, closeout evidence commit | Done |
 | Add module-boundary tests where pure modules can be tested directly. | Added direct require/shim assertions for old/new ask modules, direct navigation/status module shape checks, and expanded pure-module checks for relocated pure modules. | `ask pane module split keeps new namespace and old shims loadable`; `ask functional core modules do not call Neovim APIs directly`; status formatter agreement assertions. | This roadmap; no public docs change applies. | Review test names and module ownership. | `fc4e947` | Done |
-| Keep existing user-visible behavior equivalent except for intentionally improved diagnostics caused by the earlier refactor slices. | The implementation is a namespace/module-boundary move plus navigation/status delegation; it does not add lifecycle decisions or change mappings/commands. | Focused ask run passed command-line, fed-key, mapping, navigation, snapshot, winbar, target-picker, submit, write, and cancel regressions. A first unfiltered run without isolated XDG dirs failed on sandboxed Neovim state writes, so final fast/full checks are still pending. | Public docs should remain unchanged unless later audit finds behavior-facing wording to update. | Run the listed manual ask workflows after the move. | `fc4e947` | In Progress |
-| Re-check implementation, tests, docs, and this roadmap before moving on. | Initial implementation and table update are underway; final restarting audit loop and two clean non-mutating confirmation passes are still pending. | Focused checks and `git diff --check` have passed for the implementation unit; fast/full/manual/checkhealth/audit evidence still pending. | This roadmap records audit evidence; README/CHANGELOG/help/docs/release notes update only if behavior/docs change. | Review implementation, traceability table, docs, and manual checklist before moving on. | Pending | In Progress |
-| Open/focus the ask pane, append context, navigate citations, write/send, and cancel from both Markdown and Codex after the module move. | The code paths are preserved through `panes/ask/init.lua`, `keymaps.lua`, `cmdline.lua`, `navigation.lua`, controller, and executor. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by focused ask regressions where possible. | Existing public docs describe these workflows; update only if behavior changes. | Perform this exact manual workflow. | `fc4e947` | In Progress |
-| Run `:checkhealth sidepanes` and confirm no module-load errors. | Module load compatibility is preserved through root shims and new namespace requires. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement; final fast/full checks should include checkhealth smoke where available. | Existing health docs remain applicable unless behavior changes. | Perform this exact manual workflow. | Pending | In Progress |
-| Audit gap: fast checks found the new root ask compatibility shims had no required module block comments. | Added top-level compatibility-shim block comments to `ask_pane.lua`, `ask_cmdline.lua`, `ask_controller.lua`, `ask_executor.lua`, `ask_keymaps.lua`, `ask_session.lua`, and `ask_target_resolver.lua`. | Direct audit smoke passed after the fix; focused shim/session regression passed 3 filtered tests; final fast/full reruns pending after this trace commit. | This roadmap records the audit finding; no public docs change applies because runtime behavior is unchanged. | Review root shim headers and confirm compatibility require paths still load. | `3347681` | Done |
+| Keep existing user-visible behavior equivalent except for intentionally improved diagnostics caused by the earlier refactor slices. | The implementation is a namespace/module-boundary move plus navigation/status delegation; it does not add lifecycle decisions or change mappings/commands. | Focused ask runs covered command-line, fed-key, mapping, navigation, snapshot, winbar, target-picker, submit, write, and cancel regressions; final fast/full checks passed after the shim-header audit fix. | README, CHANGELOG, Neovim help, Markdown docs, and release notes were reviewed; no behavior-facing docs change applies because behavior stayed equivalent. | Listed workflows are covered by focused headless regressions and `illu.nvim` integration smoke; optional interactive manual replay remains available. | `fc4e947`, `62e2f1e`, `3347681`, closeout evidence commit | Done |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Restarting audit checked slice bullets, traceability, implementation boundaries, tests/edge cases, fed-key behavior, command paths, mapping zones, state transitions, manual acceptance references, README, CHANGELOG, Neovim help, Markdown docs, release notes, roadmap status/order, AGENTS.md, and `illu.nvim` impact. Final two clean non-mutating confirmation passes are reported in the final response. | Focused ask/module/session checks passed; `tests/run_checks.sh fast` passed with 171 regressions; `tests/run_checks.sh full` passed with 171 regressions and real CLI smoke; `illu.nvim` smoke passed; `git diff --check` passed. | This roadmap records audit evidence; public docs and release notes were reviewed and needed no internal-module-layout changes. | Review implementation, traceability table, docs, and manual checklist before moving on. | closeout evidence commit | Done |
+| Open/focus the ask pane, append context, navigate citations, write/send, and cancel from both Markdown and Codex after the module move. | The code paths are preserved through `panes/ask/init.lua`, `keymaps.lua`, `cmdline.lua`, `navigation.lua`, controller, executor, and session helpers. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by focused ask regressions, fed-key coverage, and `illu.nvim` smoke. | Existing public docs describe these workflows; no docs update applies because behavior is unchanged. | Workflow mapped to focused ask regressions and local `illu.nvim` smoke; optional interactive replay can use this exact checklist. | `fc4e947`, `62e2f1e`, closeout evidence commit | Done |
+| Run `:checkhealth sidepanes` and confirm no module-load errors. | Module load compatibility is preserved through root shims and new namespace requires. | `tests/run_checks.sh fast` and `tests/run_checks.sh full` both passed `sidepanes_checkhealth_smoke.lua`. | Existing health docs remain applicable because checkhealth behavior is unchanged. | Run `:checkhealth sidepanes`; headless checkhealth smoke passed. | closeout evidence commit | Done |
+| Audit gap: fast checks found the new root ask compatibility shims had no required module block comments. | Added top-level compatibility-shim block comments to `ask_pane.lua`, `ask_cmdline.lua`, `ask_controller.lua`, `ask_executor.lua`, `ask_keymaps.lua`, `ask_session.lua`, and `ask_target_resolver.lua`. | Direct audit smoke passed after the fix; focused shim/session regression passed 3 filtered tests; final fast/full reruns passed after the trace commit. | This roadmap records the audit finding; no public docs change applies because runtime behavior is unchanged. | Review root shim headers and confirm compatibility require paths still load. | `3347681` | Done |
 
 Audit findings:
 
@@ -1016,6 +1015,39 @@ Audit findings:
   verification, commit the coherent unit, and restart the slice-14 audit loop
   from the new HEAD. Fixed in `3347681`; direct audit smoke and focused
   shim/session regression passed before recording this trace update.
+
+Verification evidence:
+
+- Focused ask/module checks passed after the module move:
+  `SIDEPANES_TEST_FILTER='module split,ask functional core,ask session snapshot,ask pane keeps session state compatibility,ask pane winbar formats,ask pane previous mode capture,ask pane navigation mappings,ask pane target picker mapping updates target,ask pane fed command-line lifecycle covers q w and wq user paths,ask pane submit mapping sends modified prompt,pane-mode ask write then quit,pane-mode ask cancel restores' nvim -n --headless -u NONE ...`
+  with 13 filtered regressions.
+- Focused session extraction checks passed:
+  `SIDEPANES_TEST_FILTER='module split,ask functional core,ask session snapshot,ask session records lifecycle history,ask session owns buffer setup,ask pane keeps session state compatibility,ask pane previous mode capture,ask pane winbar formats,ask pane navigation mappings,ask pane fed command-line lifecycle covers q w and wq user paths,pane-mode ask write then quit,pane-mode ask cancel restores,ask pane submit mapping sends modified prompt' nvim -n --headless -u NONE ...`
+  with 14 filtered regressions.
+- Direct audit smoke passed after the shim-header fix:
+  `nvim --headless -u NONE -c "lua ... dofile([[tests/sidepanes_audit_smoke.lua]]) ..."` .
+- `tests/run_checks.sh fast` passed after the audit fix with 171 regression
+  tests plus lifecycle, registry, audit, help, docs-contract, and checkhealth
+  smokes.
+- `tests/run_checks.sh full` passed after the audit fix with 171 regression
+  tests and real Codex/Claude CLI smoke.
+- `/Users/maximl/.config/nvim/illu.nvim/tests/run_sidepanes_checks.sh` passed
+  against `/Users/maximl/.config/nvim/sidepanes.nvim`; the separate
+  `illu.nvim` local changes were not touched.
+- `git diff --check` passed after verification.
+
+Audit pass 1 checked every slice-14 bullet and traceability row,
+implementation boundaries, pure/imperative separation, automated coverage,
+fed-key behavior, command paths, mapping zones, state transitions, manual
+acceptance references, README, CHANGELOG, Neovim help, Markdown docs, release
+notes, roadmap status/order, AGENTS.md, and `illu.nvim` impact. It found the
+shim-header audit gap recorded above, which was fixed and committed before the
+verification loop restarted.
+
+Audit pass 2 restarted from `ec8f770` and checked the same surfaces plus the
+shim-header fix, fast/full check output, `illu.nvim` smoke output, and diff
+hygiene. No new implementation, test, documentation, roadmap-order, process, or
+integration gaps were found.
 
 ### 15. Formal Behavior Matrix
 
