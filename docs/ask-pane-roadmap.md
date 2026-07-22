@@ -96,25 +96,38 @@ Every remaining planned slice must use this protocol. Do not mark a slice
 `Done` until every item below is complete.
 
 1. Copy every bullet under the numbered slice into a traceability table.
-2. For each bullet, record:
+2. Group the slice into the smallest coherent implementation units: usually one
+   roadmap bullet or a tightly related set of bullets that must be reviewed and
+   reverted together.
+3. For each bullet, record:
    - implementation reference, usually a file/function.
    - automated test reference, or a written reason why no automated test is
      appropriate.
    - documentation reference, or a written reason why no docs change is needed.
    - manual acceptance test reference.
+   - commit reference once the bullet's coherent unit is committed.
    - status: `Done`, `Blocked`, or `Not Applicable`.
-3. Check the implementation, tests, docs, roadmap, help docs, README,
+4. After implementing, testing, documenting, and focused-checking a coherent
+   unit, commit that unit before starting the next coherent unit. Do not leave
+   completed unit work uncommitted while continuing the slice.
+5. Check the implementation, tests, docs, roadmap, help docs, README,
    CHANGELOG, release notes, and `illu.nvim` notes when relevant.
-4. Re-read the traceability table and the changed code/docs until no missing
-   bullet, contradiction, or stale behavior claim remains.
-5. Run focused tests for the slice.
-6. Run `tests/run_checks.sh fast`.
-7. Run `tests/run_checks.sh full` for behavior-sensitive, release-sensitive, or
+6. Re-read the traceability table and the changed code/docs until no missing
+   bullet, contradiction, stale behavior claim, untested edge case, or
+   implementation concern remains.
+7. Run focused tests for the slice.
+8. Run `tests/run_checks.sh fast`.
+9. Run `tests/run_checks.sh full` for behavior-sensitive, release-sensitive, or
    cross-module changes.
-8. Run the `illu.nvim` smoke check whenever defaults, mappings, commands,
+10. Run the `illu.nvim` smoke check whenever defaults, mappings, commands,
    public API, or local config behavior changes.
-9. Run `git diff --check`.
-10. Only then update the slice status table and report the evidence.
+11. Run `git diff --check`.
+12. After the last implementation, test, or doc change, perform at least two
+    consecutive clean audit passes. Record each pass with its scope and outcome.
+    If any pass finds a gap, append it under the current numbered slice, add it
+    to traceability, fix/test/document it, commit that unit, and restart the
+    two-clean-pass count.
+13. Only then update the slice status table and report the evidence.
 
 The audit must be literal and bullet-by-bullet. A slice-level statement such as
 "this area is covered" is not sufficient.

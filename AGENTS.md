@@ -68,6 +68,21 @@ tests, docs, roadmap, help docs, README, CHANGELOG, release notes, and any
 personal `illu.nvim` notes that are affected until no missing bullet,
 contradiction, stale behavior claim, or untested edge case remains.
 
+For roadmap-driven implementation work, commit completed work at the smallest
+coherent unit inside a numbered slice: usually one roadmap bullet or a tightly
+related set of bullets that must be reviewed and reverted together. Do not wait
+until the end of a multi-slice branch, and do not start the next coherent unit
+while the previous completed unit is still uncommitted. Record the commit hash
+in the traceability table for the rows it satisfies. If a later audit changes
+that unit, commit the fix as its own follow-up unit and update traceability.
+
+Audit passes must be falsifiable. After the last implementation, test, or doc
+change in a slice, perform at least two consecutive clean audit passes that find
+no new issue. Record each pass with its scope and outcome. If a pass finds a
+gap, contradiction, stale claim, missing edge case, or implementation concern,
+add it to the roadmap and traceability table, fix/test/document it, commit that
+unit, and restart the two-clean-pass count.
+
 ## Internal Architecture
 
 Prefer a functional core with an imperative Neovim shell. This fits Lua and
