@@ -10,6 +10,7 @@ local ask_executor = require("sidepanes.ask_executor")
 local ask_prompt = require("sidepanes.ask_prompt")
 local ask_policy = require("sidepanes.ask_policy")
 local ask_route = require("sidepanes.ask_route")
+local ask_session = require("sidepanes.ask_session")
 local commands = require("sidepanes.commands")
 local config = require("sidepanes.config")
 local dependencies = require("sidepanes.dependencies")
@@ -4368,7 +4369,7 @@ test("ask action policy classifies command lines plain quit mappings and lifecyc
 end)
 
 test("ask functional core modules do not call Neovim APIs directly", function()
-    for _, module in ipairs({ "sidepanes.ask_policy", "sidepanes.ask_cmdline", "sidepanes.ask_controller", "sidepanes.ask_executor", "sidepanes.ask_route" }) do
+    for _, module in ipairs({ "sidepanes.ask_policy", "sidepanes.ask_cmdline", "sidepanes.ask_controller", "sidepanes.ask_executor", "sidepanes.ask_route", "sidepanes.ask_session" }) do
         local path = vim.fn.getcwd() .. "/lua/" .. module:gsub("%.", "/") .. ".lua"
         local source = table.concat(vim.fn.readfile(path), "\n")
 
@@ -4414,6 +4415,156 @@ test("ask route keeps current pane-mode default target decisions explicit", func
         not ask_route.auto_append_blocked({ auto_append = true, active_buf = 10, citation_count = 1 }),
         "auto_append=true should allow append"
     )
+end)
+
+test("ask session snapshot exposes serializable state facts and labels", function()
+    local raw = {
+        bufnr = 12,
+        citations = {
+            { file = "src/one.lua", path = "/project/src/one.lua" },
+            { file = "src/one.lua", path = "/project/src/one.lua" },
+            { file = "src/two.lua", path = "/project/src/two.lua" },
+        },
+        draft_state = "draft_written",
+        entry = {
+            label = "Codex: Default",
+            root = "/project",
+        },
+        model_picker_shown = true,
+        previous = {
+            active_mode = "codex",
+            active_terminal_key = "codex:default:/project",
+        },
+        root = "/project",
+        written_prompt = "Question:\nhello",
+    }
+
+    local snapshot = ask_session.snapshot(raw, {
+        ask_config = { model_picker = "after_open" },
+        buffer = {
+            live_prompt = "Question:\nhello live",
+            modified = true,
+            valid = true,
+        },
+        window = {
+            active = true,
+            valid = true,
+        },
+    })
+
+    assert(snapshot.active == true, "snapshot did not mark valid ask session active")
+    assert(snapshot.valid_buffer == true, "snapshot lost valid buffer fact")
+    assert(snapshot.valid_window == true, "snapshot lost valid window fact")
+    assert(snapshot.active_window == true, "snapshot lost active window fact")
+    assert(snapshot.dirty_buffer == true, "snapshot lost modified buffer fact")
+    assert(snapshot.live_prompt == "Question:\nhello live", "snapshot lost live prompt")
+    assert(snapshot.written_prompt == "Question:\nhello", "snapshot lost written prompt")
+    assert(snapshot.draft_state == "draft_written", "snapshot lost current draft state")
+    assert(snapshot.target_label == "Codex: Default", "snapshot target label was wrong")
+    assert(snapshot.target_root == "/project", "snapshot target root was wrong")
+    assert(snapshot.picker_mode == "after_open", "snapshot picker mode was wrong")
+    assert(snapshot.picker_shown == true, "snapshot picker shown fact was wrong")
+    assert(snapshot.previous_pane_mode == "codex", "snapshot previous pane mode was wrong")
+    assert(snapshot.citation_count == 3, "snapshot citation count was wrong")
+    assert(snapshot.file_count == 2, "snapshot file count was wrong")
+
+    local facts = ask_session.lifecycle_facts(snapshot)
+
+    assert(facts.valid_buffer == true, "lifecycle facts lost valid buffer")
+    assert(facts.dirty_buffer == true, "lifecycle facts lost dirty buffer")
+    assert(facts.live_prompt == "Question:\nhello live", "lifecycle facts lost live prompt")
+    assert(facts.written_prompt == "Question:\nhello", "lifecycle facts lost written prompt")
+    assert(facts.picker_mode == "after_open", "lifecycle facts lost picker mode")
+    assert(facts.active_target == "Codex: Default", "lifecycle facts lost active target")
+    assert(facts.previous_pane == "codex", "lifecycle facts lost previous pane")
+
+    local status = ask_session.status_data(snapshot)
+
+    assert(status.active == true, "status data lost active state")
+    assert(status.draft_state == "draft_written", "status data lost draft state")
+    assert(status.target_label == "Codex: Default", "status data lost target label")
+    assert(status.target_root == "/project", "status data lost target root")
+    assert(status.picker_mode == "after_open", "status data lost picker mode")
+    assert(status.picker_shown == true, "status data lost picker shown")
+    assert(status.citation_count == 3 and status.file_count == 2, "status data lost citation counts")
+    assert(ask_session.format_title(snapshot) == "Ask: Codex: Default - draft_written", "formatted title was wrong")
+end)
+
+test("ask session snapshot covers empty invalid target and picker cases", function()
+    for _, state_name in ipairs({
+        "ready_empty",
+        "draft_modified",
+        "draft_written",
+        "sending_picker",
+        "sending_terminal",
+        "send_failed",
+        "cancelled",
+        "sent",
+    }) do
+        local snapshot = ask_session.snapshot({ bufnr = 2, draft_state = state_name }, {
+            buffer = { valid = true },
+        })
+
+        assert(snapshot.draft_state == state_name, "snapshot lost state " .. state_name)
+    end
+
+    local ready = ask_session.snapshot({ bufnr = 3, ready = true }, {
+        ask_config = { model_picker = "manual" },
+        buffer = {
+            live_prompt = "Question:",
+            modified = false,
+            valid = true,
+        },
+        window = { valid = false },
+    })
+
+    assert(ready.active == true, "ready snapshot should be active with a valid buffer")
+    assert(ready.draft_state == "ready_empty", "ready snapshot should default to ready_empty")
+    assert(ready.target_label == "No target", "missing target should use No target label")
+    assert(ready.target_root == nil, "missing target root should stay nil")
+    assert(ready.picker_mode == "manual", "manual picker mode was lost")
+    assert(ready.picker_shown == false, "picker shown should default false")
+    assert(ready.previous_pane_mode == nil, "missing previous pane should stay nil")
+    assert(ready.citation_count == 0 and ready.file_count == 0, "empty citations should count as zero")
+    assert(ready.valid_window == false, "invalid window fact was lost")
+
+    local invalid = ask_session.snapshot({
+        bufnr = 4,
+        citations = { { file = "src/old.lua" } },
+        draft_state = "send_failed",
+        entry = { preset_label = "Fallback Preset", root = "/fallback" },
+        previous = { active_terminal_key = "claude:default:/fallback" },
+    }, {
+        ask_config = { model_picker = "before_send" },
+        buffer = {
+            live_prompt = "stale",
+            modified = true,
+            valid = false,
+        },
+        window = { valid = false },
+    })
+
+    assert(invalid.active == false, "invalid buffer snapshot should be inactive")
+    assert(invalid.draft_state == nil, "inactive snapshot should not expose a current draft state")
+    assert(invalid.dirty_buffer == true, "invalid snapshot should still carry explicit dirty fact")
+    assert(invalid.target_label == "Fallback Preset", "target label fallback was wrong")
+    assert(invalid.target_root == "/fallback", "target root fallback was wrong")
+    assert(invalid.picker_mode == "before_send", "before_send picker mode was lost")
+    assert(invalid.previous_pane_mode == "claude:default:/fallback", "terminal previous fallback was wrong")
+    assert(invalid.citation_count == 1 and invalid.file_count == 1, "invalid snapshot counts were wrong")
+    assert(ask_session.format_title(invalid) == "Ask: Fallback Preset - inactive", "inactive title was wrong")
+end)
+
+test("ask session records lifecycle history at the session boundary", function()
+    local state = {}
+    local raw = {}
+
+    ask_session.record_state(state, raw, "ready_empty")
+    ask_session.record_state(state, raw, "draft_modified")
+
+    assert(raw.draft_state == "draft_modified", "record_state did not update raw draft state")
+    assert(state.ask_pane_last_state == "draft_modified", "record_state did not update last state")
+    assert(vim.deep_equal(state.ask_pane_state_history, { "ready_empty", "draft_modified" }), "record_state history was wrong")
 end)
 
 test("ask command-line adapter builds ask pane and floating compatibility commands", function()
