@@ -1700,6 +1700,12 @@ Remaining implementation order, restated before starting this slice:
 - Re-check implementation, tests, docs, roadmap, README, CHANGELOG, help docs,
   Markdown docs, release notes, AGENTS.md, and `illu.nvim` applicability before
   moving on.
+- Post-completion audit gap: slice 24 was completed before commit references
+  were mandatory, so record the catch-up commit and the process-rule commit
+  before progressing to slice 25.
+- Post-completion audit gap: the original slice 24 audit notes were not a
+  falsifiable two-clean-pass loop after the last change, so perform and record
+  two consecutive clean post-slice audit passes before progressing.
 
 Manual acceptance tests:
 
@@ -1774,6 +1780,8 @@ Traceability table:
 | Add regression tests proving user-visible behavior is unchanged for quit, write, submit, picker, target, restore, and mapping paths touched by the refactor. | Existing behavior tests retained; direct tests added for new boundaries. | `tests/run_checks.sh fast` and `tests/run_checks.sh full` passed with 160 regression tests. | Public docs unchanged because behavior is unchanged. | Manual acceptance list under this slice. | Done |
 | Add or keep fed-key tests for every behavior-sensitive mapping touched by this slice; callback-only tests are allowed only for registration and must have a matching fed-key test or an explicit no-fed-key reason. | Existing fed-key tests for typed `:q!`, personal `qq`/`<leader>qq`, and `<C-J>` submit retained; callback tests remain for registration/command-string adapter paths. | Full checks and `illu.nvim` smoke passed. | `AGENTS.md` and this roadmap. | Manual keypress acceptance tests. | Done |
 | Re-check implementation, tests, docs, roadmap, README, CHANGELOG, help docs, Markdown docs, release notes, AGENTS.md, and `illu.nvim` applicability before moving on. | Implementation, test, docs, roadmap, and local integration audit completed. | `tests/run_checks.sh fast`, `tests/run_checks.sh full`, `illu.nvim` smoke, and `git diff --check` passed. | Public docs, help docs, CHANGELOG, release notes, AGENTS.md, and roadmap audited; no additional public docs change needed. | Manual audit before Done. | Done |
+| Post-completion audit gap: slice 24 was completed before commit references were mandatory, so record the catch-up commit and the process-rule commit before progressing to slice 25. | Catch-up commit `0cf2ff7` contains the accumulated ask-pane implementation/test/doc state. Process commit `97b86a5` adds per-unit commit and stricter audit rules. This audit-record update will be committed separately. | `git log --oneline --decorate -5` confirmed both commits; `git status --short` confirmed sidepanes.nvim was clean before this audit-record update. | `AGENTS.md`, Mandatory Slice Completion Protocol, and this traceability row. | Review branch log and confirm no completed slice unit remains uncommitted before slice 25 starts. | Done |
+| Post-completion audit gap: the original slice 24 audit notes were not a falsifiable two-clean-pass loop after the last change, so perform and record two consecutive clean post-slice audit passes before progressing. | Post-slice audit passes below record scope and outcome after commits `0cf2ff7` and `97b86a5`. | `tests/run_checks.sh fast` passed with 160 regression tests; `tests/run_checks.sh full` passed; `illu.nvim` smoke passed; `git diff --check` will be rerun before committing this audit-record update. | This roadmap audit section; `AGENTS.md` and Mandatory Slice Completion Protocol define future enforcement. | Review recorded post-protocol passes before slice 25 starts. | Done |
 | In the ask pane, run `:q`, `:q!`, `:w`, `:wq`, `:x`, configured `qq`, configured `<leader>qq`, `<C-CR>`, and `<C-J>`; confirm outcomes match the behavior matrix. | Existing behavior preserved by ask controller/executor/command adapter. | Existing command-line, send mapping, submit mapping, and fed-key tests passed in full checks. | Behavior matrix and this roadmap. | Perform this exact workflow. | Done |
 | In Markdown and Codex panes, press personal plain-quit mappings such as `qq` and `<leader>qq`; confirm Sidepanes does not close. | Non-ask guards still in `maps.lua` using policy and `ask_cmdline.markdown_return_command()`. | Personal quit fed-key regression and `illu.nvim` smoke passed. | Mapping zone matrix and this roadmap. | Perform this exact workflow. | Done |
 | Change target manually with `M`, then submit; confirm target choice survives the refactor. | `ask_keymaps` delegates target mapping to controller/change-target handler; `ask_pane.change_target()` behavior unchanged. | Target picker mapping tests passed in full checks. | Existing public docs unchanged. | Perform this exact workflow. | Done |
@@ -1789,6 +1797,10 @@ Verification results:
   /Users/maximl/.config/nvim/illu.nvim/tests/run_sidepanes_checks.sh`
   passed.
 - `git diff --check` passed.
+- Catch-up commit `0cf2ff7` recorded the accumulated ask-pane implementation,
+  test, and documentation state after earlier slices were left uncommitted.
+- Process commit `97b86a5` recorded the per-unit commit rule and stricter
+  two-clean-pass audit rule.
 
 Audit passes:
 
@@ -1801,6 +1813,17 @@ Audit passes:
 - Pass 3 caught and fixed stale roadmap status text introduced while updating
   slice 24 traceability: slices 14 and 17 are planned, slice 24 is done, and
   the top remaining implementation order now starts at slice 25.
+- Post-protocol pass 1 checked the committed branch state, slice 24
+  traceability, implementation boundary modules, pure-module API usage,
+  mapping/fed-key test references, README, CHANGELOG, Neovim help, Markdown
+  docs, release notes, roadmap status/order, AGENTS.md, and `illu.nvim`
+  applicability. It found the missing commit evidence and non-falsifiable audit
+  loop recorded as post-completion gaps above; no additional behavior, test, or
+  documentation gap was found.
+- Post-protocol pass 2 rechecked roadmap status/order, slice 24 bullets and
+  traceability, public ask-pane mapping docs, release notes, `AGENTS.md`,
+  sidepanes git status/log evidence, full/fast check results, and `illu.nvim`
+  smoke evidence after the process correction. No new gaps were found.
 
 ### 25. Ask Session State And Status Snapshot Refactor
 
