@@ -1971,6 +1971,7 @@ test("pane-local slot maps exist on markdown and terminal panes", function()
     assert(has_nowait_map(ctx.bufnr, "<C-G>", "t"), "terminal-mode toggle map missing on terminal pane")
 end)
 
+-- Ask layer: keymap registration and coverage matrix tests.
 test("ask mapping zone matrix matches active maps by user location", function()
     reset_pane()
 
@@ -4337,6 +4338,7 @@ test("old terminal helper names remain compatibility aliases", function()
     assert(pane.toggle_markdown_agent == pane.toggle_markdown_terminal, "toggle_markdown_agent is not an internal alias")
 end)
 
+-- Ask layer: policy predicate and action-plan tests.
 test("ask action policy classifies command lines plain quit mappings and lifecycle plans", function()
     local intents = ask_policy.INTENTS
     local actions = ask_policy.ACTIONS
@@ -4503,6 +4505,7 @@ test("ask route keeps current pane-mode default target decisions explicit", func
     )
 end)
 
+-- Ask layer: snapshot and selector tests.
 test("ask session snapshot exposes serializable state facts and labels", function()
     local raw = {
         bufnr = 12,
@@ -4675,6 +4678,7 @@ test("ask pane keeps session state compatibility helpers while exposing snapshot
     assert(snapshot.target_label == "No target", "empty compatibility snapshot target label was wrong")
 end)
 
+-- Ask layer: command-line adapter tests.
 test("ask command-line adapter builds ask pane and floating compatibility commands", function()
     assert(
         ask_cmdline.markdown_return_command() == '<C-u>lua require("sidepanes.internal").show_markdown()<CR>',
@@ -4706,6 +4710,7 @@ test("ask command-line adapter builds ask pane and floating compatibility comman
     )
 end)
 
+-- Ask layer: executor tests with fake dependencies.
 test("ask lifecycle executor runs policy actions through fake handlers", function()
     local calls = {}
     local actions = ask_policy.ACTIONS
@@ -5176,6 +5181,7 @@ test("visual-line ask captures all selected lines", function()
     assert(captured:find("assert Value%(1%)%.value==1 and Binding"), captured)
 end)
 
+-- Ask layer: fed-key user paths and end-to-end pane-mode smoke.
 test("pane-mode ask creates ask pane prompt and appends same-file selections", function()
     reset_pane()
 
