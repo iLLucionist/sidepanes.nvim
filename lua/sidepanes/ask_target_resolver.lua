@@ -17,6 +17,7 @@ local REASONS = {
     active_ask_target = "active_ask_target",
     before_send_picker = "before_send_picker",
     default_ask_target = "default_ask_target",
+    explicit_target = "explicit_target",
     explicit_target_change = "explicit_target_change",
     last_coding_agent = "last_coding_agent",
     no_target = "no_target",

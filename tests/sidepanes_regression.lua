@@ -4511,6 +4511,7 @@ test("ask target resolver centralizes pane-mode target decisions", function()
     assert(decision.kind == "picker", "explicit target change should open picker")
     assert(decision.reason == "explicit_target_change", "explicit picker reason was wrong")
     assert(decision.entries[1] == default and decision.entries[2] == extra, "picker entries did not preserve target then extra order")
+    assert(ask_target_resolver.REASONS.explicit_target == "explicit_target", "explicit target reason missing")
 
     decision = ask_target_resolver.resolve({})
     assert(decision.kind == "picker" and decision.reason == "no_target", "missing target route was wrong")
@@ -5497,6 +5498,49 @@ test("pane-mode ask target resolver leaves missing targets to the picker path", 
     pane.ask_picker({ bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
 
     assert(not pane.ask_pane.bufnr, "missing ask target unexpectedly created an ask pane")
+end)
+
+test("pane-mode explicit ask target replaces stale resolver reason", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-explicit-target-reason-test")
+
+    write(root .. "/src/origin.lua", {
+        "first()",
+        "second()",
+    })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+            claude = {
+                label = "Claude",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    local origin_buf = vim.api.nvim_get_current_buf()
+
+    pane.ask_picker({ bufnr = origin_buf, line1 = 1, line2 = 1 })
+    pane.ask("claude", nil, { bufnr = origin_buf, line1 = 2, line2 = 2 })
+
+    local snapshot = ask_pane_module.snapshot(pane)
+
+    assert(pane.ask_pane.entry.tool_name == "claude", "explicit ask did not replace target")
+    assert(pane.ask_pane.target_reason == "explicit_target", "explicit ask kept stale target reason")
+    assert(snapshot.target_reason == "explicit_target", "explicit ask snapshot kept stale target reason")
 end)
 
 test("pane-mode duplicate detection respects edited ask draft text", function()

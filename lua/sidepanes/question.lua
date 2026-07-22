@@ -553,13 +553,16 @@ function M.ask(state, deps, tool_name, preset_name, opts)
     end
 
     local preset = deps.preset_by_name(tool, preset_name)
+    local ask_opts = vim.tbl_extend("force", {}, opts, {
+        target_reason = opts.target_reason or ask_target_resolver.REASONS.explicit_target,
+    })
 
     M.ask_with_entry(state, deps, {
         kind = "terminal",
         tool_name = tool_name,
         preset_name = preset.name,
         label = (tool.label or tool_name) .. ": " .. (preset.label or preset.name or "Default"),
-    }, opts)
+    }, ask_opts)
 end
 
 return M
