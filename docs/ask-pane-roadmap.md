@@ -36,7 +36,7 @@ remain planned.
 | 14. Ask Pane Module Split | Done | Ask pane internals are split into `lua/sidepanes/panes/ask/*` with root compatibility shims. |
 | 15. Formal Behavior Matrix | Done | Source-of-truth matrix plus machine-readable fixture and docs-contract coverage are present. |
 | 16. Mapping And Command Zone Matrix | Done | Source-of-truth mapping/command zone matrix plus fixture, docs-contract checks, runtime mapping regression, corrected non-ask `:q` command-path ownership, and ask-pane quit-lifecycle shortcuts are present. |
-| 17. Ask Target And Picker Status Visibility | Planned | Add status/debug visibility for active target, picker mode, and picker timing. |
+| 17. Ask Target And Picker Status Visibility | In Progress | Add status/debug visibility for active target, picker mode, and picker timing. |
 | 18. Target Resolver Refactor | Done | Target resolution now lives in a pure resolver with traceable active, last-context, default, picker, and before-send decisions plus snapshot-facing target reasons. |
 | 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
 | 20. `SidepanesAskStatus` | Planned | Add a command/API that reports ask draft state for debugging. |
@@ -1330,11 +1330,20 @@ Verification results:
 
 ### 17. Ask Target And Picker Status Visibility
 
-Status: `Planned`
+Status: `In Progress`
 
 User response: yes, do that.
 
 Goal: make target and picker state easy to inspect while editing.
+
+Remaining implementation order, restated before starting this slice:
+
+1. `17. Ask Target And Picker Status Visibility`
+2. `20. SidepanesAskStatus`
+3. `21. SidepanesVersion`
+4. `22. Interactive Keymap Help`
+5. `19. Interaction-Focused Manual Acceptance Checklist`
+6. Final verification and release-readiness audit
 
 - Add a small status/debug formatter that returns:
   - current ask target label.
@@ -1359,6 +1368,24 @@ Manual acceptance tests:
 
 Refinement note: the status formatter should be pure enough to test without
 opening real terminals.
+
+Traceability table:
+
+| Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Add a small status/debug formatter that returns: | Planned: extend the existing ask status formatter boundary without changing lifecycle behavior. | Planned: direct pure formatter tests plus focused ask status regressions. | Public docs update only if a user-facing command/API changes in this slice. | Create an ask draft, inspect formatter output, and compare to visible target/picker state. | Pending | Planned |
+| current ask target label. | Planned: expose target label from the shared ask snapshot/status data. | Planned: direct status test and runtime target-change status assertion. | Public docs update only if status output becomes user-facing now. | Change target with `M`; status output matches the winbar target. | Pending | Planned |
+| root used by the target. | Planned: expose target root from the shared ask snapshot/status data. | Planned: direct status test covering explicit target root and fallback root. | Public docs update only if status output becomes user-facing now. | Change target across roots and inspect status root. | Pending | Planned |
+| picker mode: `manual`, `after_open`, or `before_send`. | Planned: expose normalized picker mode from ask config/status data. | Planned: direct tests for all three picker modes plus runtime picker-mode checks. | Public docs already describe picker modes; update only if status output is user-facing now. | Switch picker modes and inspect status output. | Pending | Planned |
+| whether `after_open` has already been shown for this draft. | Planned: expose `picker_shown` for the active draft. | Planned: runtime `after_open` regression asserting shown/not-shown transitions. | Public docs update only if status output becomes user-facing now. | Set `model_picker = "after_open"`, append first context, and confirm status indicates the picker has been shown. | Pending | Planned |
+| draft state from slice 13. | Planned: expose existing draft state labels through the formatter. | Planned: direct formatter tests for known draft states and runtime lifecycle assertions. | Existing lifecycle docs list draft states; update only if user-facing status output is added now. | Write, send, cancel, and failed-send workflows show expected draft state in status. | Pending | Planned |
+| citation count and file count. | Planned: expose existing citation/file counts through the formatter. | Planned: direct and runtime append tests for zero, one-file, and multi-file counts. | Public docs update only if status output becomes user-facing now. | Append selections from one and multiple files and inspect counts. | Pending | Planned |
+| Use this formatter for `SidepanesAskStatus` and optionally for health/debug output. | Planned: wire the formatter to existing or new status/debug surface allowed by this slice, without implementing broader later-slice behavior opportunistically. | Planned: command/API/debug tests if a public surface is added; explicit no-test reason if kept internal until slice 20. | README/help/Markdown docs/CHANGELOG update if a public command/API is added; otherwise no public docs change applies. | Run the status/debug surface and compare target, picker, draft, and counts. | Pending | Planned |
+| Keep the winbar concise; do not turn it into a dense status dump. | Planned: keep winbar title on existing concise target/draft format. | Planned: existing winbar snapshot-format regression plus any new status regression confirming winbar text remains concise. | Existing winbar docs remain valid unless text changes. | Open/edit ask pane and confirm winbar remains concise. | Pending | Planned |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Planned: perform restarting audit passes and two clean non-mutating confirmation passes after the final commit. | Planned: focused tests, fast/full checks as applicable, `illu.nvim` smoke if public API/commands/local behavior change, and `git diff --check`. | Audit README, CHANGELOG, Neovim help, Markdown docs, release notes, roadmap, AGENTS.md, and `illu.nvim` impact. | Review implementation, traceability table, docs, and manual checklist before moving on. | Pending | Planned |
+| Create an ask draft and change target with `M`; confirm status output matches the winbar target. | Planned: preserve target-picker workflow while exposing matching status data. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by target-picker/status regressions where possible. | Existing target docs remain valid unless status output is public. | Perform this exact workflow. | Pending | Planned |
+| Set `model_picker = "after_open"`, append first context, and confirm status indicates the picker has been shown. | Planned: preserve `after_open` picker timing while exposing shown state. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by runtime picker/status regressions where possible. | Existing picker docs remain valid unless status output is public. | Perform this exact workflow. | Pending | Planned |
+| Set `model_picker = "before_send"`, write/send, and confirm the selected target is reflected before the prompt is sent. | Planned: preserve `before_send` picker timing while exposing selected target state. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by runtime picker/status regressions where possible. | Existing picker docs remain valid unless status output is public. | Perform this exact workflow. | Pending | Planned |
 
 ### 18. Target Resolver Refactor
 
