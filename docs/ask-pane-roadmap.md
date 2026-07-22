@@ -40,7 +40,7 @@ remain planned.
 | 18. Target Resolver Refactor | Done | Target resolution now lives in a pure resolver with traceable active, last-context, default, picker, and before-send decisions plus snapshot-facing target reasons. |
 | 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
 | 20. `SidepanesAskStatus` | Done | `ask_status(opts)`, `:SidepanesAskStatus`, and `:Sidepanes ask-status` report ask draft status for debugging. |
-| 21. `SidepanesVersion` | Planned | Add a command/API that reports plugin version and load path. |
+| 21. `SidepanesVersion` | In Progress | Add a command/API that reports plugin version and load path. |
 | 22. Interactive Keymap Help | Planned | Add pane-local keybinding help surfaced from the winbar. |
 | 23. Ask Action Policy And Fed-Key Test Discipline | Done | Central ask action predicates, policy tests, and fed-key test guidance are implemented and verified. |
 | 24. Ask Architecture Boundary Refactor | Done | Ask behavior is consolidated around pure policy/route/command helpers, thin adapters, a controller factory, and an injected lifecycle executor. |
@@ -1649,6 +1649,13 @@ version and where the plugin was loaded from.
 Goal: make support/debugging easier when multiple plugin copies or runtime paths
 are involved.
 
+Remaining implementation order:
+
+1. `21. SidepanesVersion`
+2. `22. Interactive Keymap Help`
+3. `19. Interaction-Focused Manual Acceptance Checklist`
+4. Final verification and release-readiness audit
+
 - Add a version source, for example `sidepanes.version` or a constant in the
   public facade.
 - Add public API `version()` returning:
@@ -1671,6 +1678,22 @@ Manual acceptance tests:
 
 Refinement note: the version command should avoid expensive filesystem/git work
 on startup. Prefer lazy computation when the command is invoked.
+
+Traceability:
+
+| Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Add a version source, for example `sidepanes.version` or a constant in the public facade. | Pending. | Pending. | Pending. | Inspect the public API and runtime command output. | Pending. | In Progress |
+| Add public API `version()` returning: | Pending. | Pending. | Pending. | Call `require("sidepanes").version()` from Neovim. | Pending. | In Progress |
+| version string, currently `0.4.0-dev` while on this branch. | Pending. | Pending. | Pending. | Confirm API and command output include `0.4.0-dev`. | Pending. | In Progress |
+| plugin load path. | Pending. | Pending. | Pending. | Confirm API and command output include the loaded plugin path. | Pending. | In Progress |
+| git branch/commit if cheap and available without shelling out during normal use, otherwise omit commit from runtime and leave it to manual debug. | Pending. | Pending. | Pending. | Confirm runtime status does not perform expensive git work on startup. | Pending. | In Progress |
+| Add command `:SidepanesVersion` and root subcommand `:Sidepanes version`. | Pending. | Pending. | Pending. | Run both command paths in Neovim. | Pending. | In Progress |
+| Include this in health output or recommend it in bug-report docs. | Pending. | Pending. | Pending. | Run `:checkhealth sidepanes` and review bug-report docs. | Pending. | In Progress |
+| Add docs, help, audit smoke coverage, and regression tests. | Pending. | Pending. | Pending. | Review README, Markdown docs, Neovim help, CHANGELOG, release notes, audit smoke, docs contract, and regression coverage. | Pending. | In Progress |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Pending. | Pending. | Pending. | Re-read the slice bullets, traceability, changed implementation, tests, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Pending. | In Progress |
+| Run `:SidepanesVersion` from the personal config and confirm it prints `0.4.0-dev` or the release version plus the path under `~/.config/nvim/sidepanes.nvim`. | Pending. | Not Applicable as automated test: this row records a manual acceptance workflow; regression and `illu.nvim` smoke coverage will support it separately. | Pending. | Perform this exact workflow in `illu.nvim`. | Pending. | In Progress |
+| Temporarily load Sidepanes from another runtime path and confirm the command reports that path. | Pending. | Not Applicable as automated test: this row records a manual acceptance workflow; regression coverage may simulate a load path separately. | Pending. | Perform this exact workflow in Neovim or with a temporary runtime path. | Pending. | In Progress |
 
 ### 22. Interactive Keymap Help
 
