@@ -143,6 +143,7 @@ function M.snapshot(raw, opts)
         picker_mode = config.model_picker or opts.picker_mode,
         picker_shown = raw.model_picker_shown == true,
         previous_pane_mode = previous_mode(raw.previous),
+        target_reason = raw.target_reason,
         target_label = target_label(raw.entry),
         target_root = target_root(raw),
         valid_buffer = buffer.valid == true,
@@ -160,6 +161,7 @@ function M.lifecycle_facts(snapshot)
         live_prompt = snapshot.live_prompt or "",
         picker_mode = snapshot.picker_mode,
         previous_pane = snapshot.previous_pane_mode,
+        target_reason = snapshot.target_reason,
         valid_buffer = snapshot.valid_buffer == true,
         written_prompt = snapshot.written_prompt,
     }
@@ -176,6 +178,7 @@ function M.status_data(snapshot)
         picker_mode = snapshot.picker_mode,
         picker_shown = snapshot.picker_shown == true,
         previous_pane_mode = snapshot.previous_pane_mode,
+        target_reason = snapshot.target_reason,
         target_label = snapshot.target_label or "No target",
         target_root = snapshot.target_root,
     }

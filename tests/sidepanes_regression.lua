@@ -16,6 +16,7 @@ local ask_prompt = require("sidepanes.ask_prompt")
 local ask_policy = require("sidepanes.ask_policy")
 local ask_route = require("sidepanes.ask_route")
 local ask_session = require("sidepanes.ask_session")
+local ask_target_resolver = require("sidepanes.ask_target_resolver")
 local commands = require("sidepanes.commands")
 local config = require("sidepanes.config")
 local dependencies = require("sidepanes.dependencies")
@@ -4458,7 +4459,15 @@ test("ask action policy classifies command lines plain quit mappings and lifecyc
 end)
 
 test("ask functional core modules do not call Neovim APIs directly", function()
-    for _, module in ipairs({ "sidepanes.ask_policy", "sidepanes.ask_cmdline", "sidepanes.ask_controller", "sidepanes.ask_executor", "sidepanes.ask_route", "sidepanes.ask_session" }) do
+    for _, module in ipairs({
+        "sidepanes.ask_policy",
+        "sidepanes.ask_cmdline",
+        "sidepanes.ask_controller",
+        "sidepanes.ask_executor",
+        "sidepanes.ask_route",
+        "sidepanes.ask_session",
+        "sidepanes.ask_target_resolver",
+    }) do
         local path = vim.fn.getcwd() .. "/lua/" .. module:gsub("%.", "/") .. ".lua"
         local source = table.concat(vim.fn.readfile(path), "\n")
 
@@ -4466,31 +4475,63 @@ test("ask functional core modules do not call Neovim APIs directly", function()
     end
 end)
 
-test("ask route keeps current pane-mode default target decisions explicit", function()
+test("ask target resolver centralizes pane-mode target decisions", function()
     local active = { label = "Active" }
     local last = { label = "Last" }
     local default = { label = "Default" }
+    local extra = { label = "Extra" }
+    local decision = ask_target_resolver.resolve({
+        active_entry = active,
+        last_entry = last,
+        target_entries = { default },
+        root = "/project",
+    })
+
+    assert(decision.kind == "target", "active ask target decision did not return target kind")
+    assert(decision.entry == active, "active ask target was not preferred")
+    assert(decision.reason == "active_ask_target", "active ask target reason was wrong")
+    assert(decision.root == "/project", "resolver did not preserve root")
+
+    decision = ask_target_resolver.resolve({
+        last_entry = last,
+        target_entries = { default },
+    })
+    assert(decision.entry == last and decision.reason == "last_coding_agent", "last coding agent was not preferred")
+
+    decision = ask_target_resolver.resolve({
+        target_entries = { default },
+    })
+    assert(decision.entry == default and decision.reason == "default_ask_target", "default ask target was not preferred")
+
+    decision = ask_target_resolver.resolve({
+        explicit_picker = true,
+        picker_entries = { extra },
+        target_entries = { default },
+    })
+    assert(decision.kind == "picker", "explicit target change should open picker")
+    assert(decision.reason == "explicit_target_change", "explicit picker reason was wrong")
+    assert(decision.entries[1] == default and decision.entries[2] == extra, "picker entries did not preserve target then extra order")
+
+    decision = ask_target_resolver.resolve({})
+    assert(decision.kind == "picker" and decision.reason == "no_target", "missing target route was wrong")
+
+    decision = ask_target_resolver.before_send({
+        active_entry = active,
+        picker_entries = { extra },
+        picker_mode = "before_send",
+        target_entries = { default },
+    })
+    assert(decision.kind == "picker", "before_send should request picker even with an active target")
+    assert(decision.reason == "before_send_picker", "before_send picker reason was wrong")
+    assert(decision.entries[1] == default and decision.entries[2] == extra, "before_send picker entries were wrong")
+
     local entry, reason = ask_route.default_entry({
         active_entry = active,
         last_entry = last,
         target_entries = { default },
     })
 
-    assert(entry == active and reason == "active_ask_target", "active ask target was not preferred")
-
-    entry, reason = ask_route.default_entry({
-        last_entry = last,
-        target_entries = { default },
-    })
-    assert(entry == last and reason == "last_coding_agent", "last coding agent was not preferred")
-
-    entry, reason = ask_route.default_entry({
-        target_entries = { default },
-    })
-    assert(entry == default and reason == "default_ask_target", "default ask target was not preferred")
-
-    entry, reason = ask_route.default_entry({})
-    assert(entry == nil and reason == "no_target", "missing target route was wrong")
+    assert(entry == active and reason == "active_ask_target", "compat ask route did not delegate to resolver")
 
     assert(
         ask_route.auto_append_blocked({ auto_append = false, active_buf = 10, citation_count = 1 }),
@@ -4526,6 +4567,7 @@ test("ask session snapshot exposes serializable state facts and labels", functio
             active_terminal_key = "codex:default:/project",
         },
         root = "/project",
+        target_reason = "active_ask_target",
         written_prompt = "Question:\nhello",
     }
 
@@ -4550,6 +4592,7 @@ test("ask session snapshot exposes serializable state facts and labels", functio
     assert(snapshot.live_prompt == "Question:\nhello live", "snapshot lost live prompt")
     assert(snapshot.written_prompt == "Question:\nhello", "snapshot lost written prompt")
     assert(snapshot.draft_state == "draft_written", "snapshot lost current draft state")
+    assert(snapshot.target_reason == "active_ask_target", "snapshot target reason was wrong")
     assert(snapshot.target_label == "Codex: Default", "snapshot target label was wrong")
     assert(snapshot.target_root == "/project", "snapshot target root was wrong")
     assert(snapshot.picker_mode == "after_open", "snapshot picker mode was wrong")
@@ -4566,12 +4609,14 @@ test("ask session snapshot exposes serializable state facts and labels", functio
     assert(facts.written_prompt == "Question:\nhello", "lifecycle facts lost written prompt")
     assert(facts.picker_mode == "after_open", "lifecycle facts lost picker mode")
     assert(facts.active_target == "Codex: Default", "lifecycle facts lost active target")
+    assert(facts.target_reason == "active_ask_target", "lifecycle facts lost target reason")
     assert(facts.previous_pane == "codex", "lifecycle facts lost previous pane")
 
     local status = ask_session.status_data(snapshot)
 
     assert(status.active == true, "status data lost active state")
     assert(status.draft_state == "draft_written", "status data lost draft state")
+    assert(status.target_reason == "active_ask_target", "status data lost target reason")
     assert(status.target_label == "Codex: Default", "status data lost target label")
     assert(status.target_root == "/project", "status data lost target root")
     assert(status.picker_mode == "after_open", "status data lost picker mode")
@@ -5345,6 +5390,7 @@ test("pane-mode visual ask mappings reuse active ask target without reopening pi
     local prompt = table.concat(vim.api.nvim_buf_get_lines(pane.ask_pane.bufnr, 0, -1, false), "\n")
 
     assert(pane.ask_pane.entry.preset_name == "one", "visual ask picker reopened instead of reusing active ask target")
+    assert(pane.ask_pane.target_reason == "active_ask_target", "later visual append did not reuse active target through resolver")
     assert(prompt:find("lines 1%-1", 1, false), prompt)
     assert(prompt:find("lines 2%-2", 1, false), prompt)
 
@@ -5390,7 +5436,67 @@ test("pane-mode ask-last first capture uses default target without picker", func
     local prompt = table.concat(vim.api.nvim_buf_get_lines(pane.ask_pane.bufnr, 0, -1, false), "\n")
 
     assert(pane.ask_pane.entry.preset_name == "one", "ask-last first capture opened picker instead of using default target")
+    assert(pane.ask_pane.target_reason == "default_ask_target", "ask-last first capture did not record default target reason")
     assert(prompt:find("lines 1%-1", 1, false), prompt)
+end)
+
+test("pane-mode ask target resolver ignores last coding-agent context from another root", function()
+    reset_pane()
+
+    local first_root = root_fixture("ask-pane-target-cross-root-first")
+    local second_root = root_fixture("ask-pane-target-cross-root-second")
+
+    write(first_root .. "/src/origin.lua", { "first()" })
+    write(second_root .. "/src/origin.lua", { "second()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                    { name = "two", label = "Two", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    pane.open_terminal("codex", "two", { root = first_root, focus = true })
+    vim.cmd.edit(second_root .. "/src/origin.lua")
+    pane.ask_last_coding_agent({ bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    assert(pane.ask_pane.root == second_root, "ask target resolver used the previous root")
+    assert(pane.ask_pane.entry.preset_name == "one", "cross-root ask reused the previous root preset")
+    assert(pane.ask_pane.target_reason == "default_ask_target", "cross-root ask did not fall back through default target")
+end)
+
+test("pane-mode ask target resolver leaves missing targets to the picker path", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-target-missing-test")
+
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = false,
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask_picker({ bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    assert(not pane.ask_pane.bufnr, "missing ask target unexpectedly created an ask pane")
 end)
 
 test("pane-mode duplicate detection respects edited ask draft text", function()
@@ -6089,8 +6195,11 @@ test("ask pane target picker mapping updates target and winbar", function()
     local status = ask_session.status_data(snapshot)
 
     assert(pane.ask_pane.entry.preset_name == "two", "ask pane target picker did not update preset")
+    assert(pane.ask_pane.target_reason == "explicit_target_change", "manual target picker did not record explicit target-change reason")
     assert(snapshot.target_label == "Codex: Two", "target picker snapshot label was wrong")
+    assert(snapshot.target_reason == "explicit_target_change", "target picker snapshot reason was wrong")
     assert(status.target_label == "Codex: Two", "target picker status label was wrong")
+    assert(status.target_reason == "explicit_target_change", "target picker status reason was wrong")
     assert(winbar:find("Codex: Two", 1, true), winbar)
 end)
 

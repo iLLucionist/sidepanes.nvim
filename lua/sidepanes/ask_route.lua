@@ -1,36 +1,22 @@
 --[[
 sidepanes.ask_route
-Purpose: Keep current pane-mode ask routing decisions explicit before the full resolver refactor.
-Does: Selects the active/default ask target entry and decides when auto-append should focus an existing draft.
-Architecture: Pure helper; target-resolution expansion belongs to the later target resolver slice.
+Purpose: Keep ask routing predicates available while target decisions live in the resolver.
+Does: Preserves compatibility for ask route helpers used by pane-mode ask workflows.
+Architecture: Pure compatibility wrapper; target resolution belongs to ask_target_resolver.
 ]]
+
+local ask_target_resolver = require("sidepanes.ask_target_resolver")
 
 local M = {}
 
 function M.default_entry(facts)
-    facts = facts or {}
+    local decision = ask_target_resolver.resolve(facts)
 
-    if facts.active_entry then
-        return facts.active_entry, "active_ask_target"
-    end
-
-    if facts.last_entry then
-        return facts.last_entry, "last_coding_agent"
-    end
-
-    local targets = facts.target_entries or {}
-
-    if targets[1] then
-        return targets[1], "default_ask_target"
-    end
-
-    return nil, "no_target"
+    return decision.entry, decision.reason
 end
 
 function M.auto_append_blocked(facts)
-    facts = facts or {}
-
-    return facts.auto_append == false and facts.active_buf ~= nil and (facts.citation_count or 0) > 0
+    return ask_target_resolver.auto_append_blocked(facts)
 end
 
 return M

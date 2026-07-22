@@ -10,6 +10,7 @@ local selection = require("sidepanes.selection")
 local ask_pane = require("sidepanes.ask_pane")
 local ask_cmdline = require("sidepanes.ask_cmdline")
 local ask_route = require("sidepanes.ask_route")
+local ask_target_resolver = require("sidepanes.ask_target_resolver")
 
 local M = {}
 
@@ -73,15 +74,24 @@ local function restore_origin(state, deps, origin)
     end
 end
 
+local function ask_target_entries(deps, root)
+    return deps.tool_shortcut_entries(root, { ask_only = true })
+end
+
+local function ask_picker_entries(deps, root)
+    return ask_target_resolver.picker_entries({
+        picker_entries = deps.terminal_entries(root, 1, { ask_only = true }),
+        target_entries = ask_target_entries(deps, root),
+    })
+end
+
 --- Build ask target entries and invoke a callback for the selected entry.
 local function pick_target(state, deps, prompt, context, callback)
-    local targets = deps.tool_shortcut_entries(context.root, { ask_only = true })
-
-    vim.list_extend(targets, deps.terminal_entries(context.root, 1, { ask_only = true }))
+    local targets = ask_picker_entries(deps, context.root)
 
     deps.numbered_select(prompt, targets, function(choice)
         if choice then
-            callback(choice)
+            callback(choice, ask_target_resolver.REASONS.explicit_target_change)
         end
     end)
 end
@@ -103,19 +113,21 @@ local function ask_pane_default_entry(state, deps, context)
 
     local ctx = deps.last_coding_agent_context(context.root)
     local last_entry = ctx and deps.entry_for_terminal_context(ctx) or nil
-
-    return ask_route.default_entry({
+    local decision = ask_target_resolver.resolve({
         active_entry = ask.entry,
         last_entry = last_entry,
-        target_entries = deps.tool_shortcut_entries(context.root, { ask_only = true }),
+        root = context.root,
+        target_entries = ask_target_entries(deps, context.root),
     })
+
+    return decision.entry, decision.reason
 end
 
 local function ask_pane_existing_or_default(state, deps, context, origin)
-    local entry = ask_pane_default_entry(state, deps, context)
+    local entry, reason = ask_pane_default_entry(state, deps, context)
 
     if entry then
-        M.ask_with_entry(state, deps, entry, { context = context, origin = origin })
+        M.ask_with_entry(state, deps, entry, { context = context, origin = origin, target_reason = reason })
         return true
     end
 
@@ -411,7 +423,7 @@ function M.ask_with_entry(state, deps, entry, opts)
             return
         end
 
-        ask_pane.add_context(state, pane_deps, entry, context, { origin = opts.origin })
+        ask_pane.add_context(state, pane_deps, entry, context, { origin = opts.origin, target_reason = opts.target_reason })
         return
     end
 
@@ -430,16 +442,19 @@ function M.append_to_ask(state, deps, opts)
     end
 
     if ask_uses_pane(state) then
-        local entry = ask_pane_default_entry(state, deps, context)
+        local entry, reason = ask_pane_default_entry(state, deps, context)
 
         if entry then
-            ask_pane.add_context(state, ask_pane_deps(deps), entry, context, { origin = origin })
+            ask_pane.add_context(state, ask_pane_deps(deps), entry, context, { origin = origin, target_reason = reason })
             return
         end
     end
 
     pick_target(state, deps, "Ask", context, function(choice)
-        ask_pane.add_context(state, ask_pane_deps(deps), choice, context, { origin = origin })
+        ask_pane.add_context(state, ask_pane_deps(deps), choice, context, {
+            origin = origin,
+            target_reason = ask_target_resolver.REASONS.explicit_target_change,
+        })
     end)
 end
 
@@ -458,8 +473,8 @@ function M.ask_picker(state, deps, opts)
         return
     end
 
-    pick_target(state, deps, "Ask", context, function(choice)
-        M.ask_with_entry(state, deps, choice, { context = context, origin = origin })
+    pick_target(state, deps, "Ask", context, function(choice, reason)
+        M.ask_with_entry(state, deps, choice, { context = context, origin = origin, target_reason = reason })
     end)
 end
 
@@ -481,13 +496,17 @@ function M.ask_last_coding_agent(state, deps, opts)
     local ctx = deps.last_coding_agent_context(context.root)
 
     if not ctx then
-        pick_target(state, deps, "Ask", context, function(choice)
-            M.ask_with_entry(state, deps, choice, { context = context, origin = origin })
+        pick_target(state, deps, "Ask", context, function(choice, reason)
+            M.ask_with_entry(state, deps, choice, { context = context, origin = origin, target_reason = reason })
         end)
         return
     end
 
-    M.ask_with_entry(state, deps, deps.entry_for_terminal_context(ctx), { context = context, origin = origin })
+    M.ask_with_entry(state, deps, deps.entry_for_terminal_context(ctx), {
+        context = context,
+        origin = origin,
+        target_reason = ask_target_resolver.REASONS.last_coding_agent,
+    })
 end
 
 --- Ask the current/default terminal for a specific coding agent.
@@ -509,13 +528,17 @@ function M.ask_current_coding_agent(state, deps, tool_name, opts)
     local ctx = deps.terminal_context_for_tool(tool_name, context.root)
 
     if not ctx then
-        pick_target(state, deps, "Ask", context, function(choice)
-            M.ask_with_entry(state, deps, choice, { context = context, origin = origin })
+        pick_target(state, deps, "Ask", context, function(choice, reason)
+            M.ask_with_entry(state, deps, choice, { context = context, origin = origin, target_reason = reason })
         end)
         return
     end
 
-    M.ask_with_entry(state, deps, deps.entry_for_terminal_context(ctx), { context = context, origin = origin })
+    M.ask_with_entry(state, deps, deps.entry_for_terminal_context(ctx), {
+        context = context,
+        origin = origin,
+        target_reason = ask_target_resolver.REASONS.last_coding_agent,
+    })
 end
 
 --- Ask a specific tool and optional preset.

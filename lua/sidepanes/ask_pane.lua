@@ -13,6 +13,7 @@ local ask_controller = require("sidepanes.ask_controller")
 local ask_executor = require("sidepanes.ask_executor")
 local ask_keymaps = require("sidepanes.ask_keymaps")
 local ask_session = require("sidepanes.ask_session")
+local ask_target_resolver = require("sidepanes.ask_target_resolver")
 
 local M = {}
 local CMDLINE_ENTER_DESC = "Sidepanes ask pane command-line enter"
@@ -144,13 +145,14 @@ local function reset_session(state, opts)
 end
 
 local function pick_target(state, deps, prompt, root, callback)
-    local targets = deps.tool_shortcut_entries(root, { ask_only = true })
-
-    vim.list_extend(targets, deps.terminal_entries(root, 1, { ask_only = true }))
+    local targets = ask_target_resolver.picker_entries({
+        picker_entries = deps.terminal_entries(root, 1, { ask_only = true }),
+        target_entries = deps.tool_shortcut_entries(root, { ask_only = true }),
+    })
 
     deps.numbered_select(prompt, targets, function(choice)
         if choice then
-            callback(choice)
+            callback(choice, ask_target_resolver.REASONS.explicit_target_change)
         end
     end)
 end
@@ -420,9 +422,10 @@ function M.change_target(state, deps, bufnr)
 
     local root = ask.root or vim.fn.getcwd()
 
-    pick_target(state, deps, "Question target", root, function(choice)
+    pick_target(state, deps, "Question target", root, function(choice, reason)
         ask.entry = choice
         ask.root = choice.root or ask.root or root
+        ask.target_reason = reason
         deps.update_sticky_heading()
 
         if util.valid_win(state.winid) and util.valid_buf(ask.bufnr) and vim.api.nvim_win_get_buf(state.winid) == ask.bufnr then
@@ -494,9 +497,22 @@ end
 local function open_before_send_picker(state, deps, ask, prompt)
     set_draft_state(state, ask, DRAFT_STATES.sending_picker)
     deps.update_sticky_heading()
-    pick_target(state, deps, "Question target", ask.root or vim.fn.getcwd(), function(choice)
+    local root = ask.root or vim.fn.getcwd()
+    local decision = ask_target_resolver.before_send({
+        picker_entries = deps.terminal_entries(root, 1, { ask_only = true }),
+        picker_mode = ask_config(state).model_picker,
+        root = root,
+        target_entries = deps.tool_shortcut_entries(root, { ask_only = true }),
+    })
+
+    deps.numbered_select("Question target", decision.entries or {}, function(choice)
+        if not choice then
+            return
+        end
+
         ask.entry = choice
         ask.root = choice.root or ask.root
+        ask.target_reason = decision.reason
         send_prompt(state, deps, prompt)
     end)
 end
@@ -616,6 +632,7 @@ function M.add_context(state, deps, entry, context, opts)
 
     ask.entry = entry
     ask.root = target_root
+    ask.target_reason = opts.target_reason or ask.target_reason
     ask.origin = origin or ask.origin
     ask.ready = false
     set_draft_state(state, ask, DRAFT_STATES.draft_modified)
