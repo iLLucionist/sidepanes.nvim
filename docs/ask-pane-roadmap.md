@@ -52,16 +52,15 @@ remain planned.
 The remaining planned slices must be implemented in this order unless the
 roadmap is explicitly updated first with the reason for changing the order.
 
-1. `25. Ask Session State And Status Snapshot Refactor`
-2. `26. Ask Test Architecture And Fed-Key Coverage Cleanup`
-3. `18. Target Resolver Refactor`
-4. `14. Ask Pane Module Split`
-5. `17. Ask Target And Picker Status Visibility`
-6. `20. SidepanesAskStatus`
-7. `21. SidepanesVersion`
-8. `22. Interactive Keymap Help`
-9. `19. Interaction-Focused Manual Acceptance Checklist`
-10. Final verification and release-readiness audit
+1. `26. Ask Test Architecture And Fed-Key Coverage Cleanup`
+2. `18. Target Resolver Refactor`
+3. `14. Ask Pane Module Split`
+4. `17. Ask Target And Picker Status Visibility`
+5. `20. SidepanesAskStatus`
+6. `21. SidepanesVersion`
+7. `22. Interactive Keymap Help`
+8. `19. Interaction-Focused Manual Acceptance Checklist`
+9. Final verification and release-readiness audit
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,
@@ -1913,6 +1912,9 @@ Remaining implementation order, restated before starting this slice:
 - Re-check implementation, tests, docs, roadmap, README, CHANGELOG, help docs,
   Markdown docs, release notes, AGENTS.md, and `illu.nvim` applicability before
   moving on.
+- Audit gap: after marking slice 25 `Done`, the top Remaining Implementation
+  Order still listed slice 25 first. Remove it so the next planned slice is
+  slice 26.
 
 Manual acceptance tests:
 
@@ -1959,6 +1961,7 @@ Traceability table:
 | Append context, edit the question, write, submit, cancel, and failed-send; confirm visible state labels and behavior agree. | `ask_session.record_state()`, `ask_pane.snapshot()`, and `winbar.lua` snapshot formatting drive labels/facts through append, write, submit/send, cancel, and failed-send flows. | Runtime regression assertions cover append `draft_modified` counts, written prompt facts, inactive sent/cancel snapshots, failed-send snapshot/status/winbar labels, and existing lifecycle histories. | Existing lifecycle docs remain source for user-facing labels; no docs change applies because behavior did not change. | Perform this exact workflow in Neovim. | `7aad91e`, `6c4b335`, `170eecb` | Done |
 | Switch from Markdown to ask and from Codex to ask; confirm previous pane restore behavior still works. | Previous pane state remains in raw ask session state and is exposed by `ask_session.snapshot()`; restore behavior remains in `ask_pane.cancel_draft()`. | Existing previous-pane capture/restore regressions passed; direct snapshot tests cover `previous_pane_mode`; cancel regression now asserts inactive snapshot after restore. | Existing restore docs remain unchanged because behavior did not change. | Perform this exact workflow in Neovim. | `0c1054c`, `170eecb` | Done |
 | Run any existing debug/status helpers and confirm they report the same target, picker, and draft state visible in the UI. | Existing internal status-facing helpers are `ask_pane.snapshot()`, `ask_pane.lifecycle_facts()`, `ask_session.status_data()`, and `ask_session.format_title()`; no public `SidepanesAskStatus` command was added before slice 20. | Direct and runtime tests assert target, picker, draft state, and winbar/status-facing agreement. No separate public-helper test applies because `SidepanesAskStatus` is still intentionally planned, not registered. | This roadmap; public command docs are deferred to slice 20 because no public helper changed. | Manual workflow note: no public status command exists yet; use visible winbar plus internal snapshot helpers until slice 20. | `0c1054c`, `7aad91e`, `6c4b335`, `170eecb` | Done |
+| Audit gap: after marking slice 25 `Done`, the top Remaining Implementation Order still listed slice 25 first. Remove it so the next planned slice is slice 26. | Top-level Remaining Implementation Order now starts at `26. Ask Test Architecture And Fed-Key Coverage Cleanup`. | Not Applicable: roadmap-order correction only; no runtime behavior or tests changed. | This roadmap. | Review the top-level Remaining Implementation Order before starting the next slice. | Pending audit-order correction commit. | Done |
 
 Verification results:
 
@@ -1977,8 +1980,9 @@ Audit passes:
   formatting, automated coverage, fed-key/mapping impact, command paths, state
   transitions, manual acceptance references, README, CHANGELOG, Neovim help,
   Markdown docs, release notes, roadmap status/order, AGENTS.md, and
-  `illu.nvim` applicability. No code, test, documentation, mapping, command,
-  public API, local config, or `illu.nvim` gap was found.
+  `illu.nvim` applicability. It found that the top Remaining Implementation
+  Order still started with slice 25 after slice 25 was marked `Done`; that gap
+  was recorded under this slice and fixed so the order now starts at slice 26.
 
 ### 26. Ask Test Architecture And Fed-Key Coverage Cleanup
 
