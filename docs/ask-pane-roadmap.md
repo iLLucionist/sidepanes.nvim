@@ -40,7 +40,7 @@ remain planned.
 | 18. Target Resolver Refactor | Done | Target resolution now lives in a pure resolver with traceable active, last-context, default, picker, and before-send decisions plus snapshot-facing target reasons. |
 | 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
 | 20. `SidepanesAskStatus` | Done | `ask_status(opts)`, `:SidepanesAskStatus`, and `:Sidepanes ask-status` report ask draft status for debugging. |
-| 21. `SidepanesVersion` | In Progress | Add a command/API that reports plugin version and load path. |
+| 21. `SidepanesVersion` | Done | `version()`, `:SidepanesVersion`, `:Sidepanes version`, and health output report plugin version and load path. |
 | 22. Interactive Keymap Help | Planned | Add pane-local keybinding help surfaced from the winbar. |
 | 23. Ask Action Policy And Fed-Key Test Discipline | Done | Central ask action predicates, policy tests, and fed-key test guidance are implemented and verified. |
 | 24. Ask Architecture Boundary Refactor | Done | Ask behavior is consolidated around pure policy/route/command helpers, thin adapters, a controller factory, and an injected lifecycle executor. |
@@ -52,10 +52,9 @@ remain planned.
 The remaining planned slices must be implemented in this order unless the
 roadmap is explicitly updated first with the reason for changing the order.
 
-1. `21. SidepanesVersion`
-2. `22. Interactive Keymap Help`
-3. `19. Interaction-Focused Manual Acceptance Checklist`
-4. Final verification and release-readiness audit
+1. `22. Interactive Keymap Help`
+2. `19. Interaction-Focused Manual Acceptance Checklist`
+3. Final verification and release-readiness audit
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,
@@ -1639,7 +1638,7 @@ new HEAD.
 
 ### 21. `SidepanesVersion`
 
-Status: `In Progress`
+Status: `Done`
 
 User response: add a command like `SidepanesVersion` that prints the current
 version and where the plugin was loaded from.
@@ -1649,10 +1648,9 @@ are involved.
 
 Remaining implementation order:
 
-1. `21. SidepanesVersion`
-2. `22. Interactive Keymap Help`
-3. `19. Interaction-Focused Manual Acceptance Checklist`
-4. Final verification and release-readiness audit
+1. `22. Interactive Keymap Help`
+2. `19. Interaction-Focused Manual Acceptance Checklist`
+3. Final verification and release-readiness audit
 
 - Add a version source, for example `sidepanes.version` or a constant in the
   public facade.
@@ -1723,6 +1721,17 @@ Verification results:
   `:Sidepanes version` printed `0.4.0-dev` and
   `/private/tmp/sidepanes-s21-alt.jzI6bF/sidepanes.nvim`.
 - `git diff --check` passed after verification.
+
+Audit passes:
+
+- Pass 1 checked slice bullets, traceability, implementation boundaries, tests,
+  fed-key/command coverage tables, manual acceptance evidence, README,
+  CHANGELOG, Neovim help, Markdown docs, release notes, roadmap order/status,
+  AGENTS.md, and `illu.nvim` impact. It found the stale CHANGELOG planned-slot
+  wording recorded above.
+- Pass 2 restarted after `a65e3c7` and rechecked the same areas plus stale-text
+  searches, docs contract smoke, worktree status, and `git diff --check`. No
+  new gaps were found.
 
 ### 22. Interactive Keymap Help
 
