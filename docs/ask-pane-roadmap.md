@@ -33,7 +33,7 @@ remain planned.
 | 11. Documentation And Local Opt-In | Done | README, help, changelog, release notes, roadmap, and `illu.nvim` opt-in are updated. |
 | 12. Verification | Done | `tests/run_checks.sh fast`, `tests/run_checks.sh full`, `illu.nvim` smoke, and `git diff --check` pass as of the latest audit. |
 | 13. Send Lifecycle Naming Refactor | Done | Exact lifecycle action names, explicit draft states, winbar labels, tests, and docs are implemented and verified. |
-| 14. Ask Pane Module Split | Planned | Split ask pane internals into `lua/sidepanes/panes/ask/*` or equivalent. |
+| 14. Ask Pane Module Split | In Progress | Split ask pane internals into `lua/sidepanes/panes/ask/*` or equivalent. |
 | 15. Formal Behavior Matrix | Done | Source-of-truth matrix plus machine-readable fixture and docs-contract coverage are present. |
 | 16. Mapping And Command Zone Matrix | Done | Source-of-truth mapping/command zone matrix plus fixture, docs-contract checks, runtime mapping regression, corrected non-ask `:q` command-path ownership, and ask-pane quit-lifecycle shortcuts are present. |
 | 17. Ask Target And Picker Status Visibility | Planned | Add status/debug visibility for active target, picker mode, and picker timing. |
@@ -931,7 +931,7 @@ Audit passes:
 
 ### 14. Ask Pane Module Split
 
-Status: `Planned`
+Status: `In Progress`
 
 User response: yes, split it up. Consider an ask-pane subfolder, and possibly
 `panes/ask/*` if panes may become swappable later.
@@ -939,6 +939,16 @@ User response: yes, split it up. Consider an ask-pane subfolder, and possibly
 Goal: reduce the size and responsibility of `ask_pane.lua` after slices 24-26
 have clarified the behavioral boundaries. This is a file move and
 module-boundary slice, not the place to invent new lifecycle decisions.
+
+Remaining implementation order, restated before starting this slice:
+
+1. `14. Ask Pane Module Split`
+2. `17. Ask Target And Picker Status Visibility`
+3. `20. SidepanesAskStatus`
+4. `21. SidepanesVersion`
+5. `22. Interactive Keymap Help`
+6. `19. Interaction-Focused Manual Acceptance Checklist`
+7. Final verification and release-readiness audit
 
 - Move ask-pane implementation into a pane-oriented namespace, preferably:
   - `lua/sidepanes/panes/ask/init.lua`: public ask-pane module entrypoint.
@@ -975,6 +985,28 @@ Manual acceptance tests:
 
 Refinement note: `panes/ask/*` is the better long-term shape if we expect
 Markdown, terminal, and custom panes to become independently configurable.
+
+Traceability table:
+
+| Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Move ask-pane implementation into a pane-oriented namespace, preferably: | Planned: move ask-pane internals under `lua/sidepanes/panes/ask/*` while keeping behavior equivalent. | Planned: module-load, focused ask, fast/full checks. | This roadmap; public docs change only if module/user behavior changes. | Open/focus, append, navigate, write/send, and cancel after the module move. | Pending | Planned |
+| `lua/sidepanes/panes/ask/init.lua`: public ask-pane module entrypoint. | Planned: add pane-oriented entrypoint and route existing require path through it. | Planned: require/load smoke and existing ask-pane regressions. | This roadmap; no public docs change applies unless public API changes. | Confirm existing ask pane API calls still work. | Pending | Planned |
+| `lua/sidepanes/panes/ask/session.lua`: session storage, buffer creation, reset, and lifecycle setup. | Planned: extract session/buffer/lifecycle setup helpers where this reduces `ask_pane.lua` responsibility without broad rewrites. | Planned: existing session/snapshot/buffer lifecycle regressions plus any direct module tests that fit. | This roadmap; no public docs change applies for internal module layout. | Open/focus, write, cancel, and reopen ask pane. | Pending | Planned |
+| `lua/sidepanes/panes/ask/controller.lua`: composed lifecycle entry points produced from injected dependencies, state accessors, policy, and executor. | Planned: move ask-pane controller composition if it can be separated safely. | Planned: existing controller/executor/lifecycle regressions and focused ask checks. | This roadmap; no public docs change applies for internal module layout. | Write/send and cancel workflows still follow the same lifecycle. | Pending | Planned |
+| `lua/sidepanes/panes/ask/executor.lua`: execution of policy action plans against Neovim/UI side effects. | Planned: keep pure executor where it is or move only if behavior boundaries stay clear. | Planned: existing executor fake-dependency tests plus ask lifecycle regressions. | This roadmap; no public docs change applies for internal module layout. | Submit and failed-send workflows still behave the same. | Pending | Planned |
+| `lua/sidepanes/panes/ask/cmdline.lua`: thin command-line adapter that parses command text and submits intents; no send/cancel/write decisions. | Planned: move or shim command-line adapter while preserving thin ownership. | Planned: command-line adapter tests and fed command-line lifecycle tests. | This roadmap; no public docs change applies if command behavior stays equivalent. | Run `:q`, `:q!`, `:w`, and `:wq` in the ask pane. | Pending | Planned |
+| `lua/sidepanes/panes/ask/keymaps.lua`: thin ask-pane mapping adapter that registers mappings and submits intents; no lifecycle predicates. | Planned: move or shim ask keymap adapter while preserving thin ownership. | Planned: mapping-zone/coverage tests and fed mapping tests. | This roadmap; no public docs change applies if mappings stay equivalent. | Press ask-pane mappings including `M`, `qq`, `<leader>qq`, `<C-CR>`, and `<C-J>`. | Pending | Planned |
+| `lua/sidepanes/panes/ask/navigation.lua`: `]f`, `[f`, `]s`, `[s`, and `gf` source jumps. | Planned: extract navigation/source-jump helpers if separable without behavior churn. | Planned: existing navigation/source-jump regression coverage. | This roadmap; no public docs change applies if navigation behavior stays equivalent. | Navigate citations and use `gf` from file/selection headers. | Pending | Planned |
+| `lua/sidepanes/panes/ask/status.lua`: status snapshot formatting for winbar and `SidepanesAskStatus`. | Planned: move status formatting into pane namespace only for existing winbar/status helpers; do not implement `SidepanesAskStatus` in this slice. | Planned: existing snapshot/status/winbar tests; no `SidepanesAskStatus` tests until slice 20. | This roadmap; public docs change only if existing status text changes. | Confirm ask winbar/status text remains equivalent. | Pending | Planned |
+| Keep `lua/sidepanes/ask_policy.lua` as the pure decision module unless slice 24 deliberately moves it under `panes/ask/policy.lua` with a compatibility shim. | Planned: keep policy stable unless a shimmed move is safer. | Planned: functional-core purity and policy tests. | This roadmap; no public docs change applies. | Review policy module location and compatibility. | Pending | Planned |
+| Keep `lua/sidepanes/ask_pane.lua` temporarily as a compatibility shim if that keeps the diff safer. | Planned: preserve `require("sidepanes.ask_pane")` compatibility. | Planned: existing tests requiring `sidepanes.ask_pane` and runtime regressions. | This roadmap; no public docs change applies if compatibility is preserved. | Confirm existing require path still loads. | Pending | Planned |
+| Avoid moving unrelated Markdown/terminal pane logic in the same slice. | Planned: scope file moves/edits to ask-pane modules and required require updates only. | Not Applicable as automated test: scope control is verified by diff/audit. | This roadmap. | Review final diff for unrelated Markdown/terminal moves. | Pending | Planned |
+| Add module-boundary tests where pure modules can be tested directly. | Planned: add direct module-load/boundary tests and preserve pure module tests. | Planned: focused boundary tests plus fast/full checks. | This roadmap; no public docs change applies. | Review test names and module ownership. | Pending | Planned |
+| Keep existing user-visible behavior equivalent except for intentionally improved diagnostics caused by the earlier refactor slices. | Planned: preserve ask-pane behavior; no new lifecycle decisions in this slice. | Planned: focused ask tests, fed-key tests, fast/full checks; `illu.nvim` smoke if behavior trigger applies. | Public docs should remain unchanged unless behavior changes. | Run the listed manual ask workflows after the move. | Pending | Planned |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Planned: complete restarting audit passes and two clean non-mutating confirmation passes after the last commit. | Planned: audit will include focused, fast/full as applicable, and `git diff --check`. | This roadmap records audit evidence; README/CHANGELOG/help/docs/release notes update only if behavior/docs change. | Review implementation, traceability table, docs, and manual checklist before moving on. | Pending | Planned |
+| Open/focus the ask pane, append context, navigate citations, write/send, and cancel from both Markdown and Codex after the module move. | Planned: preserve these workflows after module extraction. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by focused ask regressions where possible. | Existing public docs describe these workflows; update only if behavior changes. | Perform this exact manual workflow. | Pending | Planned |
+| Run `:checkhealth sidepanes` and confirm no module-load errors. | Planned: preserve module load paths and health checks after the split. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement; `tests/run_checks.sh fast/full` include checkhealth smoke. | Existing health docs remain applicable unless behavior changes. | Perform this exact manual workflow. | Pending | Planned |
 
 ### 15. Formal Behavior Matrix
 
