@@ -1706,6 +1706,9 @@ Remaining implementation order, restated before starting this slice:
 - Post-completion audit gap: the original slice 24 audit notes were not a
   falsifiable two-clean-pass loop after the last change, so perform and record
   two consecutive clean post-slice audit passes before progressing.
+- Post-completion audit gap: the first audit-record commit left stale future
+  wording and incomplete commit evidence after its follow-up correction, so
+  record that correction and restart the clean-pass count again.
 
 Manual acceptance tests:
 
@@ -1782,6 +1785,7 @@ Traceability table:
 | Re-check implementation, tests, docs, roadmap, README, CHANGELOG, help docs, Markdown docs, release notes, AGENTS.md, and `illu.nvim` applicability before moving on. | Implementation, test, docs, roadmap, and local integration audit completed. | `tests/run_checks.sh fast`, `tests/run_checks.sh full`, `illu.nvim` smoke, and `git diff --check` passed. | Public docs, help docs, CHANGELOG, release notes, AGENTS.md, and roadmap audited; no additional public docs change needed. | Manual audit before Done. | Done |
 | Post-completion audit gap: slice 24 was completed before commit references were mandatory, so record the catch-up commit and the process-rule commit before progressing to slice 25. | Catch-up commit `0cf2ff7` contains the accumulated ask-pane implementation/test/doc state. Process commit `97b86a5` adds per-unit commit and stricter audit rules. Audit-record commit `2ca3fce` records the post-slice audit evidence. | `git log --oneline --decorate -5` confirmed all three commits; `git status --short` confirmed sidepanes.nvim was clean after `2ca3fce`. | `AGENTS.md`, Mandatory Slice Completion Protocol, and this traceability row. | Review branch log and confirm no completed slice unit remains uncommitted before slice 25 starts. | Done |
 | Post-completion audit gap: the original slice 24 audit notes were not a falsifiable two-clean-pass loop after the last change, so perform and record two consecutive clean post-slice audit passes before progressing. | Post-slice audit passes below record scope and outcome after commits `0cf2ff7`, `97b86a5`, and `2ca3fce`. | `tests/run_checks.sh fast` passed with 160 regression tests; `tests/run_checks.sh full` passed; `illu.nvim` smoke passed; `git diff --check` passed before `2ca3fce`. | This roadmap audit section; `AGENTS.md` and Mandatory Slice Completion Protocol define future enforcement. | Review recorded post-protocol passes before slice 25 starts. | Done |
+| Post-completion audit gap: the first audit-record commit left stale future wording and incomplete commit evidence after its follow-up correction, so record that correction and restart the clean-pass count again. | Audit-evidence correction commit `01bc961` fixed stale wording after `2ca3fce`; this row records that the clean-pass count must restart after the current audit-evidence update. | `git log --oneline --decorate -8` confirmed `01bc961`; `git status --short` was clean before this update; fresh post-update clean passes are required before slice 25. | This roadmap audit section. | Review branch log and require two fresh clean passes from the latest audit-evidence commit before slice 25 starts. | Done |
 | In the ask pane, run `:q`, `:q!`, `:w`, `:wq`, `:x`, configured `qq`, configured `<leader>qq`, `<C-CR>`, and `<C-J>`; confirm outcomes match the behavior matrix. | Existing behavior preserved by ask controller/executor/command adapter. | Existing command-line, send mapping, submit mapping, and fed-key tests passed in full checks. | Behavior matrix and this roadmap. | Perform this exact workflow. | Done |
 | In Markdown and Codex panes, press personal plain-quit mappings such as `qq` and `<leader>qq`; confirm Sidepanes does not close. | Non-ask guards still in `maps.lua` using policy and `ask_cmdline.markdown_return_command()`. | Personal quit fed-key regression and `illu.nvim` smoke passed. | Mapping zone matrix and this roadmap. | Perform this exact workflow. | Done |
 | Change target manually with `M`, then submit; confirm target choice survives the refactor. | `ask_keymaps` delegates target mapping to controller/change-target handler; `ask_pane.change_target()` behavior unchanged. | Target picker mapping tests passed in full checks. | Existing public docs unchanged. | Perform this exact workflow. | Done |
@@ -1802,6 +1806,8 @@ Verification results:
 - Process commit `97b86a5` recorded the per-unit commit rule and stricter
   two-clean-pass audit rule.
 - Audit-record commit `2ca3fce` recorded the post-slice audit evidence.
+- Audit-evidence correction commit `01bc961` fixed stale future wording and
+  incomplete commit evidence found by a later pass.
 
 Audit passes:
 
@@ -1825,6 +1831,11 @@ Audit passes:
   traceability, public ask-pane mapping docs, release notes, `AGENTS.md`,
   sidepanes git status/log evidence, full/fast check results, and `illu.nvim`
   smoke evidence after the process correction. No new gaps were found.
+- Post-protocol pass 3 restarted from `01bc961` and checked clean worktree,
+  commit history, traceability rows, process protocol text, and stale future
+  wording. It found that `01bc961` itself was not recorded in the slice 24
+  evidence, so this gap was added and the clean-pass count must restart again
+  from the next audit-evidence commit.
 
 ### 25. Ask Session State And Status Snapshot Refactor
 
