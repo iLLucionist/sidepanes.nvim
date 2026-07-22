@@ -7,6 +7,7 @@ local api_helpers = require("sidepanes.api")
 local ask_cmdline = require("sidepanes.ask_cmdline")
 local ask_controller = require("sidepanes.ask_controller")
 local ask_executor = require("sidepanes.ask_executor")
+local ask_pane_module = require("sidepanes.ask_pane")
 local ask_prompt = require("sidepanes.ask_prompt")
 local ask_policy = require("sidepanes.ask_policy")
 local ask_route = require("sidepanes.ask_route")
@@ -4718,6 +4719,21 @@ test("ask pane opens reusable ready scratch buffer in the side split", function(
     assert(pane.ask_pane.draft_state == "ready_empty", "ask pane did not record ready_empty state")
     assert_state_history_contains(pane.ask_pane_state_history, { "ready_empty" }, "open ask pane")
 
+    local snapshot = ask_pane_module.snapshot(pane)
+
+    assert(snapshot.active == true, "runtime ask snapshot did not mark ready pane active")
+    assert(snapshot.active_window == true, "runtime ask snapshot did not mark pane window active")
+    assert(snapshot.draft_state == "ready_empty", "runtime ask snapshot lost ready_empty")
+    assert(snapshot.target_label == "No target", "runtime ask snapshot target label was wrong")
+    assert(snapshot.live_prompt == "Question:", "runtime ask snapshot live prompt was wrong")
+    assert(snapshot.citation_count == 0 and snapshot.file_count == 0, "runtime ask snapshot counts were wrong")
+
+    local facts = ask_pane_module.lifecycle_facts(pane)
+
+    assert(facts.valid_buffer == true, "runtime lifecycle facts lost valid buffer")
+    assert(facts.live_prompt == "Question:", "runtime lifecycle facts lost ready prompt")
+    assert(facts.dirty_buffer == false, "runtime lifecycle facts should not mark ready prompt dirty")
+
     local again = pane.show_ask_pane({ focus = true })
 
     assert(again == bufnr, "ask pane did not reuse existing buffer")
@@ -5652,6 +5668,15 @@ test("ask pane empty ready draft writes then submit cancels without sending", fu
     assert(pane.ask_pane.written_prompt == "Question:", "ready write cached unexpected prompt")
     assert(pane.ask_pane.draft_state == "draft_written", "ready write did not record draft_written")
     assert(not vim.api.nvim_get_option_value("modified", { buf = qbuf }), "ready write left buffer modified")
+
+    local snapshot = ask_pane_module.snapshot(pane)
+    local facts = ask_pane_module.lifecycle_facts(pane)
+
+    assert(snapshot.draft_state == "draft_written", "runtime snapshot lost draft_written after write")
+    assert(snapshot.written_prompt == "Question:", "runtime snapshot lost written prompt after write")
+    assert(snapshot.dirty_buffer == false, "runtime snapshot marked written prompt dirty")
+    assert(facts.written_prompt == "Question:", "runtime lifecycle facts lost written prompt")
+    assert(facts.dirty_buffer == false, "runtime lifecycle facts marked written prompt dirty")
 
     pane.submit_ask_pane(qbuf)
 

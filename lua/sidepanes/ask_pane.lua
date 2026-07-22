@@ -12,23 +12,17 @@ local ask_cmdline = require("sidepanes.ask_cmdline")
 local ask_controller = require("sidepanes.ask_controller")
 local ask_executor = require("sidepanes.ask_executor")
 local ask_keymaps = require("sidepanes.ask_keymaps")
+local ask_session = require("sidepanes.ask_session")
 
 local M = {}
 local CMDLINE_ENTER_DESC = "Sidepanes ask pane command-line enter"
-local DRAFT_STATES = ask_policy.STATES
+local DRAFT_STATES = ask_session.STATES
 local controller_for
 
 M.DRAFT_STATES = DRAFT_STATES
 
 local function set_draft_state(state, ask, draft_state)
-    if not ask then
-        return
-    end
-
-    ask.draft_state = draft_state
-    state.ask_pane_last_state = draft_state
-    state.ask_pane_state_history = state.ask_pane_state_history or {}
-    table.insert(state.ask_pane_state_history, draft_state)
+    ask_session.record_state(state, ask, draft_state)
 end
 
 local function session(state)
@@ -48,6 +42,31 @@ local function buffer_prompt(ask)
     end
 
     return util.trim(table.concat(vim.api.nvim_buf_get_lines(ask.bufnr, 0, -1, false), "\n"))
+end
+
+local function snapshot(state, ask)
+    ask = ask or state.ask_pane or {}
+
+    local valid_buf = util.valid_buf(ask.bufnr)
+    local valid_win = util.valid_win(state.winid)
+    local active_window = false
+
+    if valid_buf and valid_win then
+        active_window = vim.api.nvim_get_current_win() == state.winid and vim.api.nvim_win_get_buf(state.winid) == ask.bufnr
+    end
+
+    return ask_session.snapshot(ask, {
+        config = state.config,
+        buffer = {
+            live_prompt = valid_buf and buffer_prompt(ask) or "",
+            modified = valid_buf and vim.api.nvim_get_option_value("modified", { buf = ask.bufnr }) or false,
+            valid = valid_buf,
+        },
+        window = {
+            active = active_window,
+            valid = valid_win,
+        },
+    })
 end
 
 local function existing_question(lines)
@@ -459,15 +478,17 @@ local function send_prompt(state, deps, prompt)
 end
 
 local function lifecycle_facts(state, ask)
-    local valid_buf = util.valid_buf(ask.bufnr)
+    return ask_session.lifecycle_facts(snapshot(state, ask))
+end
 
-    return {
-        dirty_buffer = valid_buf and vim.api.nvim_get_option_value("modified", { buf = ask.bufnr }) or false,
-        live_prompt = valid_buf and buffer_prompt(ask) or "",
-        picker_mode = ask_config(state).model_picker,
-        valid_buffer = valid_buf,
-        written_prompt = ask.written_prompt,
-    }
+--- Return the current serializable ask session snapshot.
+function M.snapshot(state)
+    return snapshot(state, state.ask_pane or {})
+end
+
+--- Return policy-facing lifecycle facts from the current ask session snapshot.
+function M.lifecycle_facts(state)
+    return lifecycle_facts(state, state.ask_pane or {})
 end
 
 local function open_before_send_picker(state, deps, ask, prompt)
