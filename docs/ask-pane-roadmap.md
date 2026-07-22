@@ -45,22 +45,21 @@ remain planned.
 | 23. Ask Action Policy And Fed-Key Test Discipline | Done | Central ask action predicates, policy tests, and fed-key test guidance are implemented and verified. |
 | 24. Ask Architecture Boundary Refactor | Done | Ask behavior is consolidated around pure policy/route/command helpers, thin adapters, a controller factory, and an injected lifecycle executor. |
 | 25. Ask Session State And Status Snapshot Refactor | Done | Ask session snapshots now provide the shared facts/status data used by lifecycle decisions, winbar labels, tests, and future status commands. |
-| 26. Ask Test Architecture And Fed-Key Coverage Cleanup | In Progress | Reshape ask tests around policy/state/fed-key behavior and reduce callback-only coverage to registration checks. |
+| 26. Ask Test Architecture And Fed-Key Coverage Cleanup | Done | Ask tests are grouped by architecture layer, behavior-sensitive mappings have traceable fed-key coverage or explicit exceptions, and command-line `:w` lifecycle coverage is fixed and verified. |
 
 ## Remaining Implementation Order
 
 The remaining planned slices must be implemented in this order unless the
 roadmap is explicitly updated first with the reason for changing the order.
 
-1. `26. Ask Test Architecture And Fed-Key Coverage Cleanup`
-2. `18. Target Resolver Refactor`
-3. `14. Ask Pane Module Split`
-4. `17. Ask Target And Picker Status Visibility`
-5. `20. SidepanesAskStatus`
-6. `21. SidepanesVersion`
-7. `22. Interactive Keymap Help`
-8. `19. Interaction-Focused Manual Acceptance Checklist`
-9. Final verification and release-readiness audit
+1. `18. Target Resolver Refactor`
+2. `14. Ask Pane Module Split`
+3. `17. Ask Target And Picker Status Visibility`
+4. `20. SidepanesAskStatus`
+5. `21. SidepanesVersion`
+6. `22. Interactive Keymap Help`
+7. `19. Interaction-Focused Manual Acceptance Checklist`
+8. Final verification and release-readiness audit
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,
@@ -1987,7 +1986,7 @@ Audit passes:
 
 ### 26. Ask Test Architecture And Fed-Key Coverage Cleanup
 
-Status: `In Progress`
+Status: `Done`
 
 User response: tests should stop calling mapping callbacks for
 behavior-sensitive paths unless there is also a fed-key test; callback tests are
@@ -2085,7 +2084,7 @@ Traceability table:
 | Ensure tests compare expected behavior against the behavior matrix and mapping zone matrix rather than repeating stale implementation assumptions. | `tests/ask_pane_mapping_coverage.lua` links coverage rows to `tests/ask_pane_behavior_matrix.lua` and `tests/ask_pane_mapping_zone_matrix.lua`; the regression suite validates those links. | Coverage-table integrity test passed and fails if a behavior or zone matrix row lacks a coverage decision. | Matrix fixtures and this roadmap; no public docs change applies beyond the added `ask-pane-command-line` matrix row. | Compare manual workflows to the matrices, not implementation details. | `e8c6d20` | Done |
 | Add focused test helpers for key feeding, command-line feeding, and pane state assertions so tests are readable without hiding the user action being tested. | Added `feed_user_keys()`, `feed_user_command()`, `feed_user_insert_keys()`, `wait_until()`, and `assert_pane_window()` in `tests/sidepanes_regression.lua`; test bodies still show the literal user keys/commands. | Converted fed-key tests passed in the focused ask run. | This roadmap; no public docs change applies because helpers are internal. | Confirm test failures name the user action clearly. | `e8c6d20` | Done |
 | Run focused ask tests, `tests/run_checks.sh fast`, `tests/run_checks.sh full`, `illu.nvim` smoke when mappings/local integration are affected, and `git diff --check`. | Focused ask/personal/submit regression, fast checks, full checks, local `illu.nvim` smoke, and `git diff --check` were run after the audit-gap fix. | Focused ask run passed with 47 selected tests; `tests/run_checks.sh fast` passed with 166 regression tests; `tests/run_checks.sh full` passed with 166 regression tests and real CLI smoke; `ILLU_SIDEPANES_RUNTIME_PATH=/Users/maximl/.config/nvim/sidepanes.nvim /Users/maximl/.config/nvim/illu.nvim/tests/run_sidepanes_checks.sh` passed; `git diff --check` passed. | Verification results are recorded below; CHANGELOG notes the `:w` command-path fix. | Run the same checks locally if desired. | `ec1d381`; verification evidence commit | Done |
-| Re-check implementation, tests, docs, roadmap, README, CHANGELOG, help docs, Markdown docs, release notes, AGENTS.md, and `illu.nvim` applicability before moving on. | Planned: complete restarting audit passes and two clean non-mutating confirmation passes after the last commit. | Planned: audit will include test coverage and edge cases. | This roadmap records audit evidence; public docs update only if behavior/docs change. | Review the traceability table and manual checklist before moving on. | Pending | In Progress |
+| Re-check implementation, tests, docs, roadmap, README, CHANGELOG, help docs, Markdown docs, release notes, AGENTS.md, and `illu.nvim` applicability before moving on. | Restarting audit passes checked the slice bullets, traceability table, implementation boundaries, mapping zones, command paths, state transitions, fed-key coverage, manual acceptance references, README, CHANGELOG, help docs, Markdown docs, release notes, roadmap status/order, AGENTS.md process requirements, and `illu.nvim` applicability. | Focused ask/personal/submit, fast, full, `illu.nvim` smoke, coverage-table integrity, and `git diff --check` evidence are recorded in this slice; final two clean non-mutating confirmation passes are required after the last commit and reported in the final response. | This roadmap records audit evidence; CHANGELOG, help docs, Markdown docs, and release notes were reviewed for the `:w` command-path fix; no README change applies because the README does not enumerate ask-pane command-line lifecycle details. | Review the traceability table, manual checklist, and final two clean confirmation passes before moving on. | closeout evidence commit | Done |
 | For every mapping listed in the behavior-sensitive coverage table, perform the real keypress in Neovim and compare the outcome to the matrix. | `tests/ask_pane_mapping_coverage.lua` is the behavior-sensitive coverage table; fed-key tests exercise the same real keypaths where automated synthesis applies. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by fed-key regressions and the coverage-table integrity test. | Coverage table plus existing behavior/mapping matrices. | Perform this exact manual workflow. | `e8c6d20` | Done |
 | Repeat personal `qq` / `<leader>qq` checks in Markdown, Codex, and ask panes. | Guarded quit mappings and ask send mappings are listed in `tests/ask_pane_mapping_coverage.lua`. | `tests/sidepanes_regression.lua` "personal normal quit mappings do not close markdown or terminal side panes" and "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" passed in the focused ask run. | Existing mapping docs remain unchanged because behavior did not change. | Perform this exact manual workflow. | `e8c6d20` | Done |
 | Repeat `<C-CR>` / `<C-J>` submit checks from normal and insert ask-pane modes. | Submit fed-key coverage is listed in `tests/ask_pane_mapping_coverage.lua`; helper-driven tests feed the literal submit keys. | `tests/sidepanes_regression.lua` "ask pane submit mapping sends modified prompt from normal and insert modes" feeds normal `<C-CR>`, insert `<C-CR>`, and `<C-J>` fallback. | Existing mapping docs remain unchanged because behavior did not change. | Perform this exact manual workflow. | `e8c6d20` | Done |
@@ -2114,6 +2113,8 @@ Audit gaps:
   command-line fed-key tests and an outdated ask-write-draft test reference.
 - Audit pass 1 restart found the ask-pane `:w` command-path changelog note under
   `Changed` even though it describes a fix.
+- Audit pass 1 restart then found no further implementation, coverage,
+  documentation, roadmap-order, process, or `illu.nvim` applicability gaps.
 
 | Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
 | --- | --- | --- | --- | --- | --- | --- |
