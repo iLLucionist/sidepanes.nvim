@@ -191,4 +191,132 @@ function M.format_title(snapshot)
     return "Ask: " .. status.target_label .. " - " .. draft
 end
 
+function M.ensure(state)
+    state.ask_pane = state.ask_pane or {}
+    state.ask_pane.citations = state.ask_pane.citations or {}
+
+    return state.ask_pane
+end
+
+function M.ask_config(state)
+    return type(state.config) == "table" and type(state.config.ask) == "table" and state.config.ask or {}
+end
+
+function M.buffer_prompt(raw, adapter)
+    if not adapter.valid_buf(raw.bufnr) then
+        return ""
+    end
+
+    return adapter.trim(table.concat(adapter.get_lines(raw.bufnr, 0, -1, false), "\n"))
+end
+
+function M.runtime_snapshot(state, raw, adapter)
+    raw = raw or state.ask_pane or {}
+
+    local valid_buf = adapter.valid_buf(raw.bufnr)
+    local valid_win = adapter.valid_win(state.winid)
+    local active_window = false
+
+    if valid_buf and valid_win then
+        active_window = adapter.current_win() == state.winid and adapter.win_buf(state.winid) == raw.bufnr
+    end
+
+    return M.snapshot(raw, {
+        config = state.config,
+        buffer = {
+            live_prompt = valid_buf and M.buffer_prompt(raw, adapter) or "",
+            modified = valid_buf and adapter.get_option("modified", { buf = raw.bufnr }) or false,
+            valid = valid_buf,
+        },
+        window = {
+            active = active_window,
+            valid = valid_win,
+        },
+    })
+end
+
+function M.restore_commandline_enter(raw, adapter)
+    if not raw or not raw.cmdline_enter_setup then
+        return
+    end
+
+    local current = adapter.cmd_map("<CR>", "c")
+
+    if type(current) == "table" and current.desc == adapter.cmdline_enter_desc then
+        if raw.previous_cmdline_enter and next(raw.previous_cmdline_enter) ~= nil then
+            adapter.mapset("c", false, raw.previous_cmdline_enter)
+        else
+            adapter.del_keymap("c", "<CR>")
+        end
+    end
+
+    raw.cmdline_enter_setup = nil
+    raw.previous_cmdline_enter = nil
+end
+
+function M.reset(state, opts, adapter)
+    opts = opts or {}
+    local raw = state.ask_pane or {}
+    local bufnr = raw.bufnr
+
+    raw.resetting = true
+    M.restore_commandline_enter(raw, adapter)
+    state.ask_pane = {}
+
+    local function delete_buffer()
+        if adapter.valid_buf(bufnr) then
+            adapter.delete_buf(bufnr, { force = true })
+        end
+    end
+
+    if opts.defer_delete then
+        adapter.schedule(delete_buffer)
+    else
+        delete_buffer()
+    end
+end
+
+function M.capture_previous(state)
+    if state.active_mode == "ask" then
+        return
+    end
+
+    local raw = M.ensure(state)
+
+    raw.previous = {
+        active_mode = state.active_mode,
+        active_terminal_key = state.active_terminal_key,
+        bufnr = state.active_mode == "markdown" and state.bufnr or nil,
+    }
+end
+
+function M.ensure_buffer(state, adapter)
+    local raw = M.ensure(state)
+
+    if adapter.valid_buf(raw.bufnr) then
+        return raw.bufnr
+    end
+
+    local bufnr = adapter.create_buf(false, true)
+    local augroup = adapter.create_augroup("SidepanesAskPane" .. bufnr, { clear = true })
+
+    raw.bufnr = bufnr
+    raw.augroup = augroup
+    raw.citations = {}
+    raw.written_prompt = nil
+    raw.ready = true
+    state.ask_pane_state_history = {}
+    M.record_state(state, raw, STATES.ready_empty)
+
+    adapter.set_buf_name(bufnr, "Pane Question")
+    adapter.set_option("buftype", "acwrite", { buf = bufnr })
+    adapter.set_option("bufhidden", "hide", { buf = bufnr })
+    adapter.set_option("swapfile", false, { buf = bufnr })
+    adapter.set_option("filetype", "markdown", { buf = bufnr })
+    adapter.set_lines(bufnr, 0, -1, false, { "Question:", "" })
+    adapter.set_option("modified", false, { buf = bufnr })
+
+    return bufnr
+end
+
 return M

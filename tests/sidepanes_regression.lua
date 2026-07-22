@@ -4738,6 +4738,138 @@ test("ask session records lifecycle history at the session boundary", function()
     assert(vim.deep_equal(state.ask_pane_state_history, { "ready_empty", "draft_modified" }), "record_state history was wrong")
 end)
 
+test("ask session owns buffer setup reset snapshot and previous capture through adapters", function()
+    local valid_bufs = {}
+    local created_bufs = {}
+    local options = {}
+    local deleted = {}
+    local scheduled = false
+    local mapset_args = nil
+    local del_keymap_args = nil
+    local state = {
+        active_mode = "markdown",
+        bufnr = 9,
+        config = {
+            ask = {
+                model_picker = "manual",
+            },
+        },
+        winid = 42,
+    }
+    local adapter = {
+        cmdline_enter_desc = "session-test-enter",
+        cmd_map = function()
+            return { desc = "session-test-enter" }
+        end,
+        create_augroup = function(name, opts)
+            assert(name == "SidepanesAskPane101", "augroup name was wrong")
+            assert(opts.clear == true, "augroup opts were wrong")
+            return 202
+        end,
+        create_buf = function(listed, scratch)
+            assert(listed == false and scratch == true, "buffer creation opts were wrong")
+            table.insert(created_bufs, 101)
+            valid_bufs[101] = true
+            return 101
+        end,
+        current_win = function()
+            return 42
+        end,
+        delete_buf = function(bufnr, opts)
+            table.insert(deleted, { bufnr = bufnr, force = opts.force })
+            valid_bufs[bufnr] = false
+        end,
+        del_keymap = function(mode, lhs)
+            del_keymap_args = { mode = mode, lhs = lhs }
+        end,
+        get_lines = function(bufnr)
+            assert(bufnr == 101, "snapshot read wrong buffer")
+            return { "Question:", "  hello  " }
+        end,
+        get_option = function(name)
+            return options[name]
+        end,
+        mapset = function(mode, abbr, map)
+            mapset_args = { mode = mode, abbr = abbr, map = map }
+        end,
+        schedule = function(callback)
+            scheduled = true
+            callback()
+        end,
+        set_buf_name = function(bufnr, name)
+            assert(bufnr == 101 and name == "Pane Question", "buffer name was wrong")
+        end,
+        set_lines = function(bufnr, start, stop, strict, lines)
+            assert(bufnr == 101 and start == 0 and stop == -1 and strict == false, "initial line range was wrong")
+            assert(vim.deep_equal(lines, { "Question:", "" }), "initial ask buffer lines were wrong")
+        end,
+        set_option = function(name, value)
+            options[name] = value
+        end,
+        trim = util.trim,
+        valid_buf = function(bufnr)
+            return valid_bufs[bufnr] == true
+        end,
+        valid_win = function(winid)
+            return winid == 42
+        end,
+        win_buf = function(winid)
+            assert(winid == 42, "snapshot checked wrong window")
+            return 101
+        end,
+    }
+
+    ask_session.capture_previous(state)
+    assert(state.ask_pane.previous.active_mode == "markdown", "previous markdown mode was not captured")
+    assert(state.ask_pane.previous.bufnr == 9, "previous markdown buffer was not captured")
+
+    local bufnr = ask_session.ensure_buffer(state, adapter)
+
+    assert(bufnr == 101, "ensure_buffer returned wrong buffer")
+    assert(#created_bufs == 1, "ensure_buffer did not create exactly one buffer")
+    assert(state.ask_pane.augroup == 202, "ensure_buffer did not store augroup")
+    assert(state.ask_pane.draft_state == "ready_empty", "ensure_buffer did not set ready state")
+    assert(vim.deep_equal(state.ask_pane.citations, {}), "ensure_buffer did not initialize citations")
+    assert(options.buftype == "acwrite", "ensure_buffer did not set buftype")
+    assert(options.bufhidden == "hide", "ensure_buffer did not set bufhidden")
+    assert(options.swapfile == false, "ensure_buffer did not disable swapfile")
+    assert(options.filetype == "markdown", "ensure_buffer did not set filetype")
+    assert(options.modified == false, "ensure_buffer did not clear modified")
+    assert(vim.deep_equal(state.ask_pane_state_history, { "ready_empty" }), "ensure_buffer did not reset state history")
+    assert(ask_session.ensure_buffer(state, adapter) == 101, "ensure_buffer did not reuse valid buffer")
+    assert(#created_bufs == 1, "ensure_buffer recreated a valid buffer")
+
+    options.modified = true
+    local snapshot = ask_session.runtime_snapshot(state, state.ask_pane, adapter)
+
+    assert(snapshot.active == true, "runtime snapshot did not mark active ask buffer")
+    assert(snapshot.active_window == true, "runtime snapshot did not mark active window")
+    assert(snapshot.live_prompt == "Question:\n  hello", "runtime snapshot did not trim prompt")
+    assert(snapshot.dirty_buffer == true, "runtime snapshot did not report modified buffer")
+    assert(snapshot.picker_mode == "manual", "runtime snapshot did not include ask config")
+
+    state.ask_pane.cmdline_enter_setup = true
+    state.ask_pane.previous_cmdline_enter = { rhs = "old" }
+    ask_session.reset(state, { defer_delete = true }, adapter)
+
+    assert(scheduled == true, "deferred reset did not schedule delete")
+    assert(vim.deep_equal(deleted, { { bufnr = 101, force = true } }), "reset did not delete ask buffer")
+    assert(mapset_args.mode == "c" and mapset_args.abbr == false, "reset did not restore previous command-line map")
+    assert(mapset_args.map.rhs == "old", "reset restored wrong command-line map")
+    assert(vim.deep_equal(state.ask_pane, {}), "reset did not clear ask session")
+
+    state.ask_pane = {
+        bufnr = 102,
+        cmdline_enter_setup = true,
+        previous_cmdline_enter = {},
+    }
+    valid_bufs[102] = true
+    ask_session.reset(state, nil, adapter)
+
+    assert(del_keymap_args.mode == "c" and del_keymap_args.lhs == "<CR>", "reset did not delete command-line map without previous map")
+    assert(deleted[#deleted].bufnr == 102, "non-deferred reset did not delete the current buffer")
+end)
+
 test("ask pane keeps session state compatibility helpers while exposing snapshots", function()
     local state = {
         config = {

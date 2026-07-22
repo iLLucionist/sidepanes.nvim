@@ -27,48 +27,69 @@ local function set_draft_state(state, ask, draft_state)
     ask_session.record_state(state, ask, draft_state)
 end
 
-local function session(state)
-    state.ask_pane = state.ask_pane or {}
-    state.ask_pane.citations = state.ask_pane.citations or {}
+local session_adapter = {
+    cmdline_enter_desc = CMDLINE_ENTER_DESC,
+    cmd_map = function(lhs, mode)
+        return vim.fn.maparg(lhs, mode, false, true)
+    end,
+    create_augroup = function(name, opts)
+        return vim.api.nvim_create_augroup(name, opts)
+    end,
+    create_buf = function(listed, scratch)
+        return vim.api.nvim_create_buf(listed, scratch)
+    end,
+    current_win = function()
+        return vim.api.nvim_get_current_win()
+    end,
+    delete_buf = function(bufnr, opts)
+        pcall(vim.api.nvim_buf_delete, bufnr, opts)
+    end,
+    del_keymap = function(mode, lhs)
+        pcall(vim.keymap.del, mode, lhs)
+    end,
+    get_lines = function(bufnr, start, stop, strict)
+        return vim.api.nvim_buf_get_lines(bufnr, start, stop, strict)
+    end,
+    get_option = function(name, opts)
+        return vim.api.nvim_get_option_value(name, opts)
+    end,
+    mapset = function(mode, abbr, map)
+        pcall(vim.fn.mapset, mode, abbr, map)
+    end,
+    schedule = function(callback)
+        vim.schedule(callback)
+    end,
+    set_buf_name = function(bufnr, name)
+        pcall(vim.api.nvim_buf_set_name, bufnr, name)
+    end,
+    set_lines = function(bufnr, start, stop, strict, lines)
+        vim.api.nvim_buf_set_lines(bufnr, start, stop, strict, lines)
+    end,
+    set_option = function(name, value, opts)
+        vim.api.nvim_set_option_value(name, value, opts)
+    end,
+    trim = util.trim,
+    valid_buf = util.valid_buf,
+    valid_win = util.valid_win,
+    win_buf = function(winid)
+        return vim.api.nvim_win_get_buf(winid)
+    end,
+}
 
-    return state.ask_pane
+local function session(state)
+    return ask_session.ensure(state)
 end
 
 local function ask_config(state)
-    return type(state.config.ask) == "table" and state.config.ask or {}
+    return ask_session.ask_config(state)
 end
 
 local function buffer_prompt(ask)
-    if not util.valid_buf(ask.bufnr) then
-        return ""
-    end
-
-    return util.trim(table.concat(vim.api.nvim_buf_get_lines(ask.bufnr, 0, -1, false), "\n"))
+    return ask_session.buffer_prompt(ask, session_adapter)
 end
 
 local function snapshot(state, ask)
-    ask = ask or state.ask_pane or {}
-
-    local valid_buf = util.valid_buf(ask.bufnr)
-    local valid_win = util.valid_win(state.winid)
-    local active_window = false
-
-    if valid_buf and valid_win then
-        active_window = vim.api.nvim_get_current_win() == state.winid and vim.api.nvim_win_get_buf(state.winid) == ask.bufnr
-    end
-
-    return ask_session.snapshot(ask, {
-        config = state.config,
-        buffer = {
-            live_prompt = valid_buf and buffer_prompt(ask) or "",
-            modified = valid_buf and vim.api.nvim_get_option_value("modified", { buf = ask.bufnr }) or false,
-            valid = valid_buf,
-        },
-        window = {
-            active = active_window,
-            valid = valid_win,
-        },
-    })
+    return ask_session.runtime_snapshot(state, ask, session_adapter)
 end
 
 local function existing_question(lines)
@@ -102,47 +123,8 @@ local function existing_question(lines)
     return table.concat(result, "\n")
 end
 
-local function restore_commandline_enter(ask)
-    if not ask or not ask.cmdline_enter_setup then
-        return
-    end
-
-    local current = vim.fn.maparg("<CR>", "c", false, true)
-
-    if type(current) == "table" and current.desc == CMDLINE_ENTER_DESC then
-        if ask.previous_cmdline_enter and next(ask.previous_cmdline_enter) ~= nil then
-            pcall(vim.fn.mapset, "c", false, ask.previous_cmdline_enter)
-        else
-            pcall(vim.keymap.del, "c", "<CR>")
-        end
-    end
-
-    ask.cmdline_enter_setup = nil
-    ask.previous_cmdline_enter = nil
-end
-
-local function delete_ask_buffer(bufnr)
-    if util.valid_buf(bufnr) then
-        pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-    end
-end
-
 local function reset_session(state, opts)
-    opts = opts or {}
-    local ask = state.ask_pane or {}
-    local bufnr = ask.bufnr
-
-    ask.resetting = true
-    restore_commandline_enter(ask)
-    state.ask_pane = {}
-
-    if opts.defer_delete then
-        vim.schedule(function()
-            delete_ask_buffer(bufnr)
-        end)
-    else
-        delete_ask_buffer(bufnr)
-    end
+    ask_session.reset(state, opts, session_adapter)
 end
 
 local function pick_target(state, deps, prompt, root, callback)
@@ -156,20 +138,6 @@ local function pick_target(state, deps, prompt, root, callback)
             callback(choice, ask_target_resolver.REASONS.explicit_target_change)
         end
     end)
-end
-
-local function capture_previous(state)
-    if state.active_mode == "ask" then
-        return
-    end
-
-    local ask = session(state)
-
-    ask.previous = {
-        active_mode = state.active_mode,
-        active_terminal_key = state.active_terminal_key,
-        bufnr = state.active_mode == "markdown" and state.bufnr or nil,
-    }
 end
 
 local function is_non_ask_sidepane_buffer(state, bufnr, ask)
@@ -256,39 +224,14 @@ end
 
 --- Create or return the ask-pane scratch buffer.
 function M.ensure_buf(state)
-    local ask = session(state)
-
-    if util.valid_buf(ask.bufnr) then
-        return ask.bufnr
-    end
-
-    local bufnr = vim.api.nvim_create_buf(false, true)
-    local augroup = vim.api.nvim_create_augroup("SidepanesAskPane" .. bufnr, { clear = true })
-
-    ask.bufnr = bufnr
-    ask.augroup = augroup
-    ask.citations = {}
-    ask.written_prompt = nil
-    ask.ready = true
-    state.ask_pane_state_history = {}
-    set_draft_state(state, ask, DRAFT_STATES.ready_empty)
-
-    pcall(vim.api.nvim_buf_set_name, bufnr, "Pane Question")
-    vim.api.nvim_set_option_value("buftype", "acwrite", { buf = bufnr })
-    vim.api.nvim_set_option_value("bufhidden", "hide", { buf = bufnr })
-    vim.api.nvim_set_option_value("swapfile", false, { buf = bufnr })
-    vim.api.nvim_set_option_value("filetype", "markdown", { buf = bufnr })
-    vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "Question:", "" })
-    vim.api.nvim_set_option_value("modified", false, { buf = bufnr })
-
-    return bufnr
+    return ask_session.ensure_buffer(state, session_adapter)
 end
 
 --- Show or focus the persistent ask pane.
 function M.show(state, deps, opts)
     opts = opts or {}
 
-    capture_previous(state)
+    ask_session.capture_previous(state)
 
     if state.active_mode == "markdown" then
         deps.save_markdown_view()
