@@ -1007,14 +1007,15 @@ Traceability table:
 | Re-check implementation, tests, docs, and this roadmap before moving on. | Initial implementation and table update are underway; final restarting audit loop and two clean non-mutating confirmation passes are still pending. | Focused checks and `git diff --check` have passed for the implementation unit; fast/full/manual/checkhealth/audit evidence still pending. | This roadmap records audit evidence; README/CHANGELOG/help/docs/release notes update only if behavior/docs change. | Review implementation, traceability table, docs, and manual checklist before moving on. | Pending | In Progress |
 | Open/focus the ask pane, append context, navigate citations, write/send, and cancel from both Markdown and Codex after the module move. | The code paths are preserved through `panes/ask/init.lua`, `keymaps.lua`, `cmdline.lua`, `navigation.lua`, controller, and executor. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by focused ask regressions where possible. | Existing public docs describe these workflows; update only if behavior changes. | Perform this exact manual workflow. | `fc4e947` | In Progress |
 | Run `:checkhealth sidepanes` and confirm no module-load errors. | Module load compatibility is preserved through root shims and new namespace requires. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement; final fast/full checks should include checkhealth smoke where available. | Existing health docs remain applicable unless behavior changes. | Perform this exact manual workflow. | Pending | In Progress |
-| Audit gap: fast checks found the new root ask compatibility shims had no required module block comments. | Added top-level compatibility-shim block comments to `ask_pane.lua`, `ask_cmdline.lua`, `ask_controller.lua`, `ask_executor.lua`, `ask_keymaps.lua`, `ask_session.lua`, and `ask_target_resolver.lua`. | `tests/run_checks.sh fast` audit smoke found the gap; rerun audit/fast/full after the fix. | This roadmap records the audit finding; no public docs change applies because runtime behavior is unchanged. | Review root shim headers and confirm compatibility require paths still load. | Pending | In Progress |
+| Audit gap: fast checks found the new root ask compatibility shims had no required module block comments. | Added top-level compatibility-shim block comments to `ask_pane.lua`, `ask_cmdline.lua`, `ask_controller.lua`, `ask_executor.lua`, `ask_keymaps.lua`, `ask_session.lua`, and `ask_target_resolver.lua`. | Direct audit smoke passed after the fix; focused shim/session regression passed 3 filtered tests; final fast/full reruns pending after this trace commit. | This roadmap records the audit finding; no public docs change applies because runtime behavior is unchanged. | Review root shim headers and confirm compatibility require paths still load. | `3347681` | Done |
 
 Audit findings:
 
 - Fast checks found that the new root ask compatibility shims were missing the
   required top-level module block comments. Fix the shim headers, rerun
   verification, commit the coherent unit, and restart the slice-14 audit loop
-  from the new HEAD.
+  from the new HEAD. Fixed in `3347681`; direct audit smoke and focused
+  shim/session regression passed before recording this trace update.
 
 ### 15. Formal Behavior Matrix
 
