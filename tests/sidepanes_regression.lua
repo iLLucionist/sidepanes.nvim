@@ -1,6 +1,10 @@
-local helpers = dofile(vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h") .. "/helpers.lua")
+local test_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p:h")
+local helpers = dofile(test_dir .. "/helpers.lua")
 helpers.append_repo_root(1)
 
+local ask_behavior_matrix = dofile(test_dir .. "/ask_pane_behavior_matrix.lua")
+local ask_mapping_coverage = dofile(test_dir .. "/ask_pane_mapping_coverage.lua")
+local ask_mapping_zone_matrix = dofile(test_dir .. "/ask_pane_mapping_zone_matrix.lua")
 local defaults = require("sidepanes.defaults")
 local agent_session = require("sidepanes.agent_session")
 local api_helpers = require("sidepanes.api")
@@ -225,6 +229,29 @@ local function has_notify(messages, needle)
     end
 
     return false
+end
+
+local function feed_user_keys(keys)
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "mx", false)
+end
+
+local function feed_user_command(command)
+    vim.cmd.stopinsert()
+    feed_user_keys(":" .. command .. "<CR>")
+end
+
+local function feed_user_insert_keys(keys)
+    vim.cmd.startinsert()
+    feed_user_keys(keys)
+end
+
+local function wait_until(label, condition, timeout_ms)
+    assert(vim.wait(timeout_ms or 1000, condition, 10), label)
+end
+
+local function assert_pane_window(winid, bufnr, label)
+    assert(vim.api.nvim_win_is_valid(winid), label .. " closed side pane")
+    assert(vim.api.nvim_win_get_buf(winid) == bufnr, label .. " showed wrong side pane buffer")
 end
 
 local function capture_health(fn)
@@ -2044,6 +2071,63 @@ test("ask mapping zone matrix matches active maps by user location", function()
     assert(command_table.SidepanesSubmitQuestion, "SidepanesSubmitQuestion command missing")
     assert(not command_table.SidepanesAskStatus, "SidepanesAskStatus should remain planned until its slice")
     assert(not command_table.SidepanesVersion, "SidepanesVersion should remain planned until its slice")
+end)
+
+test("ask behavior-sensitive mapping coverage table matches matrices and tests", function()
+    local behavior_rows = {}
+    local zone_rows = {}
+    local covered_behavior_rows = {}
+    local covered_zone_rows = {}
+    local test_names = {}
+
+    for _, item in ipairs(tests) do
+        test_names[item.name] = true
+    end
+
+    for _, row in ipairs(ask_behavior_matrix.rows) do
+        behavior_rows[row.id] = true
+    end
+
+    for _, row in ipairs(ask_mapping_zone_matrix.rows) do
+        zone_rows[row.id] = true
+    end
+
+    local function assert_known_test(name, field, row)
+        if name then
+            assert(test_names[name], row.id .. " " .. field .. " references missing test: " .. name)
+        end
+    end
+
+    for _, row in ipairs(ask_mapping_coverage.rows) do
+        assert(row.id, "coverage row is missing id")
+        assert(row.registration, row.id .. " missing registration coverage")
+        assert(row.direct, row.id .. " missing direct policy/state coverage")
+        assert(row.fed_key or row.no_fed_key_reason, row.id .. " missing fed-key coverage or no-fed-key reason")
+        assert(not (row.fed_key and row.no_fed_key_reason), row.id .. " should not have both fed-key coverage and no-fed-key reason")
+
+        assert_known_test(row.registration, "registration", row)
+        assert_known_test(row.direct, "direct", row)
+        assert_known_test(row.fed_key, "fed_key", row)
+
+        if row.behavior_row then
+            assert(behavior_rows[row.behavior_row], row.id .. " references unknown behavior row " .. row.behavior_row)
+            covered_behavior_rows[row.behavior_row] = true
+        end
+
+        assert(row.zone_rows and #row.zone_rows > 0, row.id .. " missing zone matrix references")
+        for _, zone_row in ipairs(row.zone_rows) do
+            assert(zone_rows[zone_row], row.id .. " references unknown zone row " .. zone_row)
+            covered_zone_rows[zone_row] = true
+        end
+    end
+
+    for id in pairs(behavior_rows) do
+        assert(covered_behavior_rows[id], "behavior matrix row lacks mapping coverage decision: " .. id)
+    end
+
+    for id in pairs(zone_rows) do
+        assert(covered_zone_rows[id], "mapping zone row lacks coverage decision: " .. id)
+    end
 end)
 
 test("pane-local mappings are configurable", function()
@@ -5490,6 +5574,20 @@ test("pane-mode ask preserves prompt when target terminal fails to open", functi
     assert(snapshot.draft_state == "send_failed", "failed send snapshot lost send_failed")
     assert(status.draft_state == "send_failed", "failed send status data lost send_failed")
     assert(winbar:find("send_failed", 1, true), winbar)
+
+    messages = capture_notify(function()
+        vim.api.nvim_set_current_win(pane.winid)
+        feed_user_command("q")
+    end)
+
+    assert(has_notify(messages, "Ask prompt was not sent; target terminal did not open"), "fed :q failed-send retry did not warn")
+    assert(pane.ask_pane.bufnr == qbuf, "fed :q failed-send retry cleared ask pane state")
+    assert(pane.ask_pane.draft_state == "send_failed", "fed :q failed-send retry did not preserve send_failed")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "send_failed", "sending_terminal" },
+        "fed :q failed-send retry"
+    )
 end)
 
 test("pane-mode ask cancel restores previous markdown and terminal modes", function()
@@ -5653,11 +5751,14 @@ test("ask pane command-line mapping cancels q and sends wq through internal call
     assert(not has_map(qbuf, "q"), "plain normal q should not cancel ask pane")
 end)
 
-test("ask pane command-line q sends after write", function()
+test("ask pane fed command-line lifecycle covers q and wq user paths", function()
     reset_pane()
 
-    local root = root_fixture("ask-pane-written-q-test")
+    local root = root_fixture("ask-pane-fed-commandline-test")
+    local out = helpers.tmp_path("sidepanes-ask-pane-fed-commandline.txt")
 
+    pcall(vim.fn.delete, out)
+    write(root .. "/docs/doc.md", { "# Doc" })
     write(root .. "/src/origin.lua", { "selected()" })
     pane.setup({
         ask = {
@@ -5666,7 +5767,7 @@ test("ask pane command-line q sends after write", function()
         tools = {
             codex = {
                 label = "Codex",
-                cmd = { "sh", "-c", "sleep 10" },
+                cmd = { "sh", "-c", "tee -a " .. out },
                 send_delay_ms = 0,
                 presets = {
                     { name = "one", label = "One", args = {} },
@@ -5677,34 +5778,78 @@ test("ask pane command-line q sends after write", function()
         },
     })
 
+    pane.open(root .. "/docs/doc.md")
+
+    local winid = pane.winid
+
+    pane.show_ask_pane({ focus = true })
+
+    local ready_buf = pane.ask_pane.bufnr
+
+    vim.api.nvim_set_current_win(winid)
+    feed_user_command("q")
+    wait_until("fed :q did not cancel ready ask pane", function()
+        return pane.active_mode == "markdown" and not vim.api.nvim_buf_is_valid(ready_buf)
+    end)
+    assert_pane_window(winid, pane.bufnr, "fed :q ready")
+    assert_state_history_contains(pane.ask_pane_state_history, { "ready_empty", "cancelled" }, "fed :q ready")
+
     vim.cmd.edit(root .. "/src/origin.lua")
     pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
 
-    local qbuf = pane.ask_pane.bufnr
-    local enter_map = vim.fn.maparg("<CR>", "c", false, true)
-    local original_getcmdline = vim.fn.getcmdline
-    local original_getcmdtype = vim.fn.getcmdtype
+    local modified_buf = pane.ask_pane.bufnr
 
-    assert(enter_map.callback, "ask pane command-line enter map has no callback")
-    assert(enter_map.desc == "Sidepanes ask pane command-line enter", "ask pane command-line enter map had wrong desc")
+    vim.api.nvim_buf_set_lines(modified_buf, 1, 1, false, { "cancel modified prompt with q" })
+    vim.api.nvim_set_option_value("modified", true, { buf = modified_buf })
+    vim.api.nvim_set_current_win(winid)
+    feed_user_command("q")
+    wait_until("fed :q did not cancel modified ask pane", function()
+        return pane.active_mode == "markdown" and not vim.api.nvim_buf_is_valid(modified_buf)
+    end)
+    assert(not read_file(out):find("cancel modified prompt with q", 1, true), "fed :q sent modified prompt")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "cancelled" },
+        "fed :q modified"
+    )
 
-    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send after write then quit" })
-    pane.write_ask_pane(qbuf)
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
 
-    vim.fn.getcmdtype = function()
-        return ":"
-    end
-    vim.fn.getcmdline = function()
-        return "q"
-    end
+    local written_buf = pane.ask_pane.bufnr
 
-    local quit_after_write = enter_map.callback()
+    vim.api.nvim_buf_set_lines(written_buf, 1, 1, false, { "send written prompt with q" })
+    pane.write_ask_pane(written_buf)
+    assert(pane.ask_pane.draft_state == "draft_written", "fed :q written setup lost draft_written state")
+    vim.api.nvim_set_current_win(winid)
+    feed_user_command("q")
+    wait_for_file(out, "send written prompt with q")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "draft_written", "sending_terminal", "sent" },
+        "fed :q written"
+    )
+    assert(pane.ask_pane_last_state == "sent", "fed :q written did not record sent")
+    assert(pane.active_mode == "codex", "fed :q written did not switch to target terminal")
 
-    vim.fn.getcmdline = original_getcmdline
-    vim.fn.getcmdtype = original_getcmdtype
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
 
-    assert(quit_after_write:find('require%("sidepanes%.internal"%)%.finish_ask_pane', 1, false), quit_after_write)
-    assert(pane.ask_pane.draft_state == "draft_written", "written command-line q setup lost draft_written state")
+    local submit_buf = pane.ask_pane.bufnr
+
+    vim.api.nvim_buf_set_lines(submit_buf, 1, 1, false, { "send modified prompt with wq" })
+    vim.api.nvim_set_option_value("modified", true, { buf = submit_buf })
+    vim.api.nvim_set_current_win(winid)
+    feed_user_command("wq")
+    wait_for_file(out, "send modified prompt with wq")
+    assert_state_history_contains(
+        pane.ask_pane_state_history,
+        { "ready_empty", "draft_modified", "draft_written", "sending_terminal", "sent" },
+        "fed :wq modified"
+    )
+    assert(pane.ask_pane_last_state == "sent", "fed :wq did not record sent")
+    assert(pane.active_mode == "codex", "fed :wq did not switch to target terminal")
+    assert(not pane.ask_pane.bufnr, "fed :wq did not clear ask state")
 end)
 
 test("ask pane empty ready draft writes then submit cancels without sending", function()
@@ -5830,12 +5975,12 @@ test("ask pane typed q bang cancels without closing the side pane", function()
     local qbuf = pane.ask_pane.bufnr
 
     vim.cmd("stopinsert")
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
+    feed_user_keys("<Esc>")
     vim.api.nvim_set_current_win(winid)
     assert(vim.wait(1000, function()
         return vim.api.nvim_get_mode().mode == "n"
     end), "typed :q! test did not reach normal mode")
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(":q!<CR>", true, false, true), "mx", false)
+    feed_user_command("q!")
 
     assert(vim.wait(1000, function()
         return pane.active_mode == "markdown"
@@ -5885,7 +6030,8 @@ test("ask pane target picker mapping updates target and winbar", function()
     local qbuf = pane.ask_pane.bufnr
 
     pane._test_next_choice = "2"
-    call_map(qbuf, "M")
+    vim.api.nvim_set_current_win(pane.winid)
+    feed_user_keys("M")
 
     local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
     local snapshot = ask_pane_module.snapshot(pane)
@@ -5990,7 +6136,8 @@ test("ask pane send mappings follow quit lifecycle instead of warning on unwritt
     vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "cancel from qq" })
 
     local messages = capture_notify(function()
-        call_map(qbuf, "qq")
+        vim.api.nvim_set_current_win(pane.winid)
+        feed_user_keys("qq")
     end)
 
     assert(not has_notify(messages, "Write the ask prompt before sending"), "unwritten ask send mapping warned instead of quitting")
@@ -6007,7 +6154,8 @@ test("ask pane send mappings follow quit lifecycle instead of warning on unwritt
     vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send from qq" })
 
     pane.write_ask_pane(qbuf)
-    call_map(qbuf, "qq")
+    vim.api.nvim_set_current_win(pane.winid)
+    feed_user_keys("qq")
     wait_for_file(out, "send from qq")
     assert_state_history_contains(
         pane.ask_pane_state_history,
@@ -6022,7 +6170,8 @@ test("ask pane send mappings follow quit lifecycle instead of warning on unwritt
 
     vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "cancel from leader qq" })
     messages = capture_notify(function()
-        call_map(qbuf, alt_lhs)
+        vim.api.nvim_set_current_win(pane.winid)
+        feed_user_keys(alt_lhs)
     end)
 
     assert(not has_notify(messages, "Write the ask prompt before sending"), "unwritten ask send alt mapping warned instead of quitting")
@@ -6039,7 +6188,8 @@ test("ask pane send mappings follow quit lifecycle instead of warning on unwritt
     vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send from leader qq" })
 
     pane.write_ask_pane(qbuf)
-    call_map(qbuf, alt_lhs)
+    vim.api.nvim_set_current_win(pane.winid)
+    feed_user_keys(alt_lhs)
     wait_for_file(out, "send from leader qq")
     assert_state_history_contains(
         pane.ask_pane_state_history,
@@ -6083,8 +6233,6 @@ test("personal quit mapping in terminal pane follows q command path with plain q
         },
     })
 
-    local original_getcmdline
-    local original_getcmdtype
     local ok, err = xpcall(function()
         pane.open(root .. "/docs/doc.md")
 
@@ -6095,34 +6243,17 @@ test("personal quit mapping in terminal pane follows q command path with plain q
         assert(has_map(ctx.bufnr, alt_lhs), "terminal pane did not guard personal ask_send_alt/global quit lhs")
         assert(not has_map(ctx.bufnr, alt_lhs, "t"), "terminal-input pane should not own personal ask_send_alt/global quit lhs")
 
-        original_getcmdline = vim.fn.getcmdline
-        original_getcmdtype = vim.fn.getcmdtype
-
-        vim.fn.getcmdtype = function()
-            return ":"
-        end
-
         local function assert_quit_command_path(command, label)
-            local enter_map = vim.fn.maparg("<CR>", "c", false, true)
-
-            assert(enter_map.callback, label .. " Sidepanes command-line enter map has no callback")
-
-            vim.fn.getcmdline = function()
-                return command
-            end
-
             local messages = capture_notify(function()
-                local mapped = enter_map.callback()
-
-                assert(mapped:find('require%("sidepanes%.internal"%)%.show_markdown', 1, false), mapped)
+                feed_user_command(command)
             end)
 
             assert(not has_notify(messages, "Write the ask prompt before sending"), label .. " command-line quit called ask send")
-
-            pane.show_markdown()
-            assert(vim.api.nvim_win_is_valid(winid), label .. " command-line quit closed side pane")
-            assert(pane.active_mode == "markdown", label .. " command-line quit did not return to markdown")
-            assert(vim.api.nvim_win_get_buf(winid) == pane.bufnr, label .. " command-line quit did not restore markdown buffer")
+            wait_until(label .. " command-line quit did not return to markdown", function()
+                return vim.api.nvim_win_is_valid(winid)
+                    and pane.active_mode == "markdown"
+                    and vim.api.nvim_win_get_buf(winid) == pane.bufnr
+            end)
         end
 
         vim.api.nvim_set_current_win(winid)
@@ -6144,12 +6275,6 @@ test("personal quit mapping in terminal pane follows q command path with plain q
 
     end, debug.traceback)
 
-    if original_getcmdline then
-        vim.fn.getcmdline = original_getcmdline
-    end
-    if original_getcmdtype then
-        vim.fn.getcmdtype = original_getcmdtype
-    end
     pcall(vim.keymap.del, "n", "<leader>qq")
 
     if not ok then
@@ -6202,7 +6327,7 @@ test("personal normal quit mappings do not close markdown or terminal side panes
         assert(has_map(markdown_bufnr, alt_lhs), "Markdown pane did not guard personal leader quit mapping")
 
         vim.api.nvim_set_current_win(winid)
-        vim.api.nvim_feedkeys("qq", "mx", false)
+        feed_user_keys("qq")
 
         assert(vim.wait(500, function()
             return vim.api.nvim_win_is_valid(winid) and vim.api.nvim_win_get_buf(winid) == markdown_bufnr
@@ -6218,7 +6343,7 @@ test("personal normal quit mappings do not close markdown or terminal side panes
 
         vim.cmd.stopinsert()
         vim.api.nvim_set_current_win(winid)
-        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(alt_lhs, true, false, true), "mx", false)
+        feed_user_keys(alt_lhs)
 
         assert(vim.wait(500, function()
             return vim.api.nvim_win_is_valid(winid) and pane.active_mode == "markdown" and vim.api.nvim_win_get_buf(winid) == pane.bufnr
@@ -6267,7 +6392,8 @@ test("ask pane submit mapping sends modified prompt from normal and insert modes
     assert(has_map(qbuf, "<C-CR>", "n"), "ask submit normal mapping missing")
     assert(has_map(qbuf, "<C-CR>", "i"), "ask submit insert mapping missing")
     vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "submit from ctrl enter" })
-    call_map(qbuf, "<C-CR>", "n")
+    vim.api.nvim_set_current_win(pane.winid)
+    feed_user_keys("<C-CR>")
 
     wait_for_file(out, "submit from ctrl enter")
     assert_state_history_contains(
@@ -6284,7 +6410,8 @@ test("ask pane submit mapping sends modified prompt from normal and insert modes
 
     qbuf = pane.ask_pane.bufnr
     vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "submit from insert ctrl enter" })
-    call_map(qbuf, "<C-CR>", "i")
+    vim.api.nvim_set_current_win(pane.winid)
+    feed_user_insert_keys("<C-CR>")
 
     wait_for_file(out, "submit from insert ctrl enter")
     assert_state_history_contains(
@@ -6304,7 +6431,7 @@ test("ask pane submit mapping sends modified prompt from normal and insert modes
     assert(has_map(qbuf, "<C-J>", "i"), "ask submit insert Ctrl+Enter fallback mapping missing")
     vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "submit from ctrl enter fallback" })
     vim.api.nvim_set_current_win(pane.winid)
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-J>", true, false, true), "mx", false)
+    feed_user_keys("<C-J>")
 
     wait_for_file(out, "submit from ctrl enter fallback")
     assert_state_history_contains(
@@ -8008,9 +8135,33 @@ test("shutdown sends configured exit commands", function()
     assert(sent:find("quit()", 1, true), sent)
 end)
 
+local function selected_test(name)
+    local filter = vim.env.SIDEPANES_TEST_FILTER
+
+    if not filter or filter == "" then
+        return true
+    end
+
+    for token in filter:gmatch("[^,]+") do
+        token = vim.trim(token)
+        if token ~= "" and name:find(token, 1, true) then
+            return true
+        end
+    end
+
+    return false
+end
+
 local failures = {}
+local selected_count = 0
 
 for _, item in ipairs(tests) do
+    if not selected_test(item.name) then
+        goto continue
+    end
+
+    selected_count = selected_count + 1
+
     local ok, err = xpcall(item.fn, debug.traceback)
 
     reset_pane()
@@ -8018,10 +8169,12 @@ for _, item in ipairs(tests) do
     if not ok then
         table.insert(failures, item.name .. "\n" .. err)
     end
+
+    ::continue::
 end
 
 if #failures > 0 then
     error(table.concat(failures, "\n\n"))
 end
 
-print("sidepanes regression tests passed: " .. #tests)
+print("sidepanes regression tests passed: " .. selected_count)

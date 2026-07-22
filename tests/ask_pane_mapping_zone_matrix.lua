@@ -131,6 +131,14 @@ return {
             result = "submit current prompt or run the ask-pane quit lifecycle",
         },
         {
+            id = "ask-pane-command-line",
+            zone = "ask pane",
+            mode = "command",
+            mapping = ":q, :q!, :w, :wq, :x, :exit",
+            default_lhs = "command-line path",
+            result = "write, cancel, or submit through ask-pane lifecycle",
+        },
+        {
             id = "ask-pane-context-navigation",
             zone = "ask pane",
             mode = "normal",
