@@ -2112,8 +2112,11 @@ Audit gaps:
   ask-pane write behavior.
 - Audit pass 1 restart found stale roadmap references to renamed/replaced ask
   command-line fed-key tests and an outdated ask-write-draft test reference.
+- Audit pass 1 restart found the ask-pane `:w` command-path changelog note under
+  `Changed` even though it describes a fix.
 
 | Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Audit gap: cover synthesizeable ask-pane `:w` command paths with fed-key tests and correct `ask-write-draft` coverage evidence. | `lua/sidepanes/ask_policy.lua` maps `w` to `write_draft`; `tests/ask_pane_mapping_coverage.lua` marks `ask-write-ready` and `ask-write-draft` as fed-key covered; `tests/sidepanes_regression.lua` feeds `:w` for ready and modified ask drafts. | Focused single-test, focused ask/personal/submit, fast, full, and `illu.nvim` smoke checks passed after the fix. | This roadmap, coverage fixture, and CHANGELOG. | Press `:w` on ready and modified ask drafts and compare state to the behavior matrix. | `ec1d381` | Done |
 | Audit gap: update stale roadmap references after the ask command-line fed-key replacement and `:w` command-path fix. | Roadmap references now point to "ask pane fed command-line lifecycle covers q w and wq user paths" and "pane-mode ask write then quit sends accumulated prompt" where applicable. | Not Applicable: documentation reference correction only; no runtime behavior changed. | This roadmap. | Re-read behavior and mapping matrix references before closeout. | `2f47ede` | Done |
+| Audit gap: move the ask-pane `:w` command-path changelog note under `Fixed`. | `CHANGELOG.md` now records the scratch-buffer `:w` command-path repair under `Fixed`. | Not Applicable: changelog categorization only; no runtime behavior changed. | `CHANGELOG.md` and this roadmap. | Re-read changelog section placement before closeout. | `f4e8ae2` | Done |
