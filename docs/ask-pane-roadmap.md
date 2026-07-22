@@ -39,7 +39,7 @@ remain planned.
 | 17. Ask Target And Picker Status Visibility | Done | Internal ask status/debug formatter exposes target, root, picker, draft, and count facts for the future status command. |
 | 18. Target Resolver Refactor | Done | Target resolution now lives in a pure resolver with traceable active, last-context, default, picker, and before-send decisions plus snapshot-facing target reasons. |
 | 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
-| 20. `SidepanesAskStatus` | Planned | Add a command/API that reports ask draft state for debugging. |
+| 20. `SidepanesAskStatus` | In Progress | Add a command/API that reports ask draft state for debugging. |
 | 21. `SidepanesVersion` | Planned | Add a command/API that reports plugin version and load path. |
 | 22. Interactive Keymap Help | Planned | Add pane-local keybinding help surfaced from the winbar. |
 | 23. Ask Action Policy And Fed-Key Test Discipline | Done | Central ask action predicates, policy tests, and fed-key test guidance are implemented and verified. |
@@ -1557,6 +1557,14 @@ User response: yes, add `SidepanesAskStatus`.
 Goal: expose ask-pane state for debugging without requiring users to inspect Lua
 tables.
 
+Remaining implementation order:
+
+1. `20. SidepanesAskStatus`
+2. `21. SidepanesVersion`
+3. `22. Interactive Keymap Help`
+4. `19. Interaction-Focused Manual Acceptance Checklist`
+5. Final verification and release-readiness audit
+
 - Add public API `ask_status()` or `get_ask_status()`.
 - Add command `:SidepanesAskStatus` and root subcommand
   `:Sidepanes ask-status`.
@@ -1583,6 +1591,27 @@ Manual acceptance tests:
 
 Refinement note: this command should help debug future bug reports without
 requiring screenshots of internal errors.
+
+Traceability:
+
+| Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Add public API `ask_status()` or `get_ask_status()`. | Pending. | Pending. | Pending. | Call the public API from Lua before, during, and after an ask draft. | Pending. | In Progress |
+| Add command `:SidepanesAskStatus` and root subcommand `:Sidepanes ask-status`. | Pending. | Pending. | Pending. | Run both command paths from a real Neovim session. | Pending. | In Progress |
+| Print or notify a concise multi-line status. | Pending. | Pending. | Pending. | Run status from empty, active, written, sent, and cancelled draft states. | Pending. | In Progress |
+| active/inactive. | Pending. | Pending. | Pending. | Compare status before opening an ask draft, while active, and after cancel/send. | Pending. | In Progress |
+| draft state. | Pending. | Pending. | Pending. | Open, modify, write, send-fail if possible, cancel, and inspect draft state. | Pending. | In Progress |
+| target label and root. | Pending. | Pending. | Pending. | Change targets and compare status label/root with the ask winbar and target picker. | Pending. | In Progress |
+| picker mode and picker-shown flag. | Pending. | Pending. | Pending. | Test `manual`, `after_open`, and `before_send` picker modes. | Pending. | In Progress |
+| file count and citation count. | Pending. | Pending. | Pending. | Append selections from one file and two files and inspect counts. | Pending. | In Progress |
+| previous pane mode. | Pending. | Pending. | Pending. | Open ask from another pane mode and inspect previous pane mode in status. | Pending. | In Progress |
+| modified/written flags. | Pending. | Pending. | Pending. | Modify and write the prompt, then inspect dirty/written facts. | Pending. | In Progress |
+| Add docs, help, health/audit smoke coverage, and regression tests. | Pending. | Pending. | Pending. | Review README, help docs, Markdown docs, CHANGELOG, release notes, audit smoke, health smoke, and regression coverage. | Pending. | In Progress |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Pending. | Pending. | Pending. | Re-read the slice bullets, traceability, changed implementation, tests, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Pending. | In Progress |
+| Open an empty ask pane and run `:SidepanesAskStatus`; confirm it reports a ready draft and no citations. | Pending. | Not Applicable as automated test: this row records a manual acceptance workflow; regression coverage will support it separately. | Pending. | Perform this exact workflow in Neovim. | Pending. | In Progress |
+| Append two selections from different files and run status; confirm file and citation counts are correct. | Pending. | Not Applicable as automated test: this row records a manual acceptance workflow; regression coverage will support it separately. | Pending. | Perform this exact workflow in Neovim. | Pending. | In Progress |
+| Write the prompt and run status; confirm it reports a written draft. | Pending. | Not Applicable as automated test: this row records a manual acceptance workflow; regression coverage will support it separately. | Pending. | Perform this exact workflow in Neovim. | Pending. | In Progress |
+| Cancel/send the draft and run status; confirm it reports inactive/no active ask draft. | Pending. | Not Applicable as automated test: this row records a manual acceptance workflow; regression coverage will support it separately. | Pending. | Perform this exact workflow in Neovim. | Pending. | In Progress |
 
 ### 21. `SidepanesVersion`
 
