@@ -37,7 +37,7 @@ remain planned.
 | 15. Formal Behavior Matrix | Done | Source-of-truth matrix plus machine-readable fixture and docs-contract coverage are present. |
 | 16. Mapping And Command Zone Matrix | Done | Source-of-truth mapping/command zone matrix plus fixture, docs-contract checks, runtime mapping regression, corrected non-ask `:q` command-path ownership, and ask-pane quit-lifecycle shortcuts are present. |
 | 17. Ask Target And Picker Status Visibility | Planned | Add status/debug visibility for active target, picker mode, and picker timing. |
-| 18. Target Resolver Refactor | In Progress | Move target-resolution order into a dedicated resolver after the ask architecture boundaries and state snapshot are cleaned up. |
+| 18. Target Resolver Refactor | Done | Target resolution now lives in a pure resolver with traceable active, last-context, default, picker, and before-send decisions plus snapshot-facing target reasons. |
 | 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
 | 20. `SidepanesAskStatus` | Planned | Add a command/API that reports ask draft state for debugging. |
 | 21. `SidepanesVersion` | Planned | Add a command/API that reports plugin version and load path. |
@@ -52,14 +52,13 @@ remain planned.
 The remaining planned slices must be implemented in this order unless the
 roadmap is explicitly updated first with the reason for changing the order.
 
-1. `18. Target Resolver Refactor`
-2. `14. Ask Pane Module Split`
-3. `17. Ask Target And Picker Status Visibility`
-4. `20. SidepanesAskStatus`
-5. `21. SidepanesVersion`
-6. `22. Interactive Keymap Help`
-7. `19. Interaction-Focused Manual Acceptance Checklist`
-8. Final verification and release-readiness audit
+1. `14. Ask Pane Module Split`
+2. `17. Ask Target And Picker Status Visibility`
+3. `20. SidepanesAskStatus`
+4. `21. SidepanesVersion`
+5. `22. Interactive Keymap Help`
+6. `19. Interaction-Focused Manual Acceptance Checklist`
+7. Final verification and release-readiness audit
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,
@@ -1284,7 +1283,7 @@ opening real terminals.
 
 ### 18. Target Resolver Refactor
 
-Status: `In Progress`
+Status: `Done`
 
 User response: yes, do that.
 
@@ -1349,7 +1348,7 @@ Traceability table:
 | Keep resolver functions pure where possible: input is session/config/UI facts, output is a target decision, picker requirement, or explicit error. | `ask_target_resolver` accepts fact tables and returns data-only decisions; imperative callers still own `vim.*`, picker display, terminal send, and state mutation. | "ask functional core modules do not call Neovim APIs directly" includes `sidepanes.ask_target_resolver` and passed in focused/fast checks. | This roadmap; no public docs change applies for internal architecture. | Review resolver API for Neovim side-effect boundaries. | `2638b81` | Done |
 | Add tests for first visual capture, later append, explicit append with `auto_append = false`, missing target, cross-root target, manual picker, and `before_send`. | Added/extended focused regression coverage for the listed pane-mode target workflows and the audit-found explicit-target stale reason edge case. | Focused run passed 10 selected tests covering resolver, snapshot, first/default capture, active append, explicit append, missing target, cross-root target, manual picker, and `before_send`; the focused explicit-target audit test passed; fast checks passed with 169 regression tests after the audit fix. | This roadmap; no public docs change applies because behavior is intended to stay compatible. | Run the listed workflows manually in Neovim. | `2638b81`, `6e9cc90` | Done |
 | Add fed-key coverage for any user-visible mapping path whose behavior changes because of target resolution. | Assessed mapping impact: no user-visible mapping changed. Existing fed-key manual target picker path still covers `M`; automatic capture/append behavior remains API/regression covered. | Fed-key "ask pane target picker mapping updates target and winbar" passed in focused/fast checks; no additional fed-key path applies because mappings did not change. | This roadmap; no public docs change applies because no mapping behavior changed. | Press affected mappings and compare with the behavior and mapping-zone matrices. | `2638b81` | Done |
-| Re-check implementation, tests, docs, and this roadmap before moving on. | Planned: complete restarting audit passes and two clean non-mutating confirmation passes after the last commit. | Planned: audit will include focused, fast/full as applicable, and `git diff --check`. | This roadmap records audit evidence; README/CHANGELOG/help/docs/release notes update only if behavior/docs change. | Review implementation, traceability table, docs, and manual checklist before moving on. | Pending | Planned |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Restarting audit passes checked slice bullets, traceability rows, resolver boundaries, state snapshot facts, command/path ownership, mapping-zone impact, manual acceptance references, README, CHANGELOG, help docs, Markdown docs, release notes, roadmap status/order, AGENTS.md, and `illu.nvim` applicability. | Focused target-resolver runs passed; `tests/run_checks.sh fast` passed with 169 regression tests; `tests/run_checks.sh full` passed with 169 regression tests and real CLI smoke after the audit fix; `git diff --check` passed. `illu.nvim` smoke was not applicable because defaults, mappings, commands, public API, and local config behavior did not change. | This roadmap records audit evidence; README/CHANGELOG/help docs/Markdown docs/release notes were reviewed and needed no behavior-doc changes because target workflows stayed compatible. | Review implementation, traceability table, docs, and manual checklist before moving on; final two clean non-mutating confirmation passes are reported in the final response. | closeout evidence commit | Done |
 | Start a first visual ask capture with `model_picker = "before_send"` and confirm no picker appears. | Preserved by resolver default selection: initial pane-mode capture still resolves the default target without consuming the queued picker choice. | Not Applicable as automated test: this bullet is a manual acceptance requirement; "pane-mode ask-last first capture uses default target without picker" supports it. | Existing public docs already describe `before_send`; no docs change applies because behavior is unchanged. | Perform this exact manual workflow. | `2638b81` | Done |
 | Append another selection and confirm the active draft target is reused. | Active draft target reuse is routed through `ask_target_resolver.resolve()` and recorded as `target_reason = "active_ask_target"`. | Not Applicable as automated test: this bullet is a manual acceptance requirement; "pane-mode visual ask mappings reuse active ask target without reopening picker" supports it. | Existing public docs already describe active draft target reuse; no docs change applies because behavior is unchanged. | Perform this exact manual workflow. | `2638b81` | Done |
 | Press `M` in the ask pane and confirm the picker still opens manually. | Manual target change uses resolver-composed picker entries and records `target_reason = "explicit_target_change"`. | Not Applicable as automated test: this bullet is a manual acceptance requirement; fed-key "ask pane target picker mapping updates target and winbar" supports it. | Existing mapping docs already list model picker behavior; no docs change applies because behavior is unchanged. | Perform this exact manual workflow. | `2638b81` | Done |
@@ -1367,7 +1366,21 @@ Audit gaps:
 | Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Audit gap: reset stale target-resolution reason when an explicit `pane.ask("tool")` target replaces the current ask-pane target. | `lua/sidepanes/ask_target_resolver.lua` adds `explicit_target`; `lua/sidepanes/question.lua` applies it when building explicit ask entries. | `tests/sidepanes_regression.lua` "pane-mode explicit ask target replaces stale resolver reason" passed; `tests/run_checks.sh fast` passed with 169 regression tests after the fix. | This roadmap; no public docs change applies because this is internal status/snapshot correctness with unchanged user workflow. | Start a draft through automatic target resolution, then explicitly ask another tool and confirm future status/debug output reports the explicit target reason. | `6e9cc90` | Done |
-| Audit gap: update stale target-resolver verification count after the explicit-target audit fix added one regression. | Traceability row for central target resolution now cites the post-fix 169-test fast run and includes the audit-fix commit. | Not Applicable: roadmap trace evidence correction only; no runtime behavior changed. | This roadmap. | Re-read slice 18 traceability rows before closeout. | audit evidence commit | Done |
+| Audit gap: update stale target-resolver verification count after the explicit-target audit fix added one regression. | Traceability row for central target resolution now cites the post-fix 169-test fast run and includes the audit-fix commit. | Not Applicable: roadmap trace evidence correction only; no runtime behavior changed. | This roadmap. | Re-read slice 18 traceability rows before closeout. | `9e4aee0` | Done |
+
+Verification results:
+
+- Focused resolver/target regression run passed 10 selected tests covering
+  resolver, snapshot, first/default capture, active append, explicit append,
+  missing target, cross-root target, manual picker, and `before_send`.
+- Focused explicit-target audit run passed 8 selected tests.
+- `tests/run_checks.sh fast` passed with 169 regression tests after the
+  explicit-target audit fix.
+- `tests/run_checks.sh full` passed with 169 regression tests and real CLI
+  smoke after the explicit-target audit fix.
+- `git diff --check` passed.
+- `illu.nvim` smoke was not applicable because this slice did not change
+  defaults, mappings, commands, public API, or local config behavior.
 
 ### 19. Interaction-Focused Manual Acceptance Checklist
 
