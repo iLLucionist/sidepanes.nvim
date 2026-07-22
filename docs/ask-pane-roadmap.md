@@ -44,7 +44,7 @@ remain planned.
 | 22. Interactive Keymap Help | Planned | Add pane-local keybinding help surfaced from the winbar. |
 | 23. Ask Action Policy And Fed-Key Test Discipline | Done | Central ask action predicates, policy tests, and fed-key test guidance are implemented and verified. |
 | 24. Ask Architecture Boundary Refactor | Done | Ask behavior is consolidated around pure policy/route/command helpers, thin adapters, a controller factory, and an injected lifecycle executor. |
-| 25. Ask Session State And Status Snapshot Refactor | In Progress | Extract a coherent ask session/snapshot model so status, winbar, lifecycle facts, and future commands read one state shape. |
+| 25. Ask Session State And Status Snapshot Refactor | Done | Ask session snapshots now provide the shared facts/status data used by lifecycle decisions, winbar labels, tests, and future status commands. |
 | 26. Ask Test Architecture And Fed-Key Coverage Cleanup | Planned | Reshape ask tests around policy/state/fed-key behavior and reduce callback-only coverage to registration checks. |
 
 ## Remaining Implementation Order
@@ -1858,7 +1858,7 @@ Audit passes:
 
 ### 25. Ask Session State And Status Snapshot Refactor
 
-Status: `In Progress`
+Status: `Done`
 
 User response: continue cleaning up the architecture before new features.
 
@@ -1954,7 +1954,7 @@ Traceability table:
 | Preserve compatibility shims for existing internal callers while moving them toward the new snapshot API. | `ask_pane.session()` and `ask_pane.DRAFT_STATES` remain available; `ask_pane.snapshot()` and `ask_pane.lifecycle_facts()` expose the new snapshot API for callers moving off raw state. | `tests/sidepanes_regression.lua` "ask pane keeps session state compatibility helpers while exposing snapshots" passed in focused regression with 165 tests. | This roadmap; no public docs change applies because shims are internal. | Manual smoke of existing ask workflows. | `1fd92b8` | Done |
 | Add direct snapshot/selector tests for every state, empty/invalid buffer cases, written vs live prompt cases, target cases, and picker modes. | Direct tests added in `tests/sidepanes_regression.lua` for `ask_session`. | `tests/sidepanes_regression.lua` enumerates all explicit states, active/invalid sessions, live vs written prompts, target label/root cases, and `manual`/`after_open`/`before_send` picker modes. Focused regression passed with 165 tests. | This roadmap; no public docs change applies because this is test architecture for internal selectors. | Review focused snapshot tests and run ask workflows. | `0c1054c` | Done |
 | Add integration tests proving winbar/status-facing output and lifecycle decisions agree on the same state labels. | Runtime tests assert snapshot/lifecycle/status/winbar agreement across ready, append, written, target change, after-open picker, send, cancel, and failed-send paths. | `tests/sidepanes_regression.lua` ready/written snapshot assertions, append count assertion, target/status/winbar assertion, after-open picker snapshot assertion, inactive sent/cancel assertions, failed-send status/winbar assertion, and winbar fallback regression passed in focused regression. | This roadmap; public docs unchanged because visible behavior did not change. | Manual visible-label agreement workflow listed under this slice. | `7aad91e`, `6c4b335`, `170eecb` | Done |
-| Re-check implementation, tests, docs, roadmap, README, CHANGELOG, help docs, Markdown docs, release notes, AGENTS.md, and `illu.nvim` applicability before moving on. | Slice audit loop started after implementation commits; final clean-pass evidence is still pending. | Focused regression passed with 165 tests; `tests/run_checks.sh fast` passed; `tests/run_checks.sh full` passed; `git diff --check` passed. `illu.nvim` smoke is not applicable unless the audit finds a defaults, mappings, commands, public API, or local config behavior change. | README, CHANGELOG, Neovim help, Markdown docs, release notes, roadmap, and AGENTS.md audit pending below; no public docs change expected because behavior stayed compatible. | All manual acceptance tests listed under this slice. | Pending final audit evidence. | In Progress |
+| Re-check implementation, tests, docs, roadmap, README, CHANGELOG, help docs, Markdown docs, release notes, AGENTS.md, and `illu.nvim` applicability before moving on. | Slice audit pass 1 checked implementation boundaries, traceability, tests, README, CHANGELOG, help docs, Markdown docs, release notes, roadmap order/status, AGENTS.md, and `illu.nvim` applicability. Final clean confirmation passes are intentionally reported in the final response instead of being written back here. | Focused regression passed with 165 tests; `tests/run_checks.sh fast` passed; `tests/run_checks.sh full` passed; `git diff --check` passed. `illu.nvim` smoke was not applicable because no defaults, mappings, commands, public API, local config behavior, or `illu.nvim` files changed. | README, CHANGELOG, Neovim help, Markdown docs, release notes, roadmap, and AGENTS.md audited; no public docs change was needed because behavior stayed compatible and no public status command was added. | All manual acceptance tests listed under this slice are mapped to automated coverage or an explicit note that no public status helper exists until slice 20. | `e84df05` plus this audit evidence update. | Done |
 | Open an empty ask pane and confirm the winbar/status-facing state is `ready_empty`. | `ask_pane.snapshot()` reports `ready_empty`; `winbar.lua` formats the snapshot title. | `tests/sidepanes_regression.lua` "ask pane opens reusable ready scratch buffer in the side split" asserts winbar, snapshot, status-facing facts, and lifecycle facts for the empty ask pane. | Existing lifecycle docs mention `ready_empty`; no docs change applies because behavior did not change. | Perform this exact workflow in Neovim. | `7aad91e`, `6c4b335` | Done |
 | Append context, edit the question, write, submit, cancel, and failed-send; confirm visible state labels and behavior agree. | `ask_session.record_state()`, `ask_pane.snapshot()`, and `winbar.lua` snapshot formatting drive labels/facts through append, write, submit/send, cancel, and failed-send flows. | Runtime regression assertions cover append `draft_modified` counts, written prompt facts, inactive sent/cancel snapshots, failed-send snapshot/status/winbar labels, and existing lifecycle histories. | Existing lifecycle docs remain source for user-facing labels; no docs change applies because behavior did not change. | Perform this exact workflow in Neovim. | `7aad91e`, `6c4b335`, `170eecb` | Done |
 | Switch from Markdown to ask and from Codex to ask; confirm previous pane restore behavior still works. | Previous pane state remains in raw ask session state and is exposed by `ask_session.snapshot()`; restore behavior remains in `ask_pane.cancel_draft()`. | Existing previous-pane capture/restore regressions passed; direct snapshot tests cover `previous_pane_mode`; cancel regression now asserts inactive snapshot after restore. | Existing restore docs remain unchanged because behavior did not change. | Perform this exact workflow in Neovim. | `0c1054c`, `170eecb` | Done |
@@ -1972,7 +1972,13 @@ Verification results:
 
 Audit passes:
 
-- Pass 1 is pending after verification evidence is committed.
+- Pass 1 checked every slice 25 bullet, traceability status, implementation
+  boundaries, direct snapshot selectors, runtime lifecycle facts, winbar
+  formatting, automated coverage, fed-key/mapping impact, command paths, state
+  transitions, manual acceptance references, README, CHANGELOG, Neovim help,
+  Markdown docs, release notes, roadmap status/order, AGENTS.md, and
+  `illu.nvim` applicability. No code, test, documentation, mapping, command,
+  public API, local config, or `illu.nvim` gap was found.
 
 ### 26. Ask Test Architecture And Fed-Key Coverage Cleanup
 
