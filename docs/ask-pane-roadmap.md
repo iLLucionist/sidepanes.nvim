@@ -36,7 +36,7 @@ remain planned.
 | 14. Ask Pane Module Split | Done | Ask pane internals are split into `lua/sidepanes/panes/ask/*` with root compatibility shims. |
 | 15. Formal Behavior Matrix | Done | Source-of-truth matrix plus machine-readable fixture and docs-contract coverage are present. |
 | 16. Mapping And Command Zone Matrix | Done | Source-of-truth mapping/command zone matrix plus fixture, docs-contract checks, runtime mapping regression, corrected non-ask `:q` command-path ownership, and ask-pane quit-lifecycle shortcuts are present. |
-| 17. Ask Target And Picker Status Visibility | In Progress | Add status/debug visibility for active target, picker mode, and picker timing. |
+| 17. Ask Target And Picker Status Visibility | Done | Internal ask status/debug formatter exposes target, root, picker, draft, and count facts for the future status command. |
 | 18. Target Resolver Refactor | Done | Target resolution now lives in a pure resolver with traceable active, last-context, default, picker, and before-send decisions plus snapshot-facing target reasons. |
 | 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
 | 20. `SidepanesAskStatus` | Planned | Add a command/API that reports ask draft state for debugging. |
@@ -52,12 +52,11 @@ remain planned.
 The remaining planned slices must be implemented in this order unless the
 roadmap is explicitly updated first with the reason for changing the order.
 
-1. `17. Ask Target And Picker Status Visibility`
-2. `20. SidepanesAskStatus`
-3. `21. SidepanesVersion`
-4. `22. Interactive Keymap Help`
-5. `19. Interaction-Focused Manual Acceptance Checklist`
-6. Final verification and release-readiness audit
+1. `20. SidepanesAskStatus`
+2. `21. SidepanesVersion`
+3. `22. Interactive Keymap Help`
+4. `19. Interaction-Focused Manual Acceptance Checklist`
+5. Final verification and release-readiness audit
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,
@@ -1330,7 +1329,7 @@ Verification results:
 
 ### 17. Ask Target And Picker Status Visibility
 
-Status: `In Progress`
+Status: `Done`
 
 User response: yes, do that.
 
@@ -1382,10 +1381,30 @@ Traceability table:
 | citation count and file count. | `ask_status.debug_data(snapshot).citation_count` and `.file_count`; `debug_lines()` line `Citations: N (M files)`. | Direct formatter tests cover zero, one-file, and multi-file counts; runtime target-picker and picker-mode tests assert one citation / one file. | No public docs change applies because status output is not public yet. | Append selections from one and multiple files and inspect counts. | `13e5c6a` | Done |
 | Use this formatter for `SidepanesAskStatus` and optionally for health/debug output. | `ask_status.debug_data()` and `debug_lines()` are the pure formatter surface intended for `SidepanesAskStatus`; the public command remains intentionally unregistered until slice 20. | Existing command-registration regression still asserts `SidepanesAskStatus` is absent; formatter tests cover the future command payload. No command/API test applies yet because slice 20 owns registration. | No README/help/Markdown docs/CHANGELOG change applies until the public command/API is added in slice 20. | Future `SidepanesAskStatus` should display these lines; for now compare internal `debug_data()` / `debug_lines()` to target, picker, draft, and counts. | `13e5c6a` | Done |
 | Keep the winbar concise; do not turn it into a dense status dump. | `winbar.lua` still uses `ask_status.format_title()` only; `debug_lines()` is separate and not used by the winbar. | Existing winbar snapshot-format regression passed in the focused run; target-picker regression asserts the winbar contains the target and not `Citations:`. | Existing winbar docs remain valid because visible winbar text did not change. | Open/edit ask pane and confirm winbar remains concise. | `13e5c6a` | Done |
-| Re-check implementation, tests, docs, and this roadmap before moving on. | Planned: perform restarting audit passes and two clean non-mutating confirmation passes after the final commit. | Planned: focused tests, fast/full checks as applicable, `illu.nvim` smoke if public API/commands/local behavior change, and `git diff --check`. | Audit README, CHANGELOG, Neovim help, Markdown docs, release notes, roadmap, AGENTS.md, and `illu.nvim` impact. | Review implementation, traceability table, docs, and manual checklist before moving on. | Pending | Planned |
-| Create an ask draft and change target with `M`; confirm status output matches the winbar target. | Planned: preserve target-picker workflow while exposing matching status data. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by target-picker/status regressions where possible. | Existing target docs remain valid unless status output is public. | Perform this exact workflow. | Pending | Planned |
-| Set `model_picker = "after_open"`, append first context, and confirm status indicates the picker has been shown. | Planned: preserve `after_open` picker timing while exposing shown state. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by runtime picker/status regressions where possible. | Existing picker docs remain valid unless status output is public. | Perform this exact workflow. | Pending | Planned |
-| Set `model_picker = "before_send"`, write/send, and confirm the selected target is reflected before the prompt is sent. | Planned: preserve `before_send` picker timing while exposing selected target state. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by runtime picker/status regressions where possible. | Existing picker docs remain valid unless status output is public. | Perform this exact workflow. | Pending | Planned |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Restarting audit checked slice bullets, traceability, implementation boundaries, pure formatter shape, command/API scope, tests/edge cases, fed-key behavior, command paths, mapping zones, state transitions, manual acceptance references, README, CHANGELOG, Neovim help, Markdown docs, release notes, roadmap status/order, AGENTS.md, and `illu.nvim` impact. Final two clean non-mutating confirmation passes are reported in the final response. | Focused status checks passed with 7 filtered regressions; `tests/run_checks.sh fast` passed with 171 regressions; `tests/run_checks.sh full` passed with 171 regressions and real CLI smoke; `git diff --check` passed. `illu.nvim` smoke was not applicable because this internal formatter changed no defaults, mappings, commands, public API, local config behavior, or `illu.nvim` files. | README, CHANGELOG, Neovim help, Markdown docs, and release notes were reviewed; no public docs change applies because the formatter is internal and `SidepanesAskStatus` remains planned for slice 20. | Review implementation, traceability table, docs, and manual checklist before moving on. | closeout evidence commit | Done |
+| Create an ask draft and change target with `M`; confirm status output matches the winbar target. | `ask_status.debug_data()` reports the same target label/root used by the concise winbar after target changes. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement; runtime target-picker/status regression supports it and asserts winbar remains concise. | Existing target docs remain valid because no public status output changed. | Perform this exact workflow; compare internal status data to winbar target until slice 20 exposes the command. | `13e5c6a` | Done |
+| Set `model_picker = "after_open"`, append first context, and confirm status indicates the picker has been shown. | `ask_status.debug_data()` reports `picker_mode = "after_open"` and `after_open_shown = true` after first captured context triggers the picker. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement; runtime `after_open` picker/status regression supports it. | Existing picker docs remain valid because behavior and public output are unchanged. | Perform this exact workflow; compare internal status data until slice 20 exposes the command. | `13e5c6a` | Done |
+| Set `model_picker = "before_send"`, write/send, and confirm the selected target is reflected before the prompt is sent. | `ask_status.debug_data()` reports `picker_mode = "before_send"`, current target/root, `draft_written`, and citation/file counts before the send-time picker runs; runtime send assertion confirms the selected target is used. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement; runtime `before_send` picker/status regression supports it. | Existing picker docs remain valid because behavior and public output are unchanged. | Perform this exact workflow; compare internal status data before send until slice 20 exposes the command. | `13e5c6a` | Done |
+
+Verification evidence:
+
+- Focused status regression passed with 7 filtered tests:
+  `SIDEPANES_TEST_FILTER='module split,ask functional core,ask session snapshot,ask pane target picker mapping updates target,ask pane automatic model picker modes update target,ask pane winbar formats,command setup registers configured commands' nvim -n --headless -u NONE ...`.
+- `tests/run_checks.sh fast` passed with 171 regression tests plus lifecycle,
+  registry, audit, help, docs-contract, and checkhealth smokes.
+- `tests/run_checks.sh full` passed with 171 regression tests plus real
+  Codex/Claude CLI smoke.
+- `git diff --check` passed.
+- `illu.nvim` smoke was not run because this slice changed only an internal
+  formatter and tests; it did not change defaults, mappings, commands, public
+  API, local config behavior, or `illu.nvim`.
+
+Audit pass 1 checked every slice-17 bullet and traceability row,
+implementation boundaries, pure formatter design, command/API scope, automated
+coverage, command-path and mapping-zone compatibility, state transitions,
+manual acceptance references, README, CHANGELOG, Neovim help, Markdown docs,
+release notes, roadmap status/order, AGENTS.md, and `illu.nvim` impact. No new
+implementation, test, documentation, process, or integration gaps were found.
 
 ### 18. Target Resolver Refactor
 
