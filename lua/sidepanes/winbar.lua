@@ -6,6 +6,8 @@ Architecture: Bridges heading.lua formatting with shared pane state; init.lua in
 ]]
 
 local heading = require("sidepanes.heading")
+local ask_pane = require("sidepanes.ask_pane")
+local ask_session = require("sidepanes.ask_session")
 local util = require("sidepanes.util")
 
 local M = {}
@@ -169,22 +171,7 @@ local function terminal_title(state)
 end
 
 local function ask_title(state)
-    local ask = state.ask_pane or {}
-    local entry = ask.entry
-    local target = entry and entry.label or "No target"
-    local draft = ask.draft_state or "ready_empty"
-
-    if not ask.draft_state then
-        if util.valid_buf(ask.bufnr) and vim.api.nvim_get_option_value("modified", { buf = ask.bufnr }) then
-            draft = "draft_modified"
-        elseif ask.written_prompt then
-            draft = "draft_written"
-        elseif ask.ready == false or (ask.citations and #ask.citations > 0) then
-            draft = "draft_modified"
-        end
-    end
-
-    return "Ask: " .. target .. " - " .. draft
+    return ask_session.format_title(ask_pane.snapshot(state))
 end
 
 --- Refresh the pane winbar for markdown heading or terminal identity.

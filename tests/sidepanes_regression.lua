@@ -29,6 +29,7 @@ local terminal_module = require("sidepanes.terminal")
 local util = require("sidepanes.util")
 local validation = require("sidepanes.validation")
 local markdown_reflow = require("sidepanes.markdown_reflow")
+local winbar_module = require("sidepanes.winbar")
 local sidepanes = require("sidepanes")
 local pane = sidepanes._state()
 
@@ -4770,6 +4771,30 @@ test("ask pane captures previous markdown and terminal pane state", function()
 
     assert(pane.ask_pane.previous.active_mode == "codex", "ask pane did not remember terminal mode")
     assert(pane.ask_pane.previous.active_terminal_key == terminal_key, "ask pane did not remember terminal key")
+end)
+
+test("ask pane winbar formats the session snapshot instead of deriving fallback state", function()
+    reset_pane()
+
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+    })
+
+    pane.show_ask_pane({ focus = true })
+
+    local qbuf = pane.ask_pane.bufnr
+
+    pane.ask_pane.draft_state = nil
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "modified without explicit state" })
+    vim.api.nvim_set_option_value("modified", true, { buf = qbuf })
+    winbar_module.update(pane)
+
+    local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+    assert(winbar:find("Ask: No target %- ready_empty"), winbar)
+    assert(not winbar:find("draft_modified", 1, true), "winbar inferred draft_modified instead of formatting snapshot: " .. winbar)
 end)
 
 test("public IPython send captures current line through terminal deps", function()
