@@ -5355,6 +5355,12 @@ test("pane-mode explicit append works when auto append is disabled", function()
     local after_explicit = table.concat(vim.api.nvim_buf_get_lines(pane.ask_pane.bufnr, 0, -1, false), "\n")
 
     assert(after_explicit:find("lines 2%-2", 1, false), "explicit append did not mutate prompt")
+
+    local snapshot = ask_pane_module.snapshot(pane)
+
+    assert(snapshot.draft_state == "draft_modified", "append snapshot did not report draft_modified")
+    assert(snapshot.citation_count == 2, "append snapshot citation count was wrong")
+    assert(snapshot.file_count == 1, "append snapshot file count was wrong")
 end)
 
 test("pane-mode ask write then quit sends accumulated prompt", function()
@@ -5399,6 +5405,7 @@ test("pane-mode ask write then quit sends accumulated prompt", function()
     assert(pane.ask_pane_last_state == "sent", "ask send did not leave sent as last state")
     assert(pane.active_mode == "codex", "ask pane send did not focus target terminal")
     assert(not pane.ask_pane.bufnr, "ask pane state was not cleared after send")
+    assert(ask_pane_module.snapshot(pane).active == false, "sent ask snapshot should be inactive after state clear")
     assert(
         vim.fn.maparg("<CR>", "c", false, true).desc ~= "Sidepanes ask pane command-line enter",
         "ask pane send leaked command-line enter mapping"
@@ -5452,6 +5459,15 @@ test("pane-mode ask preserves prompt when target terminal fails to open", functi
     assert(vim.api.nvim_buf_is_valid(qbuf), "failed send deleted ask buffer")
     assert(prompt:find("do not lose this draft", 1, true), prompt)
     assert(pane.active_mode == "ask", "failed send should leave ask pane active")
+
+    local snapshot = ask_pane_module.snapshot(pane)
+    local status = ask_session.status_data(snapshot)
+    local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+    assert(snapshot.active == true, "failed send snapshot should stay active")
+    assert(snapshot.draft_state == "send_failed", "failed send snapshot lost send_failed")
+    assert(status.draft_state == "send_failed", "failed send status data lost send_failed")
+    assert(winbar:find("send_failed", 1, true), winbar)
 end)
 
 test("pane-mode ask cancel restores previous markdown and terminal modes", function()
@@ -5482,6 +5498,7 @@ test("pane-mode ask cancel restores previous markdown and terminal modes", funct
 
     assert(pane.active_mode == "markdown", "ask pane cancel did not restore markdown mode")
     assert(vim.api.nvim_win_get_buf(pane.winid) == pane.bufnr, "ask pane cancel did not restore markdown buffer")
+    assert(ask_pane_module.snapshot(pane).active == false, "cancel snapshot should be inactive after state clear")
 
     pane.open_terminal("codex", nil, { root = root, focus = true })
 
@@ -5717,6 +5734,7 @@ test("ask pane empty ready draft writes then submit cancels without sending", fu
     assert(vim.wait(1000, function()
         return not vim.api.nvim_buf_is_valid(qbuf)
     end), "ready submit did not clear ask buffer")
+    assert(ask_pane_module.snapshot(pane).active == false, "cancelled ready submit snapshot should be inactive after clear")
 end)
 
 test("submit question command without active ask draft warns and keeps state", function()
@@ -5848,8 +5866,12 @@ test("ask pane target picker mapping updates target and winbar", function()
     call_map(qbuf, "M")
 
     local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+    local snapshot = ask_pane_module.snapshot(pane)
+    local status = ask_session.status_data(snapshot)
 
     assert(pane.ask_pane.entry.preset_name == "two", "ask pane target picker did not update preset")
+    assert(snapshot.target_label == "Codex: Two", "target picker snapshot label was wrong")
+    assert(status.target_label == "Codex: Two", "target picker status label was wrong")
     assert(winbar:find("Codex: Two", 1, true), winbar)
 end)
 
@@ -6306,6 +6328,12 @@ test("ask pane automatic model picker modes update target", function()
     pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
 
     assert(pane.ask_pane.entry.preset_name == "two", "after_open model picker did not update target")
+
+    local after_open_snapshot = ask_pane_module.snapshot(pane)
+
+    assert(after_open_snapshot.picker_mode == "after_open", "after_open snapshot picker mode was wrong")
+    assert(after_open_snapshot.picker_shown == true, "after_open snapshot did not report picker shown")
+    assert(after_open_snapshot.target_label == "Codex: Two", "after_open snapshot target label was wrong")
 
     pane._test_next_choice = "1"
     pane.show_markdown()
