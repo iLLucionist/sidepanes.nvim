@@ -44,7 +44,7 @@ remain planned.
 | 22. Interactive Keymap Help | Planned | Add pane-local keybinding help surfaced from the winbar. |
 | 23. Ask Action Policy And Fed-Key Test Discipline | Done | Central ask action predicates, policy tests, and fed-key test guidance are implemented and verified. |
 | 24. Ask Architecture Boundary Refactor | Done | Ask behavior is consolidated around pure policy/route/command helpers, thin adapters, a controller factory, and an injected lifecycle executor. |
-| 25. Ask Session State And Status Snapshot Refactor | Planned | Extract a coherent ask session/snapshot model so status, winbar, lifecycle facts, and future commands read one state shape. |
+| 25. Ask Session State And Status Snapshot Refactor | In Progress | Extract a coherent ask session/snapshot model so status, winbar, lifecycle facts, and future commands read one state shape. |
 | 26. Ask Test Architecture And Fed-Key Coverage Cleanup | Planned | Reshape ask tests around policy/state/fed-key behavior and reduce callback-only coverage to registration checks. |
 
 ## Remaining Implementation Order
@@ -1858,13 +1858,26 @@ Audit passes:
 
 ### 25. Ask Session State And Status Snapshot Refactor
 
-Status: `Planned`
+Status: `In Progress`
 
 User response: continue cleaning up the architecture before new features.
 
 Goal: give ask lifecycle, winbar/status, future debug commands, and tests one
 coherent state snapshot instead of many places deriving related facts
 differently.
+
+Remaining implementation order, restated before starting this slice:
+
+1. `25. Ask Session State And Status Snapshot Refactor`
+2. `26. Ask Test Architecture And Fed-Key Coverage Cleanup`
+3. `18. Target Resolver Refactor`
+4. `14. Ask Pane Module Split`
+5. `17. Ask Target And Picker Status Visibility`
+6. `20. SidepanesAskStatus`
+7. `21. SidepanesVersion`
+8. `22. Interactive Keymap Help`
+9. `19. Interaction-Focused Manual Acceptance Checklist`
+10. Final verification and release-readiness audit
 
 - Define one ask session model or snapshot module that owns the public shape of
   ask state consumed by policy, lifecycle, winbar, status, health/debug output,
@@ -1915,6 +1928,37 @@ Manual acceptance tests:
 Refinement note: this slice should make later `SidepanesAskStatus` mostly a
 presentation command over an existing snapshot, not a new parallel status
 implementation.
+
+Traceability table:
+
+| Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Define one ask session model or snapshot module that owns the public shape of ask state consumed by policy, lifecycle, winbar, status, health/debug output, and future commands. | Planned: introduce or reuse a focused ask session/snapshot boundary after implementation inventory. | Planned: direct snapshot/model tests plus integration tests that policy/lifecycle/winbar read the same shape. | This roadmap; public docs TBD if user-visible status/debug behavior changes. | Manual snapshot/state agreement checks listed under this slice. | Pending. | Planned |
+| Keep raw mutable Neovim/session state separate from pure snapshots: | Planned: keep mutable buffer/window/callback state in the session shell and expose pure serializable snapshots. | Planned: direct selector tests should prove snapshots are serializable facts and do not require live Neovim objects where pure coverage is possible. | This roadmap architecture requirement; no public docs change applies unless user-visible status output changes. | Manual architecture review plus visible lifecycle checks. | Pending. | Planned |
+| raw state may contain buffer IDs, window IDs, callbacks, and cached prompts. | Planned: raw state remains in the imperative ask/session storage boundary. | Planned: selector tests should cover raw-to-snapshot conversion with fake IDs/cached prompt values. | This roadmap; no public docs change applies because this is internal architecture. | Manual architecture review. | Pending. | Planned |
+| snapshots contain serializable facts and labels. | Planned: snapshot module returns facts/labels without raw Neovim handles. | Planned: direct snapshot tests should assert expected serializable keys and labels. | This roadmap; future status docs may reference the status labels only. | Manual status/debug output check. | Pending. | Planned |
+| policy consumes snapshots or facts, not raw Neovim objects. | Planned: lifecycle fact collection feeds policy from the snapshot/facts boundary. | Planned: policy/snapshot integration tests should assert lifecycle decisions from snapshot facts. | This roadmap; no public docs change applies because policy inputs are internal. | Manual lifecycle behavior checks. | Pending. | Planned |
+| Extract pure selectors for: | Planned: snapshot module should collect pure selectors behind one public surface. | Planned: direct selector tests for every selector row below. | This roadmap; no public docs change applies unless selector output becomes public status text. | Manual snapshot/status review. | Pending. | Planned |
+| active/inactive ask session. | Planned: selector reports whether an ask session is active. | Planned: direct tests for no session, ready session, sent/cancelled/reset session, and invalid-buffer session. | This roadmap; future `SidepanesAskStatus` docs will use this output. | Open/cancel/send ask pane and compare active/inactive status. | Pending. | Planned |
+| current draft state. | Planned: selector reports explicit draft state labels from the canonical state boundary. | Planned: direct tests for `ready_empty`, `draft_modified`, `draft_written`, `sending_picker`, `sending_terminal`, `send_failed`, `cancelled`, and `sent`. | Existing lifecycle docs list labels; update only if wording or source changes. | Confirm visible labels across append, write, submit, cancel, and failed-send. | Pending. | Planned |
+| valid buffer/window facts. | Planned: selector reports buffer/window validity without leaking raw handles into policy. | Planned: direct tests for valid, missing, deleted, and invalid buffer/window cases. | This roadmap; no public docs change applies because validity facts are internal. | Manual invalid-window behavior review if a reproducible interaction exists. | Pending. | Planned |
+| modified/written/live prompt facts. | Planned: selector reports dirty buffer, written prompt, and live prompt availability. | Planned: direct tests for empty ready prompt, modified prompt, written unmodified prompt, edited-after-write prompt, and preserved failed-send prompt. | Existing public lifecycle docs should remain accurate unless behavior changes. | Append/edit/write/submit/cancel workflow listed under this slice. | Pending. | Planned |
+| target label/root facts. | Planned: selector reports current target label and root for status/winbar/future commands. | Planned: direct tests for default target, changed target, missing target, and cross-root/root-label cases as applicable. | Existing target docs remain unchanged unless status output becomes public in this slice. | Change target manually and compare status-facing output to winbar. | Pending. | Planned |
+| picker mode and picker-shown facts. | Planned: selector reports configured picker mode and whether `after_open` has shown for the draft. | Planned: direct tests for `manual`, `after_open`, `before_send`, shown, and not-shown cases. | Existing picker docs remain unchanged unless status output becomes public in this slice. | Use `after_open` and `before_send` workflows and inspect status-facing output. | Pending. | Planned |
+| previous pane mode. | Planned: selector reports previous pane mode from session state. | Planned: direct tests for Markdown, Codex/terminal, custom terminal, missing previous pane, and reset cases where the harness supports them. | Existing restore docs remain unchanged unless behavior changes. | Switch from Markdown/Codex to ask and confirm restore behavior. | Pending. | Planned |
+| citation/file counts. | Planned: selector reports citation and distinct file counts from the canonical citation registry/prompt state. | Planned: direct tests for zero citations, one file/multiple citations, multiple files, duplicate skip, and edited-visible-prompt fallback if affected. | Future status docs may mention counts; no public docs change applies until a public command exposes them. | Append context across files and compare counts to visible prompt. | Pending. | Planned |
+| Make lifecycle fact collection a single function or module used by all lifecycle entry points; do not let `finish_quit`, `submit_now`, status, and tests each derive their own version. | Planned: route lifecycle entry points through one snapshot/facts function. | Planned: integration tests should prove `finish_quit`, `submit_now`, status-facing output, and test helpers agree on labels/facts. | This roadmap; no public docs change applies unless behavior changes. | Run quit/submit/status workflows and compare behavior to labels. | Pending. | Planned |
+| Move state history and last-state reporting toward the ask session/snapshot boundary instead of storing lifecycle history partly beside `state.ask_pane`. | Planned: consolidate history/last-state reporting at the session/snapshot boundary while preserving compatibility shims. | Planned: direct and integration tests should assert history updates for every lifecycle state transition. | Existing lifecycle docs remain unchanged; roadmap records the internal move. | Inspect state labels through visible winbar/status-facing output during lifecycle workflows. | Pending. | Planned |
+| Make winbar ask labels and future `SidepanesAskStatus` use the same snapshot formatter or pure status data. | Planned: add pure status formatter/data consumed by winbar and future command work. | Planned: integration tests should assert winbar/status-facing output uses the same labels as lifecycle facts. | Existing winbar docs should remain accurate; future command docs are deferred to slice 20 unless a public API changes now. | Open/edit/write/send/fail and compare visible labels with status-facing data. | Pending. | Planned |
+| Remove fallback state derivation from winbar once the snapshot exists; winbar should format state, not infer it. | Planned: simplify winbar to format snapshot/status data only. | Planned: integration test should fail if winbar falls back to modified/written/citation inference inconsistent with snapshot state. | This roadmap; public docs should not need a behavior change. | Confirm winbar labels match canonical states across lifecycle. | Pending. | Planned |
+| Preserve compatibility shims for existing internal callers while moving them toward the new snapshot API. | Planned: keep existing internal APIs temporarily where needed and delegate them to snapshot/session functions. | Planned: regression tests should cover current callers and compatibility aliases/shims. | This roadmap; no public docs change applies because shims are internal. | Manual smoke of existing ask workflows. | Pending. | Planned |
+| Add direct snapshot/selector tests for every state, empty/invalid buffer cases, written vs live prompt cases, target cases, and picker modes. | Planned: add focused snapshot/selector coverage in the regression suite or a new ask-focused test file if harness shape allows. | Planned: this bullet is itself the automated coverage requirement; tests must enumerate every listed case. | This roadmap; no public docs change applies because this is test architecture for internal selectors. | Review focused snapshot tests and run ask workflows. | Pending. | Planned |
+| Add integration tests proving winbar/status-facing output and lifecycle decisions agree on the same state labels. | Planned: add integration tests around winbar/status-facing data and lifecycle decisions. | Planned: integration coverage for state-label agreement across open, append/edit, write, submit, cancel, and failed-send. | This roadmap; public docs updated only if visible wording changes. | Manual visible-label agreement workflow listed under this slice. | Pending. | Planned |
+| Re-check implementation, tests, docs, roadmap, README, CHANGELOG, help docs, Markdown docs, release notes, AGENTS.md, and `illu.nvim` applicability before moving on. | Planned: final slice audit loop after implementation/testing/docs. | Planned: focused tests, `tests/run_checks.sh fast`, `tests/run_checks.sh full`, `git diff --check`, and `illu.nvim` smoke if defaults/mappings/commands/public API/local behavior change. | All listed docs must be audited; update public docs only if behavior or documented status output changes. | All manual acceptance tests listed under this slice. | Pending. | Planned |
+| Open an empty ask pane and confirm the winbar/status-facing state is `ready_empty`. | Planned: `show_ask_pane`/session snapshot should report `ready_empty` for an empty active draft. | Planned: direct snapshot test plus integration/winbar test for empty ask pane. | Existing lifecycle docs mention `ready_empty`; update only if wording/source changes. | Perform this exact workflow in Neovim. | Pending. | Planned |
+| Append context, edit the question, write, submit, cancel, and failed-send; confirm visible state labels and behavior agree. | Planned: lifecycle snapshot should drive state labels through all listed transitions. | Planned: direct state tests plus integration tests for append/edit/write/submit/cancel/failure. | Existing lifecycle docs remain source for user-facing labels unless behavior changes. | Perform this exact workflow in Neovim. | Pending. | Planned |
+| Switch from Markdown to ask and from Codex to ask; confirm previous pane restore behavior still works. | Planned: previous-pane selector and lifecycle restore should preserve existing behavior. | Planned: regression coverage for Markdown and terminal/Codex previous-pane restoration. | Existing restore docs remain unchanged unless behavior changes. | Perform this exact workflow in Neovim. | Pending. | Planned |
+| Run any existing debug/status helpers and confirm they report the same target, picker, and draft state visible in the UI. | Planned: use existing internal/debug helpers if present; do not add public `SidepanesAskStatus` before slice 20. | Planned: integration coverage for any existing status-facing helper; explicit no-test reason needed if no helper exists yet. | This roadmap; public command docs are deferred to slice 20 unless an existing documented helper changes. | Perform this exact workflow if an existing helper is available; otherwise record that no public helper exists yet. | Pending. | Planned |
 
 ### 26. Ask Test Architecture And Fed-Key Coverage Cleanup
 
