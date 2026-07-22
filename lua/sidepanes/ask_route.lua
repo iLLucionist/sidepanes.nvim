@@ -5,7 +5,7 @@ Does: Preserves compatibility for ask route helpers used by pane-mode ask workfl
 Architecture: Pure compatibility wrapper; target resolution belongs to ask_target_resolver.
 ]]
 
-local ask_target_resolver = require("sidepanes.ask_target_resolver")
+local ask_target_resolver = require("sidepanes.panes.ask.target_resolver")
 
 local M = {}
 

@@ -12,7 +12,7 @@ Architecture: Uses an internal state table for focused submodules and returns a 
 
 local defaults = require("sidepanes.defaults")
 local agent_session = require("sidepanes.agent_session")
-local ask_pane = require("sidepanes.ask_pane")
+local ask_pane = require("sidepanes.panes.ask")
 local api_helpers = require("sidepanes.api")
 local commands = require("sidepanes.commands")
 local context = require("sidepanes.context")

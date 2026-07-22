@@ -7,10 +7,10 @@ Architecture: Orchestrates selection, picker, and terminal callbacks while keepi
 
 local util = require("sidepanes.util")
 local selection = require("sidepanes.selection")
-local ask_pane = require("sidepanes.ask_pane")
-local ask_cmdline = require("sidepanes.ask_cmdline")
+local ask_pane = require("sidepanes.panes.ask")
+local ask_cmdline = require("sidepanes.panes.ask.cmdline")
 local ask_route = require("sidepanes.ask_route")
-local ask_target_resolver = require("sidepanes.ask_target_resolver")
+local ask_target_resolver = require("sidepanes.panes.ask.target_resolver")
 
 local M = {}
 

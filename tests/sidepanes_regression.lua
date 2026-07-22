@@ -12,10 +12,12 @@ local ask_cmdline = require("sidepanes.ask_cmdline")
 local ask_controller = require("sidepanes.ask_controller")
 local ask_executor = require("sidepanes.ask_executor")
 local ask_pane_module = require("sidepanes.ask_pane")
+local ask_pane_entry = require("sidepanes.panes.ask")
 local ask_prompt = require("sidepanes.ask_prompt")
 local ask_policy = require("sidepanes.ask_policy")
 local ask_route = require("sidepanes.ask_route")
 local ask_session = require("sidepanes.ask_session")
+local ask_status = require("sidepanes.panes.ask.status")
 local ask_target_resolver = require("sidepanes.ask_target_resolver")
 local commands = require("sidepanes.commands")
 local config = require("sidepanes.config")
@@ -4462,17 +4464,48 @@ test("ask functional core modules do not call Neovim APIs directly", function()
     for _, module in ipairs({
         "sidepanes.ask_policy",
         "sidepanes.ask_cmdline",
+        "sidepanes.panes.ask.cmdline",
         "sidepanes.ask_controller",
+        "sidepanes.panes.ask.controller",
         "sidepanes.ask_executor",
+        "sidepanes.panes.ask.executor",
         "sidepanes.ask_route",
         "sidepanes.ask_session",
+        "sidepanes.panes.ask.session",
+        "sidepanes.panes.ask.status",
         "sidepanes.ask_target_resolver",
+        "sidepanes.panes.ask.target_resolver",
     }) do
         local path = vim.fn.getcwd() .. "/lua/" .. module:gsub("%.", "/") .. ".lua"
         local source = table.concat(vim.fn.readfile(path), "\n")
 
         assert(not source:find("vim%.", 1, false), module .. " contains a direct vim.* call")
     end
+end)
+
+test("ask pane module split keeps new namespace and old shims loadable", function()
+    local pairs_to_check = {
+        { "sidepanes.ask_pane", "sidepanes.panes.ask" },
+        { "sidepanes.ask_cmdline", "sidepanes.panes.ask.cmdline" },
+        { "sidepanes.ask_controller", "sidepanes.panes.ask.controller" },
+        { "sidepanes.ask_executor", "sidepanes.panes.ask.executor" },
+        { "sidepanes.ask_keymaps", "sidepanes.panes.ask.keymaps" },
+        { "sidepanes.ask_session", "sidepanes.panes.ask.session" },
+        { "sidepanes.ask_target_resolver", "sidepanes.panes.ask.target_resolver" },
+    }
+
+    for _, pair in ipairs(pairs_to_check) do
+        local old_module = require(pair[1])
+        local new_module = require(pair[2])
+
+        assert(old_module == new_module, pair[1] .. " did not shim to " .. pair[2])
+    end
+
+    assert(ask_pane_module == ask_pane_entry, "test ask pane require path did not match new namespace")
+    assert(type(require("sidepanes.panes.ask.navigation").jump_header) == "function", "ask navigation jump_header missing")
+    assert(type(require("sidepanes.panes.ask.navigation").source_jump) == "function", "ask navigation source_jump missing")
+    assert(type(ask_status.status_data) == "function", "ask status data formatter missing")
+    assert(type(ask_status.format_title) == "function", "ask status title formatter missing")
 end)
 
 test("ask target resolver centralizes pane-mode target decisions", function()
@@ -4624,6 +4657,8 @@ test("ask session snapshot exposes serializable state facts and labels", functio
     assert(status.picker_shown == true, "status data lost picker shown")
     assert(status.citation_count == 3 and status.file_count == 2, "status data lost citation counts")
     assert(ask_session.format_title(snapshot) == "Ask: Codex: Default - draft_written", "formatted title was wrong")
+    assert(ask_status.format_title(snapshot) == ask_session.format_title(snapshot), "status module title disagreed with session formatter")
+    assert(vim.deep_equal(ask_status.status_data(snapshot), status), "status module data disagreed with session formatter")
 end)
 
 test("ask session snapshot covers empty invalid target and picker cases", function()

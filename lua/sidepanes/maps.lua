@@ -8,7 +8,7 @@ Architecture: Receives behavior through dependency callbacks from the facade so 
 local M = {}
 local smart_gf = require("sidepanes.smart_gf")
 local ask_policy = require("sidepanes.ask_policy")
-local ask_cmdline = require("sidepanes.ask_cmdline")
+local ask_cmdline = require("sidepanes.panes.ask.cmdline")
 local CMDLINE_ENTER_DESC = "Sidepanes pane command-line enter"
 local pane_buffers = {}
 local cmdline_enter_installed = false

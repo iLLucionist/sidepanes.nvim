@@ -6,8 +6,8 @@ Architecture: Bridges heading.lua formatting with shared pane state; init.lua in
 ]]
 
 local heading = require("sidepanes.heading")
-local ask_pane = require("sidepanes.ask_pane")
-local ask_session = require("sidepanes.ask_session")
+local ask_pane = require("sidepanes.panes.ask")
+local ask_status = require("sidepanes.panes.ask.status")
 local util = require("sidepanes.util")
 
 local M = {}
@@ -171,7 +171,7 @@ local function terminal_title(state)
 end
 
 local function ask_title(state)
-    return ask_session.format_title(ask_pane.snapshot(state))
+    return ask_status.format_title(ask_pane.snapshot(state))
 end
 
 --- Refresh the pane winbar for markdown heading or terminal identity.
