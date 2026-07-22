@@ -4569,6 +4569,28 @@ test("ask session records lifecycle history at the session boundary", function()
     assert(vim.deep_equal(state.ask_pane_state_history, { "ready_empty", "draft_modified" }), "record_state history was wrong")
 end)
 
+test("ask pane keeps session state compatibility helpers while exposing snapshots", function()
+    local state = {
+        config = {
+            ask = {
+                model_picker = "manual",
+            },
+        },
+    }
+    local ask = ask_pane_module.session(state)
+
+    assert(type(ask) == "table", "ask pane session helper did not return a table")
+    assert(type(ask.citations) == "table", "ask pane session helper did not initialize citations")
+    assert(ask_pane_module.DRAFT_STATES.ready_empty == "ready_empty", "ask pane draft state constants compatibility changed")
+    assert(type(ask_pane_module.snapshot) == "function", "ask pane snapshot helper missing")
+    assert(type(ask_pane_module.lifecycle_facts) == "function", "ask pane lifecycle facts helper missing")
+
+    local snapshot = ask_pane_module.snapshot(state)
+
+    assert(snapshot.active == false, "empty compatibility snapshot should be inactive")
+    assert(snapshot.target_label == "No target", "empty compatibility snapshot target label was wrong")
+end)
+
 test("ask command-line adapter builds ask pane and floating compatibility commands", function()
     assert(
         ask_cmdline.markdown_return_command() == '<C-u>lua require("sidepanes.internal").show_markdown()<CR>',
