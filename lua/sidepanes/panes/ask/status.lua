@@ -9,8 +9,40 @@ local session = require("sidepanes.panes.ask.session")
 
 local M = {}
 
+local function bool_label(value)
+    return value and "yes" or "no"
+end
+
 function M.status_data(snapshot)
     return session.status_data(snapshot)
+end
+
+function M.debug_data(snapshot)
+    local status = M.status_data(snapshot)
+    local picker_mode = status.picker_mode or "manual"
+
+    return {
+        after_open_shown = picker_mode == "after_open" and status.picker_shown == true,
+        citation_count = status.citation_count or 0,
+        draft_state = status.draft_state or "inactive",
+        file_count = status.file_count or 0,
+        picker_mode = picker_mode,
+        target_label = status.target_label or "No target",
+        target_root = status.target_root or "",
+    }
+end
+
+function M.debug_lines(snapshot)
+    local data = M.debug_data(snapshot)
+
+    return {
+        "Ask target: " .. data.target_label,
+        "Target root: " .. data.target_root,
+        "Picker mode: " .. data.picker_mode,
+        "After-open picker shown: " .. bool_label(data.after_open_shown),
+        "Draft state: " .. data.draft_state,
+        ("Citations: %d (%d files)"):format(data.citation_count, data.file_count),
+    }
 end
 
 function M.format_title(snapshot)

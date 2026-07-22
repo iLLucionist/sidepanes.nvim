@@ -4505,6 +4505,8 @@ test("ask pane module split keeps new namespace and old shims loadable", functio
     assert(type(require("sidepanes.panes.ask.navigation").jump_header) == "function", "ask navigation jump_header missing")
     assert(type(require("sidepanes.panes.ask.navigation").source_jump) == "function", "ask navigation source_jump missing")
     assert(type(ask_status.status_data) == "function", "ask status data formatter missing")
+    assert(type(ask_status.debug_data) == "function", "ask status debug data formatter missing")
+    assert(type(ask_status.debug_lines) == "function", "ask status debug line formatter missing")
     assert(type(ask_status.format_title) == "function", "ask status title formatter missing")
 end)
 
@@ -4659,6 +4661,24 @@ test("ask session snapshot exposes serializable state facts and labels", functio
     assert(ask_session.format_title(snapshot) == "Ask: Codex: Default - draft_written", "formatted title was wrong")
     assert(ask_status.format_title(snapshot) == ask_session.format_title(snapshot), "status module title disagreed with session formatter")
     assert(vim.deep_equal(ask_status.status_data(snapshot), status), "status module data disagreed with session formatter")
+
+    local debug = ask_status.debug_data(snapshot)
+
+    assert(debug.target_label == "Codex: Default", "debug status lost target label")
+    assert(debug.target_root == "/project", "debug status lost target root")
+    assert(debug.picker_mode == "after_open", "debug status lost picker mode")
+    assert(debug.after_open_shown == true, "debug status lost after_open shown state")
+    assert(debug.draft_state == "draft_written", "debug status lost draft state")
+    assert(debug.citation_count == 3 and debug.file_count == 2, "debug status lost citation counts")
+
+    local lines = ask_status.debug_lines(snapshot)
+
+    assert(lines[1] == "Ask target: Codex: Default", "debug lines target was wrong")
+    assert(lines[2] == "Target root: /project", "debug lines root was wrong")
+    assert(lines[3] == "Picker mode: after_open", "debug lines picker mode was wrong")
+    assert(lines[4] == "After-open picker shown: yes", "debug lines picker shown state was wrong")
+    assert(lines[5] == "Draft state: draft_written", "debug lines draft state was wrong")
+    assert(lines[6] == "Citations: 3 (2 files)", "debug lines citation counts were wrong")
 end)
 
 test("ask session snapshot covers empty invalid target and picker cases", function()
@@ -4724,6 +4744,23 @@ test("ask session snapshot covers empty invalid target and picker cases", functi
     assert(invalid.previous_pane_mode == "claude:default:/fallback", "terminal previous fallback was wrong")
     assert(invalid.citation_count == 1 and invalid.file_count == 1, "invalid snapshot counts were wrong")
     assert(ask_session.format_title(invalid) == "Ask: Fallback Preset - inactive", "inactive title was wrong")
+
+    local inactive_debug = ask_status.debug_data(invalid)
+
+    assert(inactive_debug.target_label == "Fallback Preset", "inactive debug target label was wrong")
+    assert(inactive_debug.target_root == "/fallback", "inactive debug target root was wrong")
+    assert(inactive_debug.picker_mode == "before_send", "inactive debug picker mode was wrong")
+    assert(inactive_debug.after_open_shown == false, "inactive debug after_open state should be false")
+    assert(inactive_debug.draft_state == "inactive", "inactive debug draft state was wrong")
+
+    local empty_debug = ask_status.debug_data({})
+
+    assert(empty_debug.target_label == "No target", "empty debug target label was wrong")
+    assert(empty_debug.target_root == "", "empty debug target root was wrong")
+    assert(empty_debug.picker_mode == "manual", "empty debug picker mode should default to manual")
+    assert(empty_debug.after_open_shown == false, "empty debug after_open state should be false")
+    assert(empty_debug.draft_state == "inactive", "empty debug draft state was wrong")
+    assert(empty_debug.citation_count == 0 and empty_debug.file_count == 0, "empty debug counts were wrong")
 end)
 
 test("ask session records lifecycle history at the session boundary", function()
@@ -6404,6 +6441,7 @@ test("ask pane target picker mapping updates target and winbar", function()
     local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
     local snapshot = ask_pane_module.snapshot(pane)
     local status = ask_session.status_data(snapshot)
+    local debug = ask_status.debug_data(snapshot)
 
     assert(pane.ask_pane.entry.preset_name == "two", "ask pane target picker did not update preset")
     assert(pane.ask_pane.target_reason == "explicit_target_change", "manual target picker did not record explicit target-change reason")
@@ -6411,7 +6449,14 @@ test("ask pane target picker mapping updates target and winbar", function()
     assert(snapshot.target_reason == "explicit_target_change", "target picker snapshot reason was wrong")
     assert(status.target_label == "Codex: Two", "target picker status label was wrong")
     assert(status.target_reason == "explicit_target_change", "target picker status reason was wrong")
+    assert(debug.target_label == "Codex: Two", "target picker debug status label was wrong")
+    assert(debug.target_root == root, "target picker debug status root was wrong")
+    assert(debug.picker_mode == "manual", "target picker debug status picker mode was wrong")
+    assert(debug.after_open_shown == false, "manual target picker should not report after_open shown")
+    assert(debug.draft_state == "draft_modified", "target picker debug status draft state was wrong")
+    assert(debug.citation_count == 1 and debug.file_count == 1, "target picker debug status counts were wrong")
     assert(winbar:find("Codex: Two", 1, true), winbar)
+    assert(not winbar:find("Citations:", 1, true), "winbar should not become a dense status dump: " .. winbar)
 end)
 
 test("ask pane target picker mapping is configurable", function()
@@ -6850,10 +6895,17 @@ test("ask pane automatic model picker modes update target", function()
     assert(pane.ask_pane.entry.preset_name == "two", "after_open model picker did not update target")
 
     local after_open_snapshot = ask_pane_module.snapshot(pane)
+    local after_open_debug = ask_status.debug_data(after_open_snapshot)
 
     assert(after_open_snapshot.picker_mode == "after_open", "after_open snapshot picker mode was wrong")
     assert(after_open_snapshot.picker_shown == true, "after_open snapshot did not report picker shown")
     assert(after_open_snapshot.target_label == "Codex: Two", "after_open snapshot target label was wrong")
+    assert(after_open_debug.target_label == "Codex: Two", "after_open debug status target label was wrong")
+    assert(after_open_debug.target_root == root, "after_open debug status target root was wrong")
+    assert(after_open_debug.picker_mode == "after_open", "after_open debug status picker mode was wrong")
+    assert(after_open_debug.after_open_shown == true, "after_open debug status did not report picker shown")
+    assert(after_open_debug.draft_state == "draft_modified", "after_open debug status draft state was wrong")
+    assert(after_open_debug.citation_count == 1 and after_open_debug.file_count == 1, "after_open debug status counts were wrong")
 
     pane._test_next_choice = "1"
     pane.show_markdown()
@@ -6888,8 +6940,20 @@ test("ask pane automatic model picker modes update target", function()
 
     vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send with changed model" })
     pane.write_ask_pane(qbuf)
+
+    local before_send_debug = ask_status.debug_data(ask_pane_module.snapshot(pane))
+
+    assert(before_send_debug.target_label == "Codex: One", "before_send debug status target label before send was wrong")
+    assert(before_send_debug.target_root == root, "before_send debug status target root before send was wrong")
+    assert(before_send_debug.picker_mode == "before_send", "before_send debug status picker mode before send was wrong")
+    assert(before_send_debug.after_open_shown == false, "before_send debug status should not report after_open shown")
+    assert(before_send_debug.draft_state == "draft_written", "before_send debug status draft state before send was wrong")
+    assert(before_send_debug.citation_count == 1 and before_send_debug.file_count == 1, "before_send debug status counts before send were wrong")
+
     pane._test_next_choice = "2"
     pane.finish_ask_pane(qbuf)
+
+    local terminal_ctx = pane.terminals[util.terminal_key("codex", root)]
 
     wait_for_file(out, "send with changed model")
     assert_state_history_contains(
@@ -6898,7 +6962,8 @@ test("ask pane automatic model picker modes update target", function()
         "before-send picker"
     )
     assert(pane.ask_pane_last_state == "sent", "before-send picker did not record sent")
-    assert(pane.terminals[util.terminal_key("codex", root)].preset_name == "two", "before_send model picker did not send to selected preset")
+    assert(terminal_ctx.preset_name == "two", "before_send model picker did not send to selected preset")
+    assert(terminal_ctx.root == root, "before_send model picker sent with wrong root")
 end)
 
 test("ask pane navigation mappings move between context headers and source jump opens citation", function()
