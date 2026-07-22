@@ -2072,8 +2072,8 @@ test("ask mapping zone matrix matches active maps by user location", function()
 
     assert(command_table.SidepanesAsk, "SidepanesAsk command missing")
     assert(command_table.SidepanesAskAppend, "SidepanesAskAppend command missing")
+    assert(command_table.SidepanesAskStatus, "SidepanesAskStatus command missing")
     assert(command_table.SidepanesSubmitQuestion, "SidepanesSubmitQuestion command missing")
-    assert(not command_table.SidepanesAskStatus, "SidepanesAskStatus should remain planned until its slice")
     assert(not command_table.SidepanesVersion, "SidepanesVersion should remain planned until its slice")
 end)
 
@@ -2579,6 +2579,9 @@ test("command registration invokes facade callbacks", function()
         append_to_ask = function(opts)
             calls.ask_append = opts
         end,
+        ask_status = function()
+            calls.ask_status = true
+        end,
         submit_ask_pane = function()
             calls.submit_question = true
         end,
@@ -2602,6 +2605,7 @@ test("command registration invokes facade callbacks", function()
         width_picker = "SidepanesTestWidthPick",
         ask = "SidepanesTestAsk",
         ask_append = "SidepanesTestAskAppend",
+        ask_status = "SidepanesTestAskStatus",
         submit_question = "SidepanesTestSubmitQuestion",
         ask_codex = "SidepanesTestAskCodex",
         ask_claude = "SidepanesTestAskClaude",
@@ -2654,6 +2658,8 @@ test("command registration invokes facade callbacks", function()
     assert(calls.ask.bufnr == bufnr and calls.ask.line1 == 2 and calls.ask.line2 == 4, "ask command did not forward range")
     vim.cmd("2,5SidepanesTestAskAppend")
     assert(calls.ask_append.bufnr == bufnr and calls.ask_append.line1 == 2 and calls.ask_append.line2 == 5, "ask append command did not forward range")
+    vim.cmd("SidepanesTestAskStatus")
+    assert(calls.ask_status == true, "ask status command did not report status")
     vim.cmd("SidepanesTestSubmitQuestion")
     assert(calls.submit_question == true, "submit question command did not submit ask pane")
     vim.cmd("3,5SidepanesTestAskCodex gpt55_high_fast")
@@ -2730,6 +2736,9 @@ test("root command dispatches subcommands and completes choices", function()
         end,
         append_to_ask = function(opts)
             calls.ask_append = opts
+        end,
+        ask_status = function()
+            calls.ask_status = true
         end,
         submit_ask_pane = function()
             calls.submit_question = true
@@ -2822,6 +2831,8 @@ test("root command dispatches subcommands and completes choices", function()
     assert(calls.ask.bufnr == bufnr and calls.ask.line1 == 2 and calls.ask.line2 == 4, "root ask subcommand did not forward range")
     vim.cmd("3,6SidepanesRootTest ask-append")
     assert(calls.ask_append.bufnr == bufnr and calls.ask_append.line1 == 3 and calls.ask_append.line2 == 6, "root ask-append subcommand did not forward range")
+    vim.cmd("SidepanesRootTest ask-status")
+    assert(calls.ask_status == true, "root ask-status subcommand did not call ask status")
     vim.cmd("SidepanesRootTest submit-question")
     assert(calls.submit_question == true, "root submit-question subcommand did not submit ask pane")
     vim.cmd("3,5SidepanesRootTest ask-codex gpt55_high_fast")
@@ -2843,6 +2854,7 @@ test("root command dispatches subcommands and completes choices", function()
 
     assert(vim.tbl_contains(subcommands, "codex"), "root completion did not include codex")
     assert(vim.tbl_contains(ask_subcommands, "ask-append"), "root completion did not include ask-append")
+    assert(vim.tbl_contains(ask_subcommands, "ask-status"), "root completion did not include ask-status")
     assert(vim.tbl_contains(submit_subcommands, "submit-question"), "root completion did not include submit-question")
     assert(vim.tbl_contains(width_subcommands, "width-pick"), "root completion did not include width-pick")
     assert(vim.tbl_contains(width_subcommands, "width"), "root completion did not include width")
@@ -2871,6 +2883,7 @@ test("default command names use Sidepanes prefix", function()
         width_picker = function() end,
         ask_picker = function() end,
         append_to_ask = function() end,
+        ask_status = function() end,
         ask = function() end,
     }
 
@@ -2895,6 +2908,7 @@ test("default command names use Sidepanes prefix", function()
         "SidepanesWidthPick",
         "SidepanesAsk",
         "SidepanesAskAppend",
+        "SidepanesAskStatus",
         "SidepanesSubmitQuestion",
         "SidepanesAskCodex",
         "SidepanesAskClaude",
@@ -4652,11 +4666,14 @@ test("ask session snapshot exposes serializable state facts and labels", functio
 
     assert(status.active == true, "status data lost active state")
     assert(status.draft_state == "draft_written", "status data lost draft state")
+    assert(status.modified == true, "status data lost modified flag")
+    assert(status.written == true, "status data lost written flag")
     assert(status.target_reason == "active_ask_target", "status data lost target reason")
     assert(status.target_label == "Codex: Default", "status data lost target label")
     assert(status.target_root == "/project", "status data lost target root")
     assert(status.picker_mode == "after_open", "status data lost picker mode")
     assert(status.picker_shown == true, "status data lost picker shown")
+    assert(status.previous_pane_mode == "codex", "status data lost previous pane mode")
     assert(status.citation_count == 3 and status.file_count == 2, "status data lost citation counts")
     assert(ask_session.format_title(snapshot) == "Ask: Codex: Default - draft_written", "formatted title was wrong")
     assert(ask_status.format_title(snapshot) == ask_session.format_title(snapshot), "status module title disagreed with session formatter")
@@ -4664,21 +4681,31 @@ test("ask session snapshot exposes serializable state facts and labels", functio
 
     local debug = ask_status.debug_data(snapshot)
 
+    assert(debug.active == true, "debug status lost active state")
     assert(debug.target_label == "Codex: Default", "debug status lost target label")
     assert(debug.target_root == "/project", "debug status lost target root")
     assert(debug.picker_mode == "after_open", "debug status lost picker mode")
+    assert(debug.picker_shown == true, "debug status lost picker shown state")
     assert(debug.after_open_shown == true, "debug status lost after_open shown state")
     assert(debug.draft_state == "draft_written", "debug status lost draft state")
+    assert(debug.previous_pane_mode == "codex", "debug status lost previous pane mode")
+    assert(debug.modified == true, "debug status lost modified flag")
+    assert(debug.written == true, "debug status lost written flag")
     assert(debug.citation_count == 3 and debug.file_count == 2, "debug status lost citation counts")
 
     local lines = ask_status.debug_lines(snapshot)
 
-    assert(lines[1] == "Ask target: Codex: Default", "debug lines target was wrong")
-    assert(lines[2] == "Target root: /project", "debug lines root was wrong")
-    assert(lines[3] == "Picker mode: after_open", "debug lines picker mode was wrong")
-    assert(lines[4] == "After-open picker shown: yes", "debug lines picker shown state was wrong")
-    assert(lines[5] == "Draft state: draft_written", "debug lines draft state was wrong")
-    assert(lines[6] == "Citations: 3 (2 files)", "debug lines citation counts were wrong")
+    assert(lines[1] == "Ask pane: active", "debug lines active state was wrong")
+    assert(lines[2] == "Draft state: draft_written", "debug lines draft state was wrong")
+    assert(lines[3] == "Ask target: Codex: Default", "debug lines target was wrong")
+    assert(lines[4] == "Target root: /project", "debug lines root was wrong")
+    assert(lines[5] == "Picker mode: after_open", "debug lines picker mode was wrong")
+    assert(lines[6] == "Picker shown: yes", "debug lines picker shown state was wrong")
+    assert(lines[7] == "After-open picker shown: yes", "debug lines after_open shown state was wrong")
+    assert(lines[8] == "Citations: 3 (2 files)", "debug lines citation counts were wrong")
+    assert(lines[9] == "Previous pane: codex", "debug lines previous pane was wrong")
+    assert(lines[10] == "Modified: yes", "debug lines modified flag was wrong")
+    assert(lines[11] == "Written: yes", "debug lines written flag was wrong")
 end)
 
 test("ask session snapshot covers empty invalid target and picker cases", function()
@@ -4752,6 +4779,9 @@ test("ask session snapshot covers empty invalid target and picker cases", functi
     assert(inactive_debug.picker_mode == "before_send", "inactive debug picker mode was wrong")
     assert(inactive_debug.after_open_shown == false, "inactive debug after_open state should be false")
     assert(inactive_debug.draft_state == "inactive", "inactive debug draft state was wrong")
+    assert(inactive_debug.previous_pane_mode == "claude:default:/fallback", "inactive debug previous pane was wrong")
+    assert(inactive_debug.modified == true, "inactive debug modified flag was wrong")
+    assert(inactive_debug.written == false, "inactive debug written flag was wrong")
 
     local empty_debug = ask_status.debug_data({})
 
@@ -4760,6 +4790,10 @@ test("ask session snapshot covers empty invalid target and picker cases", functi
     assert(empty_debug.picker_mode == "manual", "empty debug picker mode should default to manual")
     assert(empty_debug.after_open_shown == false, "empty debug after_open state should be false")
     assert(empty_debug.draft_state == "inactive", "empty debug draft state was wrong")
+    assert(empty_debug.active == false, "empty debug active flag was wrong")
+    assert(empty_debug.previous_pane_mode == "", "empty debug previous pane should default to empty")
+    assert(empty_debug.modified == false, "empty debug modified flag should default false")
+    assert(empty_debug.written == false, "empty debug written flag should default false")
     assert(empty_debug.citation_count == 0 and empty_debug.file_count == 0, "empty debug counts were wrong")
 end)
 
@@ -4927,6 +4961,103 @@ test("ask pane keeps session state compatibility helpers while exposing snapshot
 
     assert(snapshot.active == false, "empty compatibility snapshot should be inactive")
     assert(snapshot.target_label == "No target", "empty compatibility snapshot target label was wrong")
+end)
+
+test("ask status API and commands report active draft facts", function()
+    reset_pane()
+
+    local root = root_fixture("ask-status-api-test")
+
+    write(root .. "/src/one.lua", { "one()" })
+    write(root .. "/src/two.lua", { "two()" })
+    pane.setup({
+        commands = true,
+        ask = {
+            ui = "pane",
+            model_picker = "manual",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "exit 0" },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    local inactive = pane.ask_status({ notify = false })
+
+    assert(inactive.active == false, "inactive status should report inactive")
+    assert(inactive.draft_state == "inactive", "inactive status should use inactive draft state")
+    assert(inactive.citation_count == 0 and inactive.file_count == 0, "inactive status counts should be zero")
+    assert(vim.tbl_contains(inactive.lines, "Ask pane: inactive"), "inactive status lines missed active state")
+
+    local messages = capture_notify(function()
+        vim.cmd("SidepanesAskStatus")
+    end)
+
+    assert(#messages == 1, "standalone ask status command did not notify once")
+    assert(messages[1].level == vim.log.levels.INFO, "standalone ask status command used wrong log level")
+    assert(messages[1].message:find("Ask pane: inactive", 1, true), "standalone ask status command missed inactive state")
+
+    pane.show_ask_pane({ focus = true })
+
+    local ready = pane.ask_status({ notify = false })
+
+    assert(ready.active == true, "ready status should report active")
+    assert(ready.draft_state == "ready_empty", "ready status should report ready_empty")
+    assert(ready.citation_count == 0 and ready.file_count == 0, "ready status should report no citations")
+    assert(ready.modified == false and ready.written == false, "ready status should not be modified or written")
+
+    vim.cmd.edit(root .. "/src/one.lua")
+    pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+    vim.cmd.edit(root .. "/src/two.lua")
+    pane.append_to_ask({ bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local collected = pane.ask_status({ notify = false })
+
+    assert(collected.active == true, "collected status should report active")
+    assert(collected.draft_state == "draft_modified", "collected status should report modified draft")
+    assert(collected.target_label == "Codex: One", "collected status target label was wrong")
+    assert(collected.target_root == root, "collected status target root was wrong")
+    assert(collected.picker_mode == "manual", "collected status picker mode was wrong")
+    assert(collected.picker_shown == false, "manual collected status should not report picker shown")
+    assert(collected.citation_count == 2 and collected.file_count == 2, "collected status counts were wrong")
+    assert(collected.previous_pane_mode == "markdown", "collected status previous pane was wrong")
+    assert(collected.modified == true and collected.written == false, "collected status flags were wrong before write")
+
+    local qbuf = pane.ask_pane.bufnr
+
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "status check" })
+    pane.write_ask_pane(qbuf)
+
+    local written = pane.ask_status({ notify = false })
+
+    assert(written.draft_state == "draft_written", "written status should report draft_written")
+    assert(written.modified == false, "written status should not be modified")
+    assert(written.written == true, "written status should report written")
+    assert(vim.tbl_contains(written.lines, "Written: yes"), "written status lines missed written flag")
+
+    messages = capture_notify(function()
+        vim.cmd("Sidepanes ask-status")
+    end)
+
+    assert(#messages == 1, "root ask-status subcommand did not notify once")
+    assert(messages[1].message:find("Citations: 2 (2 files)", 1, true), "root ask-status missed citation counts")
+    assert(messages[1].message:find("Written: yes", 1, true), "root ask-status missed written flag")
+
+    pane.cancel_ask_pane(qbuf)
+
+    local cancelled = pane.ask_status({ notify = false })
+
+    assert(cancelled.active == false, "cancelled status should report inactive")
+    assert(cancelled.draft_state == "inactive", "cancelled status should report inactive draft state")
+    assert(cancelled.citation_count == 0 and cancelled.file_count == 0, "cancelled status counts should reset")
 end)
 
 -- Ask layer: command-line adapter tests.

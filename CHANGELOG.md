@@ -47,6 +47,8 @@ but they should be called out clearly in this changelog.
   terminal panes, and the ask pane, with regression and docs-contract coverage
   for active ask mappings, command paths, planned command slots, and
   collision-prone shortcuts.
+- Added `ask_status(opts)`, `:SidepanesAskStatus`, and
+  `:Sidepanes ask-status` for concise ask-pane debugging status.
 
 ### Changed
 

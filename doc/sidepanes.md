@@ -72,6 +72,7 @@ be configured individually with `commands = { ... }`.
 | `:Sidepanes width-pick` | Open the width picker. |
 | `:Sidepanes ask` | Ask via the target picker. |
 | `:Sidepanes ask-append` | Append the current range to the ask pane prompt. |
+| `:Sidepanes ask-status` | Report active ask-pane debug status. |
 | `:Sidepanes submit-question` | Submit the active ask pane prompt. |
 | `:Sidepanes ask-codex [preset]` | Ask Codex directly. |
 | `:Sidepanes ask-claude [preset]` | Ask Claude directly. |
@@ -96,12 +97,17 @@ be configured individually with `commands = { ... }`.
 | `:SidepanesWidthPick` | Open the width picker. |
 | `:SidepanesAsk` | Ask via the target picker. |
 | `:SidepanesAskAppend` | Append the current range to the ask pane prompt. |
+| `:SidepanesAskStatus` | Report active ask-pane debug status. |
 | `:SidepanesSubmitQuestion` | Submit the active ask pane prompt. |
 | `:SidepanesAskCodex [preset]` | Ask Codex directly. |
 | `:SidepanesAskClaude [preset]` | Ask Claude directly. |
 
 `SidepanesAsk*` commands are range-aware, so they work with visual selections
 and explicit ranges.
+
+`:SidepanesAskStatus` and `:Sidepanes ask-status` notify concise ask-pane
+debug status: active state, draft state, target label/root, picker mode and
+shown flag, citation counts, previous pane mode, and modified/written flags.
 
 ## Mapping Surface
 
@@ -714,6 +720,7 @@ restart_ipython(opts)
 ask(tool_name, preset_name, opts)
 ask_picker(opts)
 append_to_ask(opts)
+ask_status(opts)
 submit_ask_pane()
 ask_last_coding_agent(opts)
 ask_current_coding_agent(tool_name, opts)

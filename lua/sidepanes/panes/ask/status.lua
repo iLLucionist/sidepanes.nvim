@@ -22,13 +22,18 @@ function M.debug_data(snapshot)
     local picker_mode = status.picker_mode or "manual"
 
     return {
+        active = status.active == true,
         after_open_shown = picker_mode == "after_open" and status.picker_shown == true,
         citation_count = status.citation_count or 0,
         draft_state = status.draft_state or "inactive",
         file_count = status.file_count or 0,
+        modified = status.modified == true,
         picker_mode = picker_mode,
+        picker_shown = status.picker_shown == true,
+        previous_pane_mode = status.previous_pane_mode or "",
         target_label = status.target_label or "No target",
         target_root = status.target_root or "",
+        written = status.written == true,
     }
 end
 
@@ -36,12 +41,17 @@ function M.debug_lines(snapshot)
     local data = M.debug_data(snapshot)
 
     return {
+        "Ask pane: " .. (data.active and "active" or "inactive"),
+        "Draft state: " .. data.draft_state,
         "Ask target: " .. data.target_label,
         "Target root: " .. data.target_root,
         "Picker mode: " .. data.picker_mode,
+        "Picker shown: " .. bool_label(data.picker_shown),
         "After-open picker shown: " .. bool_label(data.after_open_shown),
-        "Draft state: " .. data.draft_state,
         ("Citations: %d (%d files)"):format(data.citation_count, data.file_count),
+        "Previous pane: " .. data.previous_pane_mode,
+        "Modified: " .. bool_label(data.modified),
+        "Written: " .. bool_label(data.written),
     }
 end
 

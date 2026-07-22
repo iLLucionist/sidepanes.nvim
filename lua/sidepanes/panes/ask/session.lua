@@ -173,14 +173,17 @@ function M.status_data(snapshot)
     return {
         active = snapshot.active == true,
         citation_count = snapshot.citation_count or 0,
+        dirty_buffer = snapshot.dirty_buffer == true,
         draft_state = snapshot.draft_state,
         file_count = snapshot.file_count or 0,
+        modified = snapshot.dirty_buffer == true,
         picker_mode = snapshot.picker_mode,
         picker_shown = snapshot.picker_shown == true,
         previous_pane_mode = snapshot.previous_pane_mode,
         target_reason = snapshot.target_reason,
         target_label = snapshot.target_label or "No target",
         target_root = snapshot.target_root,
+        written = snapshot.written_prompt ~= nil,
     }
 end
 

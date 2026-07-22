@@ -171,6 +171,7 @@ local expected_commands = {
     "SidepanesWidthPick",
     "SidepanesAsk",
     "SidepanesAskAppend",
+    "SidepanesAskStatus",
     "SidepanesSubmitQuestion",
     "SidepanesAskCodex",
     "SidepanesAskClaude",

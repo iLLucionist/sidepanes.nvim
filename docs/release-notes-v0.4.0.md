@@ -23,6 +23,9 @@ The ask pane is designed for prompt assembly:
   or trigger ask-pane send,
 - pane-local `mappings.pane.ask_submit = "<C-CR>"` submits the active ask draft
   from normal or insert mode,
+- `:SidepanesAskStatus`, `:Sidepanes ask-status`, and `ask_status(opts)`
+  report the active ask draft state, target, picker, citation counts, previous
+  pane mode, and modified/written flags,
 - `:SidepanesAskAppend`, `:Sidepanes ask-append`, and `append_to_ask(opts)`
   append explicitly even when auto-append is disabled,
 - prompts group citations by `File:` and allow multiple `Selection:` blocks per

@@ -13,6 +13,7 @@ Architecture: Uses an internal state table for focused submodules and returns a 
 local defaults = require("sidepanes.defaults")
 local agent_session = require("sidepanes.agent_session")
 local ask_pane = require("sidepanes.panes.ask")
+local ask_status = require("sidepanes.panes.ask.status")
 local api_helpers = require("sidepanes.api")
 local commands = require("sidepanes.commands")
 local context = require("sidepanes.context")
@@ -739,6 +740,24 @@ function M.submit_ask_pane(bufnr)
     return ask_pane.submit_now(M, ask_pane_deps(), bufnr)
 end
 
+--- Report the active ask-pane status and return the status payload.
+function M.ask_status(opts)
+    opts = opts or {}
+
+    local snapshot = ask_pane.snapshot(M)
+    local data = ask_status.debug_data(snapshot)
+    local lines = ask_status.debug_lines(snapshot)
+    local result = vim.deepcopy(data)
+
+    result.lines = vim.deepcopy(lines)
+
+    if opts.notify ~= false then
+        vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO)
+    end
+
+    return result
+end
+
 --- Change the target for the active ask pane.
 function M.change_ask_pane_target(bufnr)
     ask_pane.change_target(M, ask_pane_deps(), bufnr)
@@ -861,6 +880,7 @@ local public_functions = {
     "ask_picker",
     "append_to_ask",
     "submit_ask_pane",
+    "ask_status",
     "ask_last_coding_agent",
     "ask_current_coding_agent",
     "ask",

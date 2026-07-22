@@ -124,6 +124,7 @@ subcommands:
     :Sidepanes width-pick
     :Sidepanes ask
     :Sidepanes ask-append
+    :Sidepanes ask-status
     :Sidepanes submit-question
     :Sidepanes ask-codex [preset]
     :Sidepanes ask-claude [preset]
@@ -147,6 +148,7 @@ Standalone commands:
     :SidepanesWidthPick
     :SidepanesAsk
     :SidepanesAskAppend
+    :SidepanesAskStatus
     :SidepanesSubmitQuestion
     :SidepanesAskCodex [preset]
     :SidepanesAskClaude [preset]
@@ -442,6 +444,7 @@ Stable public functions:
     ask_last_coding_agent(opts)
     ask_current_coding_agent(tool_name, opts)
     append_to_ask(opts)
+    ask_status(opts)
     submit_ask_pane()
     shutdown_terminals(opts)
 <
@@ -689,10 +692,16 @@ ask-append` to append the current range explicitly. The public API
 `append_to_ask(opts)` does the same and appends even when `ask.auto_append` is
 disabled.
 
+Use `:SidepanesAskStatus`, `:Sidepanes ask-status`, or `ask_status(opts)` to
+inspect concise ask-pane debug status: active state, draft state, target
+label/root, picker mode and shown flag, citation counts, previous pane mode,
+and modified/written flags.
+
 Useful calls:
 >
     require("sidepanes").ask_picker({ visual = true })
     require("sidepanes").append_to_ask({ visual = true })
+    require("sidepanes").ask_status()
     require("sidepanes").ask("codex", "gpt55_high_fast", { visual = true })
     require("sidepanes").ask_current_coding_agent("claude", { visual = true })
     require("sidepanes").ask_last_coding_agent({ visual = true })

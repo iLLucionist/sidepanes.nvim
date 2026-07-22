@@ -35,10 +35,10 @@ return {
     required_commands = {
         "SidepanesAsk",
         "SidepanesAskAppend",
+        "SidepanesAskStatus",
         "SidepanesSubmitQuestion",
     },
     planned_commands = {
-        "SidepanesAskStatus",
         "SidepanesVersion",
     },
     rows = {
@@ -150,17 +150,17 @@ return {
             id = "ask-zone-commands",
             zone = "project buffer, Markdown pane, terminal pane, ask pane",
             mode = "command",
-            mapping = "SidepanesAsk, SidepanesAskAppend, SidepanesSubmitQuestion",
-            default_lhs = ":SidepanesAsk, :SidepanesAskAppend, :SidepanesSubmitQuestion",
-            result = "range-aware ask, explicit append, or active draft submit",
+            mapping = "SidepanesAsk, SidepanesAskAppend, SidepanesAskStatus, SidepanesSubmitQuestion",
+            default_lhs = ":SidepanesAsk, :SidepanesAskAppend, :SidepanesAskStatus, :SidepanesSubmitQuestion",
+            result = "range-aware ask, explicit append, active draft status, or active draft submit",
         },
         {
             id = "ask-zone-planned-commands",
             zone = "project buffer, Markdown pane, terminal pane, ask pane",
             mode = "command",
-            mapping = "SidepanesAskStatus, SidepanesVersion",
+            mapping = "SidepanesVersion",
             default_lhs = "planned",
-            result = "reserved for slices 20 and 21",
+            result = "reserved for slice 21",
         },
     },
 }

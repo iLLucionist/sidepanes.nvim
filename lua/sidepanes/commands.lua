@@ -25,6 +25,7 @@ local default_names = {
     width_picker = "SidepanesWidthPick",
     ask = "SidepanesAsk",
     ask_append = "SidepanesAskAppend",
+    ask_status = "SidepanesAskStatus",
     submit_question = "SidepanesSubmitQuestion",
     ask_codex = "SidepanesAskCodex",
     ask_claude = "SidepanesAskClaude",
@@ -35,6 +36,7 @@ local subcommand_names = {
     "ask-append",
     "ask-claude",
     "ask-codex",
+    "ask-status",
     "submit-question",
     "claude",
     "codex",
@@ -298,6 +300,8 @@ local function dispatch_root(api, opts)
         api.ask_picker(range_opts(opts))
     elseif subcommand == "ask-append" then
         api.append_to_ask(range_opts(opts))
+    elseif subcommand == "ask-status" then
+        api.ask_status()
     elseif subcommand == "submit-question" then
         api.submit_ask_pane()
     elseif subcommand == "ask-codex" then
@@ -410,6 +414,10 @@ function M.setup(api, config)
     command(names.ask_append, function(opts)
         api.append_to_ask(range_opts(opts))
     end, { range = true })
+
+    command(names.ask_status, function()
+        api.ask_status()
+    end, {})
 
     command(names.submit_question, function()
         api.submit_ask_pane()

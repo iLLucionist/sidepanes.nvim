@@ -1199,8 +1199,8 @@ Goal: make mapping behavior predictable by location.
     `ask_previous_selection`, `ask_source`.
   - Markdown heading picker `headings`.
   - terminal/Markdown toggles.
-  - `SidepanesAsk`, `SidepanesAskAppend`, `SidepanesSubmitQuestion`,
-    `SidepanesAskStatus`, and `SidepanesVersion` once implemented.
+  - `SidepanesAsk`, `SidepanesAskAppend`, `SidepanesAskStatus`,
+    `SidepanesSubmitQuestion`, and `SidepanesVersion` once implemented.
 - Explicitly test collision-prone mappings such as `<leader>qq` against personal
   global mappings that expand to `:q<CR>`; direct command-line `:q` uses the
   command path, while non-recursive normal mappings with plain quit RHS are
@@ -1227,8 +1227,9 @@ Scope rules:
   command path used by collision-prone personal/global quit mappings such as a
   user-defined `<leader>qq -> :q<CR>`. Sidepanes does not install non-ask
   `ask_send_alt` maps just to claim those personal lhs values.
-- `SidepanesAskStatus` and `SidepanesVersion` are listed as planned command
-  slots only. They must not be registered before slices 20 and 21.
+- `SidepanesAskStatus` is an active command as of slice 20.
+  `SidepanesVersion` remains a planned command slot and must not be registered
+  before slice 21.
 
 | Row ID | Zone | Mode | Mapping or command | Default lhs / command | Expected result | Existing automated coverage |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -1245,8 +1246,8 @@ Scope rules:
 | `ask-pane-submit-and-send` | ask pane | normal/insert | `ask_submit`, `ask_send`, `ask_send_alt` | `<C-CR>`, disabled, disabled | Submit current prompt, or run the quit lifecycle for configured quit-style mappings. | `tests/sidepanes_regression.lua` ask-pane submit tests and "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" |
 | `ask-pane-command-line` | ask pane | command | `:q`, `:q!`, `:w`, `:wq`, `:x`, `:exit` | command-line path | Write, cancel, or submit through ask-pane lifecycle. | `tests/sidepanes_regression.lua` "ask pane fed command-line lifecycle covers q w and wq user paths" and command-line adapter tests |
 | `ask-pane-context-navigation` | ask pane | normal | `ask_next_file`, `ask_previous_file`, `ask_next_selection`, `ask_previous_selection`, `ask_source` | `]f`, `[f`, `]s`, `[s`, `gf` | Move through citations or jump to cited source. | `tests/sidepanes_regression.lua` "ask pane navigation mappings move between context headers and source jump opens citation" |
-| `ask-zone-commands` | project buffer, Markdown pane, terminal pane, ask pane | command | `SidepanesAsk`, `SidepanesAskAppend`, `SidepanesSubmitQuestion` | `:SidepanesAsk`, `:SidepanesAskAppend`, `:SidepanesSubmitQuestion` | Range-aware ask, explicit append, or active draft submit. | `tests/sidepanes_regression.lua` command dispatch tests |
-| `ask-zone-planned-commands` | project buffer, Markdown pane, terminal pane, ask pane | command | `SidepanesAskStatus`, `SidepanesVersion` | planned | Reserved for slices 20 and 21. | `tests/sidepanes_docs_contract_smoke.lua` verifies they are documented as planned here, not registered commands. |
+| `ask-zone-commands` | project buffer, Markdown pane, terminal pane, ask pane | command | `SidepanesAsk`, `SidepanesAskAppend`, `SidepanesAskStatus`, `SidepanesSubmitQuestion` | `:SidepanesAsk`, `:SidepanesAskAppend`, `:SidepanesAskStatus`, `:SidepanesSubmitQuestion` | Range-aware ask, explicit append, active draft status, or active draft submit. | `tests/sidepanes_regression.lua` command dispatch and status tests |
+| `ask-zone-planned-commands` | project buffer, Markdown pane, terminal pane, ask pane | command | `SidepanesVersion` | planned | Reserved for slice 21. | `tests/sidepanes_docs_contract_smoke.lua` verifies it is documented as planned here, not registered early. |
 
 Manual acceptance tests:
 

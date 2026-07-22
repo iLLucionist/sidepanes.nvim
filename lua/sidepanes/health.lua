@@ -28,6 +28,7 @@ local default_commands = {
     width_picker = "SidepanesWidthPick",
     ask = "SidepanesAsk",
     ask_append = "SidepanesAskAppend",
+    ask_status = "SidepanesAskStatus",
     submit_question = "SidepanesSubmitQuestion",
     ask_codex = "SidepanesAskCodex",
     ask_claude = "SidepanesAskClaude",
