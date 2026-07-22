@@ -1687,6 +1687,9 @@ Audit gaps:
 - Confirmation pass 2 found a generated README banner insertion, an untracked
   `assets/sidepanes-banner.png` artifact, and an untracked `.DS_Store` after
   fast checks. Remove those artifacts and restart the clean confirmation count.
+- Restarted confirmation pass 1 found an untracked `nvim.log` after a focused
+  Neovim regression run fell back to the repository for logging. Ignore/remove
+  that local log artifact and restart the clean confirmation count.
 
 Traceability:
 
@@ -1706,6 +1709,7 @@ Traceability:
 | Audit gap: fast check found the behavior-sensitive mapping coverage fixture still referenced the old `ask-zone-planned-commands` row after `SidepanesVersion` moved into active commands. Update the fixture to cover `:SidepanesVersion` and `:Sidepanes version` against `ask-zone-commands`. | `tests/ask_pane_mapping_coverage.lua` now uses `version-command` with zone row `ask-zone-commands`. | `tests/sidepanes_regression.lua` "ask behavior-sensitive mapping coverage table matches matrices and tests" fails if coverage rows reference removed matrix rows; focused rerun passed. | This roadmap records the audit gap; no user-facing docs change applies because this is test fixture evidence. | Not Applicable: fixture consistency gap found by automated fast check, not a manual workflow. | `79cceaa` | Done |
 | Audit gap: audit pass 1 found the CHANGELOG still described the zone matrix as covering planned command slots after `SidepanesVersion` became active. Remove the stale planned-slot wording. | `CHANGELOG.md` zone-matrix entry now describes active ask mappings, command paths, and collision-prone shortcuts. | `rg` audit for stale `planned command` / `ask-zone-planned-commands` references covers the wording; no runtime test applies to release-note phrasing. | `CHANGELOG.md`; this roadmap records the audit gap. | Not Applicable: release-facing wording gap found by audit, not an interactive workflow. | `21c0977` | Done |
 | Audit gap: confirmation pass 2 found a generated README banner insertion, an untracked `assets/sidepanes-banner.png` artifact, and an untracked `.DS_Store` after fast checks. Remove those artifacts and restart the clean confirmation count. | Removed the generated README banner block and ignored only the recurring local `.DS_Store` and `assets/sidepanes-banner.png` artifacts. | `git status --short --untracked-files=all` catches generated artifacts; no runtime test applies to repository cleanliness. | `.gitignore` records the local/generated artifact ignores; this roadmap records the process gap. | Not Applicable: repository hygiene gap found by confirmation pass, not an interactive workflow. | `56b18eb` | Done |
+| Audit gap: restarted confirmation pass 1 found an untracked `nvim.log` after a focused Neovim regression run fell back to the repository for logging. Ignore/remove that local log artifact and restart the clean confirmation count. | Removed the generated `nvim.log` and added `nvim.log` to the local/generated artifact ignores. | `git status --short --untracked-files=all` catches generated log artifacts; no runtime test applies to repository cleanliness. | `.gitignore` records the local/generated artifact ignore; this roadmap records the process gap. | Not Applicable: repository hygiene gap found by confirmation pass, not an interactive workflow. | Pending. | In Progress |
 
 Verification results:
 

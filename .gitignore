@@ -4,6 +4,7 @@ luac.out
 # Local/generated artifacts
 .DS_Store
 assets/sidepanes-banner.png
+nvim.log
 
 # luarocks build files
 *.src.rock
