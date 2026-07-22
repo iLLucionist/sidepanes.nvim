@@ -128,6 +128,7 @@ subcommands:
     :Sidepanes submit-question
     :Sidepanes ask-codex [preset]
     :Sidepanes ask-claude [preset]
+    :Sidepanes version
 <
 
 Standalone commands:
@@ -152,7 +153,11 @@ Standalone commands:
     :SidepanesSubmitQuestion
     :SidepanesAskCodex [preset]
     :SidepanesAskClaude [preset]
+    :SidepanesVersion
 <
+
+Use :SidepanesVersion, :Sidepanes version, or version() to report the
+Sidepanes version and plugin load path for support and debugging.
 
 Width commands accept columns, percentages, fractions, numeric ratios, deltas,
 and aliases:
@@ -446,6 +451,7 @@ Stable public functions:
     append_to_ask(opts)
     ask_status(opts)
     submit_ask_pane()
+    version()
     shutdown_terminals(opts)
 <
 

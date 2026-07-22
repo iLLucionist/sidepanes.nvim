@@ -76,6 +76,7 @@ be configured individually with `commands = { ... }`.
 | `:Sidepanes submit-question` | Submit the active ask pane prompt. |
 | `:Sidepanes ask-codex [preset]` | Ask Codex directly. |
 | `:Sidepanes ask-claude [preset]` | Ask Claude directly. |
+| `:Sidepanes version` | Report Sidepanes version and load path. |
 
 ### Standalone Commands
 
@@ -101,6 +102,7 @@ be configured individually with `commands = { ... }`.
 | `:SidepanesSubmitQuestion` | Submit the active ask pane prompt. |
 | `:SidepanesAskCodex [preset]` | Ask Codex directly. |
 | `:SidepanesAskClaude [preset]` | Ask Claude directly. |
+| `:SidepanesVersion` | Report Sidepanes version and load path. |
 
 `SidepanesAsk*` commands are range-aware, so they work with visual selections
 and explicit ranges.
@@ -108,6 +110,9 @@ and explicit ranges.
 `:SidepanesAskStatus` and `:Sidepanes ask-status` notify concise ask-pane
 debug status: active state, draft state, target label/root, picker mode and
 shown flag, citation counts, previous pane mode, and modified/written flags.
+
+`:SidepanesVersion`, `:Sidepanes version`, and `version()` report the Sidepanes
+version and plugin load path for support and debugging.
 
 ## Mapping Surface
 
@@ -722,6 +727,7 @@ ask_picker(opts)
 append_to_ask(opts)
 ask_status(opts)
 submit_ask_pane()
+version()
 ask_last_coding_agent(opts)
 ask_current_coding_agent(tool_name, opts)
 shutdown_terminals(opts)

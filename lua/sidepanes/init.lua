@@ -30,6 +30,7 @@ local render = require("sidepanes.render")
 local switcher = require("sidepanes.switcher")
 local terminal = require("sidepanes.terminal")
 local util = require("sidepanes.util")
+local version = require("sidepanes.version")
 local pane_window = require("sidepanes.window")
 local viewer = require("sidepanes.viewer")
 local width = require("sidepanes.width")
@@ -803,6 +804,19 @@ function M.ask(tool_name, preset_name, opts)
     question.ask(M, question_deps(), tool_name, preset_name, opts)
 end
 
+--- Return Sidepanes version and load-path facts.
+function M.version(opts)
+    opts = opts or {}
+
+    local info = version.info(opts)
+
+    if opts.notify == true then
+        vim.notify(table.concat(version.lines(info), "\n"), vim.log.levels.INFO)
+    end
+
+    return info
+end
+
 
 -- =============================================================================
 -- DOCUMENT PICKER API
@@ -884,6 +898,7 @@ local public_functions = {
     "ask_last_coding_agent",
     "ask_current_coding_agent",
     "ask",
+    "version",
     "pick",
     "pick_headings",
 }

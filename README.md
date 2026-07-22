@@ -457,6 +457,7 @@ in the previous window after `<leader>mP` or `:Sidepanes pick`.
 :Sidepanes ask-append
 :Sidepanes ask-status
 :Sidepanes submit-question
+:Sidepanes version
 :MarkdownReflow
 ```
 

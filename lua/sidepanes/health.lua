@@ -7,6 +7,7 @@ Architecture: Reads the public sidepanes config as a diagnostic layer without ow
 
 local util = require("sidepanes.util")
 local dependencies = require("sidepanes.dependencies")
+local version = require("sidepanes.version")
 
 local M = {}
 
@@ -32,6 +33,7 @@ local default_commands = {
     submit_question = "SidepanesSubmitQuestion",
     ask_codex = "SidepanesAskCodex",
     ask_claude = "SidepanesAskClaude",
+    version = "SidepanesVersion",
 }
 
 local expected_global_mappings = {
@@ -451,6 +453,8 @@ function M.check(opts)
 
     start("Sidepanes")
     ok("sidepanes.nvim loaded")
+    info("Version: " .. version.VERSION)
+    info("Load path: " .. version.info().load_path)
     check_layout(config)
     check_reflow(config)
     check_dependencies()

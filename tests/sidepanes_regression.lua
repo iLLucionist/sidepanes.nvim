@@ -36,6 +36,7 @@ local terminal_module = require("sidepanes.terminal")
 local util = require("sidepanes.util")
 local validation = require("sidepanes.validation")
 local markdown_reflow = require("sidepanes.markdown_reflow")
+local sidepanes_version = require("sidepanes.version")
 local winbar_module = require("sidepanes.winbar")
 local sidepanes = require("sidepanes")
 local pane = sidepanes._state()
@@ -2074,7 +2075,7 @@ test("ask mapping zone matrix matches active maps by user location", function()
     assert(command_table.SidepanesAskAppend, "SidepanesAskAppend command missing")
     assert(command_table.SidepanesAskStatus, "SidepanesAskStatus command missing")
     assert(command_table.SidepanesSubmitQuestion, "SidepanesSubmitQuestion command missing")
-    assert(not command_table.SidepanesVersion, "SidepanesVersion should remain planned until its slice")
+    assert(command_table.SidepanesVersion, "SidepanesVersion command missing")
 end)
 
 test("ask behavior-sensitive mapping coverage table matches matrices and tests", function()
@@ -2520,6 +2521,43 @@ test("setup installs single focus and shutdown autocmds when repeated", function
     assert(pane.config.tools.codex ~= nil, "setup dropped default tools")
 end)
 
+test("version module and public API report version and load path", function()
+    reset_pane()
+
+    local root = helpers.repo_root(1)
+    local fixture = sidepanes_version.info({
+        source = root .. "/lua/sidepanes/version.lua",
+    })
+
+    assert(sidepanes_version.VERSION == "0.4.0-dev", "version constant was wrong")
+    assert(fixture.version == "0.4.0-dev", "version info used wrong version")
+    assert(fixture.load_path == root, "version info did not trim module path")
+    assert(
+        sidepanes_version.info({ source = "@/tmp/other/lua/sidepanes/version.lua" }).load_path == "/tmp/other",
+        "version info did not handle @-prefixed module source"
+    )
+    assert(
+        sidepanes_version.info({ source = "/tmp/not-sidepanes.lua" }).load_path == "/tmp/not-sidepanes.lua",
+        "version info should keep unrecognized source paths"
+    )
+
+    local public_info = pane.version()
+
+    assert(public_info.version == "0.4.0-dev", "public version API used wrong version")
+    assert(public_info.load_path == root, "public version API reported wrong load path")
+
+    local messages = capture_notify(function()
+        local notified = pane.version({ notify = true })
+
+        assert(notified.version == "0.4.0-dev", "notifying version API returned wrong version")
+    end)
+
+    assert(#messages == 1, "version API notify did not emit one message")
+    assert(messages[1].level == vim.log.levels.INFO, "version API notify used wrong log level")
+    assert(messages[1].message:find("Sidepanes version: 0.4.0-dev", 1, true), "version notify missed version")
+    assert(messages[1].message:find("Load path: " .. root, 1, true), "version notify missed load path")
+end)
+
 test("command registration invokes facade callbacks", function()
     local calls = {}
     local bufnr = vim.api.nvim_get_current_buf()
@@ -2588,6 +2626,9 @@ test("command registration invokes facade callbacks", function()
         ask = function(tool_name, preset_name, opts)
             calls.ask_tool = { tool_name = tool_name, preset_name = preset_name, opts = opts }
         end,
+        version = function(opts)
+            calls.version = opts
+        end,
     }, {
         toggle = "SidepanesTestToggle",
         pick = "SidepanesTestPick",
@@ -2609,6 +2650,7 @@ test("command registration invokes facade callbacks", function()
         submit_question = "SidepanesTestSubmitQuestion",
         ask_codex = "SidepanesTestAskCodex",
         ask_claude = "SidepanesTestAskClaude",
+        version = "SidepanesTestVersion",
     })
 
     vim.cmd("SidepanesTestToggle docs/demo.md")
@@ -2670,6 +2712,8 @@ test("command registration invokes facade callbacks", function()
     assert(calls.ask_tool.tool_name == "claude", "ask claude command used wrong tool")
     assert(calls.ask_tool.preset_name == "sonnet", "ask claude command did not forward preset")
     assert(calls.ask_tool.opts.line1 == 6 and calls.ask_tool.opts.line2 == 7, "ask claude command did not forward range")
+    vim.cmd("SidepanesTestVersion")
+    assert(calls.version and calls.version.notify == true, "version command did not report version")
 end)
 
 test("root command dispatches subcommands and completes choices", function()
@@ -2745,6 +2789,9 @@ test("root command dispatches subcommands and completes choices", function()
         end,
         ask = function(tool_name, preset_name, opts)
             calls.ask_tool = { tool_name = tool_name, preset_name = preset_name, opts = opts }
+        end,
+        version = function(opts)
+            calls.version = opts
         end,
         config = {
             tools = {
@@ -2843,10 +2890,13 @@ test("root command dispatches subcommands and completes choices", function()
     assert(calls.ask_tool.tool_name == "claude", "root ask-claude subcommand used wrong tool")
     assert(calls.ask_tool.preset_name == "sonnet", "root ask-claude subcommand did not forward preset")
     assert(calls.ask_tool.opts.line1 == 6 and calls.ask_tool.opts.line2 == 7, "root ask-claude subcommand did not forward range")
+    vim.cmd("SidepanesRootTest version")
+    assert(calls.version and calls.version.notify == true, "root version subcommand did not report version")
 
     local subcommands = vim.fn.getcompletion("SidepanesRootTest co", "cmdline")
     local ask_subcommands = vim.fn.getcompletion("SidepanesRootTest ask", "cmdline")
     local submit_subcommands = vim.fn.getcompletion("SidepanesRootTest submit", "cmdline")
+    local version_subcommands = vim.fn.getcompletion("SidepanesRootTest v", "cmdline")
     local width_subcommands = vim.fn.getcompletion("SidepanesRootTest width", "cmdline")
     local tool_names = vim.fn.getcompletion("SidepanesRootTest tool c", "cmdline")
     local codex_presets = vim.fn.getcompletion("SidepanesRootTest codex g", "cmdline")
@@ -2856,6 +2906,7 @@ test("root command dispatches subcommands and completes choices", function()
     assert(vim.tbl_contains(ask_subcommands, "ask-append"), "root completion did not include ask-append")
     assert(vim.tbl_contains(ask_subcommands, "ask-status"), "root completion did not include ask-status")
     assert(vim.tbl_contains(submit_subcommands, "submit-question"), "root completion did not include submit-question")
+    assert(vim.tbl_contains(version_subcommands, "version"), "root completion did not include version")
     assert(vim.tbl_contains(width_subcommands, "width-pick"), "root completion did not include width-pick")
     assert(vim.tbl_contains(width_subcommands, "width"), "root completion did not include width")
     local width_args = vim.fn.getcompletion("SidepanesRootTest width n", "cmdline")
@@ -2885,6 +2936,7 @@ test("default command names use Sidepanes prefix", function()
         append_to_ask = function() end,
         ask_status = function() end,
         ask = function() end,
+        version = function() end,
     }
 
     commands.setup(api, true)
@@ -2912,6 +2964,7 @@ test("default command names use Sidepanes prefix", function()
         "SidepanesSubmitQuestion",
         "SidepanesAskCodex",
         "SidepanesAskClaude",
+        "SidepanesVersion",
     }
     local forbidden = {
         "PaneSwitch",
@@ -3613,6 +3666,8 @@ test("health check reports configured commands, mappings, and tools", function()
     end)
 
     assert(has_health_report(reports, "ok", "sidepanes.nvim loaded"), "health did not report plugin loaded")
+    assert(has_health_report(reports, "info", "Version: 0.4.0-dev"), "health did not report version")
+    assert(has_health_report(reports, "info", "Load path: " .. helpers.repo_root(1)), "health did not report load path")
     assert(has_health_report(reports, "ok", "External reflow command found: sh"), "health did not find reflow command")
     assert(has_health_report(reports, "ok", "Codex command found: sh"), "health did not find Codex command")
     assert(has_health_report(reports, "ok", "Claude command found: sh"), "health did not find Claude command")

@@ -49,6 +49,8 @@ but they should be called out clearly in this changelog.
   collision-prone shortcuts.
 - Added `ask_status(opts)`, `:SidepanesAskStatus`, and
   `:Sidepanes ask-status` for concise ask-pane debugging status.
+- Added `version()`, `:SidepanesVersion`, and `:Sidepanes version` for support
+  and debugging output that includes the plugin version and load path.
 
 ### Changed
 

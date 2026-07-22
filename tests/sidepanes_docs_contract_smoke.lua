@@ -58,6 +58,7 @@ for _, item in ipairs({
     ":Sidepanes submit-question",
     ":Sidepanes ask-codex [preset]",
     ":Sidepanes ask-claude [preset]",
+    ":Sidepanes version",
     ":SidepanesToggle [file]",
     ":SidepanesPick",
     ":SidepanesHeadings",
@@ -78,6 +79,7 @@ for _, item in ipairs({
     ":SidepanesSubmitQuestion",
     ":SidepanesAskCodex [preset]",
     ":SidepanesAskClaude [preset]",
+    ":SidepanesVersion",
 }) do
     assert_has(docs, item)
 end
@@ -122,6 +124,7 @@ for _, item in ipairs({
     "append_to_ask(opts)",
     "ask_status(opts)",
     "submit_ask_pane()",
+    "version()",
     "shutdown_terminals(opts)",
 }) do
     assert_has(docs, item)
@@ -278,6 +281,7 @@ for _, item in ipairs({
     "SidepanesAskAppend",
     "SidepanesAskStatus",
     "SidepanesSubmitQuestion",
+    "SidepanesVersion",
     "append_to_ask(opts)",
     "submit_ask_pane()",
     "show_ask_pane(opts)",
@@ -383,8 +387,8 @@ for _, command in ipairs(ask_mapping_zone_matrix.required_commands) do
 end
 
 for _, command in ipairs(ask_mapping_zone_matrix.planned_commands) do
-    assert_has(ask_roadmap, command, "ask mapping zone matrix planned command " .. command)
-    assert_has(ask_roadmap, "planned", "planned command marker for " .. command)
+    assert_has(ask_roadmap, command, "ask mapping zone matrix future command " .. command)
+    assert_has(ask_roadmap, "planned", "future command planned marker for " .. command)
 end
 
 for _, row in ipairs(ask_mapping_zone_matrix.rows) do

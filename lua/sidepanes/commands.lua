@@ -1,7 +1,7 @@
 --[[
 sidepanes.commands
 Purpose: Register user commands that expose the sidepanes public API.
-Does: Creates Sidepanes-prefixed commands for switching, asking, focusing, zooming, and controlling Codex, Claude, and IPython panes.
+Does: Creates Sidepanes-prefixed commands for switching, asking, focusing, zooming, terminal panes, and debug facts.
 Architecture: Keeps command registration separate from setup while receiving the facade table as its API surface.
 ]]
 
@@ -29,6 +29,7 @@ local default_names = {
     submit_question = "SidepanesSubmitQuestion",
     ask_codex = "SidepanesAskCodex",
     ask_claude = "SidepanesAskClaude",
+    version = "SidepanesVersion",
 }
 
 local subcommand_names = {
@@ -52,6 +53,7 @@ local subcommand_names = {
     "switch",
     "toggle",
     "tool",
+    "version",
     "width",
     "width-pick",
     "zoom",
@@ -308,6 +310,8 @@ local function dispatch_root(api, opts)
         api.ask("codex", parts[2], range_opts(opts))
     elseif subcommand == "ask-claude" then
         api.ask("claude", parts[2], range_opts(opts))
+    elseif subcommand == "version" then
+        api.version({ notify = true })
     else
         vim.notify("Unknown Sidepanes subcommand: " .. subcommand, vim.log.levels.WARN)
         show_help()
@@ -434,6 +438,10 @@ function M.setup(api, config)
 
         api.ask("claude", preset, range_opts(opts))
     end, { nargs = "?", range = true })
+
+    command(names.version, function()
+        api.version({ notify = true })
+    end, {})
 end
 
 return M

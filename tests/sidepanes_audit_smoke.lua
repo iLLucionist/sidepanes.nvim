@@ -175,6 +175,7 @@ local expected_commands = {
     "SidepanesSubmitQuestion",
     "SidepanesAskCodex",
     "SidepanesAskClaude",
+    "SidepanesVersion",
     "MarkdownReflow",
 }
 

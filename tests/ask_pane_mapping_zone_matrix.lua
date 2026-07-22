@@ -1,7 +1,7 @@
 --[[
 ask_pane_mapping_zone_matrix
 Purpose: Define the ask-pane mapping and command contract by user location.
-Does: Lists representative active mappings, commands, and planned command placeholders by project, Markdown, terminal, and ask-pane zones.
+Does: Lists representative active mappings and commands by project, Markdown, terminal, and ask-pane zones.
 Architecture: Kept as a test fixture so docs and focused regressions can share one compact source of truth.
 ]]
 
@@ -37,10 +37,9 @@ return {
         "SidepanesAskAppend",
         "SidepanesAskStatus",
         "SidepanesSubmitQuestion",
-    },
-    planned_commands = {
         "SidepanesVersion",
     },
+    planned_commands = {},
     rows = {
         {
             id = "project-global-normal-ask-pane",
@@ -150,17 +149,9 @@ return {
             id = "ask-zone-commands",
             zone = "project buffer, Markdown pane, terminal pane, ask pane",
             mode = "command",
-            mapping = "SidepanesAsk, SidepanesAskAppend, SidepanesAskStatus, SidepanesSubmitQuestion",
-            default_lhs = ":SidepanesAsk, :SidepanesAskAppend, :SidepanesAskStatus, :SidepanesSubmitQuestion",
-            result = "range-aware ask, explicit append, active draft status, or active draft submit",
-        },
-        {
-            id = "ask-zone-planned-commands",
-            zone = "project buffer, Markdown pane, terminal pane, ask pane",
-            mode = "command",
-            mapping = "SidepanesVersion",
-            default_lhs = "planned",
-            result = "reserved for slice 21",
+            mapping = "SidepanesAsk, SidepanesAskAppend, SidepanesAskStatus, SidepanesSubmitQuestion, SidepanesVersion",
+            default_lhs = ":SidepanesAsk, :SidepanesAskAppend, :SidepanesAskStatus, :SidepanesSubmitQuestion, :SidepanesVersion",
+            result = "range-aware ask, explicit append, active draft status, active draft submit, or version debugging",
         },
     },
 }

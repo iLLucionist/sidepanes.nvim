@@ -26,6 +26,8 @@ The ask pane is designed for prompt assembly:
 - `:SidepanesAskStatus`, `:Sidepanes ask-status`, and `ask_status(opts)`
   report the active ask draft state, target, picker, citation counts, previous
   pane mode, and modified/written flags,
+- `:SidepanesVersion`, `:Sidepanes version`, and `version()` report the
+  Sidepanes version and plugin load path for support/debugging,
 - `:SidepanesAskAppend`, `:Sidepanes ask-append`, and `append_to_ask(opts)`
   append explicitly even when auto-append is disabled,
 - prompts group citations by `File:` and allow multiple `Selection:` blocks per
