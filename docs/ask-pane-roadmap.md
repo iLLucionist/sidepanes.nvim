@@ -122,12 +122,31 @@ Every remaining planned slice must use this protocol. Do not mark a slice
 10. Run the `illu.nvim` smoke check whenever defaults, mappings, commands,
    public API, or local config behavior changes.
 11. Run `git diff --check`.
-12. After the last implementation, test, or doc change, perform at least two
-    consecutive clean audit passes. Record each pass with its scope and outcome.
-    If any pass finds a gap, append it under the current numbered slice, add it
-    to traceability, fix/test/document it, commit that unit, and restart the
-    two-clean-pass count.
-13. Only then update the slice status table and report the evidence.
+12. Run repeated audit passes until nothing new comes up. Each pass must check:
+    - every bullet under the numbered implementation slice.
+    - the traceability table.
+    - implementation correctness and architecture boundaries.
+    - automated test coverage, edge cases, fed-key behavior, command paths,
+      mapping zones, state transitions, and compatibility requirements.
+    - manual acceptance tests.
+    - README, CHANGELOG, Neovim help docs, Markdown docs, release notes,
+      roadmap status/order, AGENTS.md, and `illu.nvim` impact when relevant.
+13. If any pass finds a gap, contradiction, stale claim, missing edge case,
+    incorrect behavior, weak test, incomplete documentation, process miss, or
+    commit evidence problem, append it under the current numbered slice, add it
+    to traceability, fix/test/document it, commit that coherent unit, and
+    restart the audit loop from the new HEAD.
+14. After the last commit, including any audit-record or process-doc commit,
+    perform at least two consecutive clean confirmation passes. A clean
+    confirmation pass is non-mutating: it must not edit files, add roadmap
+    bullets, or rely on memory. If it finds anything, it is not clean; record
+    the gap, fix it, commit it, and restart the clean-pass count from the new
+    HEAD.
+15. Because recording the final clean confirmation passes in this roadmap would
+    itself create a new last change and restart the loop, record all
+    gap-finding passes and fixes in the roadmap, then report the final two
+    non-mutating clean confirmation passes in the slice completion response.
+16. Only then update the slice status table and report the evidence.
 
 The audit must be literal and bullet-by-bullet. A slice-level statement such as
 "this area is covered" is not sufficient.

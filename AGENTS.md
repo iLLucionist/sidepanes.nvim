@@ -76,12 +76,29 @@ while the previous completed unit is still uncommitted. Record the commit hash
 in the traceability table for the rows it satisfies. If a later audit changes
 that unit, commit the fix as its own follow-up unit and update traceability.
 
-Audit passes must be falsifiable. After the last implementation, test, or doc
-change in a slice, perform at least two consecutive clean audit passes that find
-no new issue. Record each pass with its scope and outcome. If a pass finds a
-gap, contradiction, stale claim, missing edge case, or implementation concern,
-add it to the roadmap and traceability table, fix/test/document it, commit that
-unit, and restart the two-clean-pass count.
+Audit passes must be falsifiable, restarting, and non-negotiable. After every
+numbered implementation slice, keep checking the work in repeated passes until
+nothing else comes up. Each pass must check the internal roadmap bullets and
+traceability table, implementation code, tests and edge cases, manual
+acceptance tests, README, CHANGELOG, Neovim help, Markdown docs, release notes,
+roadmap status/order, AGENTS.md, and `illu.nvim` impact when relevant.
+
+If any pass finds a gap, contradiction, stale claim, missing edge case,
+incorrect behavior, weak test, incomplete documentation, process miss, or commit
+evidence problem, append it under the same numbered slice, add it to the
+traceability table, fix/test/document it, commit that coherent unit, and restart
+the audit loop from the new HEAD.
+
+The final slice closeout requires at least two consecutive clean confirmation
+passes after the last commit, including commits that only update audit evidence.
+A clean confirmation pass is non-mutating: it must not edit files, create new
+roadmap bullets, or rely on memory. If a confirmation pass reveals that the
+roadmap needs another audit note, that pass is not clean; update the roadmap,
+commit it, and restart. Because writing the final clean-pass results back into
+the roadmap would itself create a new last change, report those final
+non-mutating confirmation passes in the final slice response while ensuring all
+gap-finding passes and fixes are recorded in the roadmap before the final
+confirmation pair begins.
 
 ## Internal Architecture
 
