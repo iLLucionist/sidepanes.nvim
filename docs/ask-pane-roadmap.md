@@ -1683,6 +1683,9 @@ Audit gaps:
   referenced the old `ask-zone-planned-commands` row after
   `SidepanesVersion` moved into active commands. Update the fixture to cover
   `:SidepanesVersion` and `:Sidepanes version` against `ask-zone-commands`.
+- Audit pass 1 found the CHANGELOG still described the zone matrix as covering
+  planned command slots after `SidepanesVersion` became active. Remove the
+  stale planned-slot wording.
 
 Traceability:
 
@@ -1700,6 +1703,7 @@ Traceability:
 | Run `:SidepanesVersion` from the personal config and confirm it prints `0.4.0-dev` or the release version plus the path under `~/.config/nvim/sidepanes.nvim`. | Command path uses `lua/sidepanes/commands.lua`; public formatter uses `lua/sidepanes/version.lua`. | `illu.nvim` smoke passed; Not Applicable as sole automated test because this row records a manual acceptance workflow. | Not Applicable as docs change: this row records manual acceptance evidence for already documented commands. | Headless `illu.nvim` manual check ran `:SidepanesVersion` and `:Sidepanes version`; both printed `0.4.0-dev` and `/Users/maximl/.config/nvim/sidepanes.nvim`. | `fd376f7` | Done |
 | Temporarily load Sidepanes from another runtime path and confirm the command reports that path. | `sidepanes.version.info()` derives load path from the loaded module source, not a hard-coded repo path. | `tests/sidepanes_regression.lua` simulates alternate source paths; Not Applicable as sole automated test because this row records a manual acceptance workflow. | Not Applicable as docs change: this row records manual acceptance evidence for already documented load-path output. | Loaded Sidepanes through `/private/tmp/sidepanes-s21-alt.jzI6bF/sidepanes.nvim`; `:SidepanesVersion` and `:Sidepanes version` printed that temporary path. | `fd376f7` | Done |
 | Audit gap: fast check found the behavior-sensitive mapping coverage fixture still referenced the old `ask-zone-planned-commands` row after `SidepanesVersion` moved into active commands. Update the fixture to cover `:SidepanesVersion` and `:Sidepanes version` against `ask-zone-commands`. | `tests/ask_pane_mapping_coverage.lua` now uses `version-command` with zone row `ask-zone-commands`. | `tests/sidepanes_regression.lua` "ask behavior-sensitive mapping coverage table matches matrices and tests" fails if coverage rows reference removed matrix rows; focused rerun passed. | This roadmap records the audit gap; no user-facing docs change applies because this is test fixture evidence. | Not Applicable: fixture consistency gap found by automated fast check, not a manual workflow. | `79cceaa` | Done |
+| Audit gap: audit pass 1 found the CHANGELOG still described the zone matrix as covering planned command slots after `SidepanesVersion` became active. Remove the stale planned-slot wording. | `CHANGELOG.md` zone-matrix entry now describes active ask mappings, command paths, and collision-prone shortcuts. | `rg` audit for stale `planned command` / `ask-zone-planned-commands` references covers the wording; no runtime test applies to release-note phrasing. | `CHANGELOG.md`; this roadmap records the audit gap. | Not Applicable: release-facing wording gap found by audit, not an interactive workflow. | Pending. | In Progress |
 
 Verification results:
 

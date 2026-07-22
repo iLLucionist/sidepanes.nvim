@@ -45,8 +45,7 @@ but they should be called out clearly in this changelog.
   expectations stay aligned with tests.
 - Added a mapping and command zone matrix for project buffers, Markdown panes,
   terminal panes, and the ask pane, with regression and docs-contract coverage
-  for active ask mappings, command paths, planned command slots, and
-  collision-prone shortcuts.
+  for active ask mappings, command paths, and collision-prone shortcuts.
 - Added `ask_status(opts)`, `:SidepanesAskStatus`, and
   `:Sidepanes ask-status` for concise ask-pane debugging status.
 - Added `version()`, `:SidepanesVersion`, and `:Sidepanes version` for support
