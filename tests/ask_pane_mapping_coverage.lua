@@ -20,6 +20,7 @@ local ready_submit = "ask pane empty ready draft writes then submit cancels with
 local failed_send = "pane-mode ask preserves prompt when target terminal fails to open"
 local model_picker = "ask pane target picker mapping updates target and winbar"
 local navigation = "ask pane navigation mappings move between context headers and source jump opens citation"
+local version_command = "command registration invokes facade callbacks"
 
 return {
     rows = {
@@ -238,11 +239,11 @@ return {
             no_fed_key_reason = "Navigation/source-jump mappings are behavior-sensitive but not lifecycle-changing; callback coverage keeps cursor/source assertions deterministic.",
         },
         {
-            id = "ask-zone-planned-commands",
-            zone_rows = { "ask-zone-planned-commands" },
+            id = "version-command",
+            zone_rows = { "ask-zone-commands" },
             registration = registration,
-            direct = registration,
-            no_fed_key_reason = "Planned command placeholders are intentionally not registered until later slices.",
+            direct = version_command,
+            no_fed_key_reason = "Command behavior is exercised through :SidepanesVersion and :Sidepanes version, not a key mapping.",
         },
     },
 }
