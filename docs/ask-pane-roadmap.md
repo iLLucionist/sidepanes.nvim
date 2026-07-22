@@ -1007,7 +1007,7 @@ Traceability table:
 | Open/focus the ask pane, append context, navigate citations, write/send, and cancel from both Markdown and Codex after the module move. | The code paths are preserved through `panes/ask/init.lua`, `keymaps.lua`, `cmdline.lua`, `navigation.lua`, controller, executor, and session helpers. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by focused ask regressions, fed-key coverage, and `illu.nvim` smoke. | Existing public docs describe these workflows; no docs update applies because behavior is unchanged. | Workflow mapped to focused ask regressions and local `illu.nvim` smoke; optional interactive replay can use this exact checklist. | `fc4e947`, `62e2f1e`, `d6ac139` | Done |
 | Run `:checkhealth sidepanes` and confirm no module-load errors. | Module load compatibility is preserved through root shims and new namespace requires. | `tests/run_checks.sh fast` and `tests/run_checks.sh full` both passed `sidepanes_checkhealth_smoke.lua`. | Existing health docs remain applicable because checkhealth behavior is unchanged. | Run `:checkhealth sidepanes`; headless checkhealth smoke passed. | `d6ac139` | Done |
 | Audit gap: fast checks found the new root ask compatibility shims had no required module block comments. | Added top-level compatibility-shim block comments to `ask_pane.lua`, `ask_cmdline.lua`, `ask_controller.lua`, `ask_executor.lua`, `ask_keymaps.lua`, `ask_session.lua`, and `ask_target_resolver.lua`. | Direct audit smoke passed after the fix; focused shim/session regression passed 3 filtered tests; final fast/full reruns passed after the trace commit. | This roadmap records the audit finding; no public docs change applies because runtime behavior is unchanged. | Review root shim headers and confirm compatibility require paths still load. | `3347681` | Done |
-| Confirmation pass gap: closeout rows used placeholder commit references instead of the actual closeout evidence commit. | Replaced `closeout evidence commit` placeholders with `d6ac139` in slice-14 traceability rows. | Not Applicable as automated test: traceability evidence correction only; docs contract and `git diff --check` cover Markdown integrity. | This roadmap. | Re-read slice-14 traceability before restarting the clean confirmation passes. | Pending | In Progress |
+| Confirmation pass gap: closeout rows used placeholder commit references instead of the actual closeout evidence commit. | Replaced `closeout evidence commit` placeholders with `d6ac139` in slice-14 traceability rows. | Docs contract and `git diff --check` passed for the traceability evidence correction. | This roadmap. | Re-read slice-14 traceability before restarting the clean confirmation passes. | `91c6722` | Done |
 
 Audit findings:
 
@@ -1019,6 +1019,8 @@ Audit findings:
 - Confirmation pass 1 found placeholder commit references for the slice-14
   closeout evidence. Replace those placeholders with the actual evidence commit
   `d6ac139`, commit that correction, and restart the clean confirmation passes.
+  Fixed in `91c6722`; docs contract and `git diff --check` passed before the
+  fix was committed.
 
 Verification evidence:
 
