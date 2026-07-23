@@ -41,7 +41,7 @@ remain planned.
 | 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
 | 20. `SidepanesAskStatus` | Done | `ask_status(opts)`, `:SidepanesAskStatus`, and `:Sidepanes ask-status` report ask draft status for debugging. |
 | 21. `SidepanesVersion` | Done | `version()`, `:SidepanesVersion`, `:Sidepanes version`, and health output report plugin version and load path. |
-| 22. Interactive Keymap Help | In Progress | Add pane-local keybinding help surfaced from the winbar. |
+| 22. Interactive Keymap Help | Done | Pane-local `gh` mapping help, commands/API, winbar hint, docs, tests, and audit evidence are implemented. |
 | 23. Ask Action Policy And Fed-Key Test Discipline | Done | Central ask action predicates, policy tests, and fed-key test guidance are implemented and verified. |
 | 24. Ask Architecture Boundary Refactor | Done | Ask behavior is consolidated around pure policy/route/command helpers, thin adapters, a controller factory, and an injected lifecycle executor. |
 | 25. Ask Session State And Status Snapshot Refactor | Done | Ask session snapshots now provide the shared facts/status data used by lifecycle decisions, winbar labels, tests, and future status commands. |
@@ -52,9 +52,8 @@ remain planned.
 The remaining planned slices must be implemented in this order unless the
 roadmap is explicitly updated first with the reason for changing the order.
 
-1. `22. Interactive Keymap Help`
-2. `19. Interaction-Focused Manual Acceptance Checklist`
-3. Final verification and release-readiness audit
+1. `19. Interaction-Focused Manual Acceptance Checklist`
+2. Final verification and release-readiness audit
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,
@@ -1744,7 +1743,7 @@ Audit passes:
 
 ### 22. Interactive Keymap Help
 
-Status: `In Progress`
+Status: `Done`
 
 User response: add a way to view currently active key mappings for interactive
 learning. Show a configurable local mapping in the right side of the winbar,
@@ -1755,9 +1754,8 @@ mapping.
 
 Remaining implementation order:
 
-1. `22. Interactive Keymap Help`
-2. `19. Interaction-Focused Manual Acceptance Checklist`
-3. Final verification and release-readiness audit
+1. `19. Interaction-Focused Manual Acceptance Checklist`
+2. Final verification and release-readiness audit
 
 - Add a pane-local help mapping. Suggested default:
   - `mappings.pane.help = "gh"`.
@@ -1849,7 +1847,7 @@ Traceability:
 | `help.mapping = "gh"` or reuse `mappings.pane.help`. | Defaults set both; `config.normalize_help_mapping()` syncs `help.mapping` into `mappings.pane.help`; `mapping_help.help_config()` prefers runtime `mappings.pane.help`. | Fed-key/config regression asserts `help.mapping="g?"` opens from `g?` and `mappings.pane.help="gH"` is reused in the hint. | README and reference docs document both config paths. | Change configured mapping and confirm help opens on the configured lhs. | `67ea519` | Done |
 | `help.scope = "pane_first"` initially. | Default `help.scope="pane_first"`; output order is pane, global, commands. | Formatter regression asserts pane-first ordering; validation regression rejects other scope values. | README/reference docs expose `scope = "pane_first"` in default setup. | Confirm output orders pane mappings before global mappings. | `67ea519` | Done |
 | Add docs, help, audit smoke coverage, and regression tests. | Runtime/docs/tests updated for mapping help, command/API, config, health, and matrix. | Focused regression passed with 13 selected tests; audit smoke expected-command fixture includes `SidepanesMappings`. | README, `doc/sidepanes.md`, `doc/sidepanes.txt`, CHANGELOG, release notes, and roadmap zone matrix updated. | Review README, Markdown docs, Neovim help, CHANGELOG, release notes, audit smoke, docs contract, and regression coverage. | `67ea519` | Done |
-| Re-check implementation, tests, docs, and this roadmap before moving on. | Audit pass 1 re-read slice bullets, traceability, mapping-help implementation, config/mapping/winbar/command boundaries, tests, README, CHANGELOG, Vim help, Markdown docs, release notes, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Focused regression passed with 13 selected tests; `tests/run_checks.sh fast` passed with 177 regressions plus audit/help/docs-contract/health smokes; `tests/run_checks.sh full` passed with 177 regressions and real CLI smoke; `illu.nvim` smoke exited 0 and printed `sidepanes integration smoke passed` with existing Mason `ENOTCONN` VimLeavePre teardown noise after the pass line; `git diff --check` passed. | Traceability and roadmap matrix updated; README, CHANGELOG, Vim help, Markdown docs, and release notes reviewed for mapping-help behavior. Final clean confirmation passes are still pending. | Re-read slice bullets, traceability, changed implementation, tests, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | `67ea519`; `14ae59a`. | In Progress |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Audit passes 1-2 re-read slice bullets, traceability, mapping-help implementation, config/mapping/winbar/command boundaries, tests, README, CHANGELOG, Vim help, Markdown docs, release notes, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Focused regression passed with 13 selected tests; `tests/run_checks.sh fast` passed with 177 regressions plus audit/help/docs-contract/health smokes; `tests/run_checks.sh full` passed with 177 regressions and real CLI smoke; `illu.nvim` smoke exited 0 and printed `sidepanes integration smoke passed` with existing Mason `ENOTCONN` VimLeavePre teardown noise after the pass line; `git diff --check` passed. | Traceability, roadmap matrix, status/order, README, CHANGELOG, Vim help, Markdown docs, and release notes reviewed for mapping-help behavior. Final clean confirmation passes are reported in the final response. | Re-read slice bullets, traceability, changed implementation, tests, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | `67ea519`; `14ae59a`; `87e70fd`; this completion-status commit. | Done |
 | In the Markdown pane, confirm the winbar shows `gh help` on the right and pressing `gh` opens mapping help with Markdown-pane mappings first. | `winbar.lua`, `maps.lua`, `mapping_help.open()`, and `mapping_help.lines()`. | Fed-key regression covers opening from pane-local configured key and Markdown-pane output; formatter regression covers pane-first ordering. | README and reference docs. | Perform this exact Markdown-pane workflow. | `67ea519` | Done |
 | In a Codex pane, press `gh`; confirm terminal-pane mappings are shown first and global Sidepanes mappings are shown after them. | Terminal kind rows and command rows in `mapping_help.lua`; pane-local map is shared across terminal pane buffers. | Zone matrix regression asserts terminal pane `gh`; formatter regression covers terminal section and global ordering. | README and reference docs describe current-pane mappings first. | Perform this exact Codex-pane workflow. | `67ea519` | Done |
 | In the ask pane, press `gh`; confirm ask-specific mappings such as `M`, `gf`, `]f`, `[f`, `qq`, and `<C-CR>` appear before global mappings. | Ask rows in `mapping_help.lua` include model picker, source jump, navigation, send, submit, and help mappings. | Formatter regression asserts ask-specific `M`, `gf`, `]f`, `[f`, `qq`, and `<C-CR>`; zone matrix regression asserts ask pane `gh`. | README and reference docs. | Perform this exact ask-pane workflow. | `67ea519` | Done |
@@ -1857,7 +1855,16 @@ Traceability:
 | Move Sidepanes to a future left or bottom placement if that layout exists and confirm the help float still centers over the pane geometry. | `float_geometry()` is layout-position agnostic and uses explicit row/col. | Geometry regression checks left-column and bottom-style pane coordinates. | This roadmap records compatibility rationale; no public left/bottom layout docs changed. | Current plugin has right-side layout; future left/bottom manual workflow remains listed. | `67ea519` | Done |
 | Disable the help mapping and confirm the winbar hint disappears. | `config.normalize_help_mapping()` syncs `help.mapping=false`; `mapping_help.winbar_hint()` returns nil; maps skip false lhs. | Fed-key/config regression asserts disabled hint; fresh-buffer regression asserts disabled help mapping is not installed. | README and reference docs document disabling. | Disable help mapping and inspect the winbar. | `67ea519` | Done |
 | Refinement note: the help view should be generated from actual normalized runtime config, not copied static docs, so it reflects personal mappings like `qq` and `<leader>qq`. | `mapping_help.lines()` reads `state.config.mappings`; normalization syncs `help.mapping` into runtime pane mappings. | Formatter regression injects runtime `qq`, `<leader>qq`, `g?`, disabled `<C-g>`, and custom global mappings and asserts output reflects them. | README/reference docs describe active mappings, not static defaults only. | Configure personal-like mappings and confirm help reflects normalized runtime values. | `67ea519` | Done |
-| Audit gap: verification evidence was stale after focused, fast, full, `illu.nvim`, and `git diff --check` checks passed. | This audit evidence update records the completed checks and restarts the slice-22 audit loop from the new HEAD. | Focused, fast, full, `illu.nvim`, and `git diff --check` results are recorded in the re-check row. | This roadmap. | Review this audit gap before final clean confirmation passes. | `14ae59a`. | Done |
+| Audit gap: verification evidence was stale after focused, fast, full, `illu.nvim`, and `git diff --check` checks passed. | The audit evidence update records the completed checks and restarted the slice-22 audit loop from the new HEAD. | Focused, fast, full, `illu.nvim`, and `git diff --check` results are recorded in the re-check row. | This roadmap. | Review this audit gap before final clean confirmation passes. | `14ae59a`; `87e70fd`; this completion-status commit. | Done |
+| Audit gap: audit pass 2 found slice status/order and the latest audit-evidence correction were not yet recorded for closeout. | This completion-status update marks slice 22 Done, removes it from remaining order, records the `87e70fd` audit-evidence correction, and starts the final clean confirmation window. | Not Applicable: process/status documentation only; no runtime behavior changed after the passing focused, fast, full, `illu.nvim`, and `git diff --check` checks. | This roadmap. | Review slice status/order and traceability before final clean confirmation passes. | This completion-status commit. | Done |
+
+Audit notes:
+
+- Audit pass 1 found stale verification evidence after checks passed; fixed in
+  `14ae59a` and corrected in `87e70fd`.
+- Audit pass 2 found final slice status/order and the latest audit-evidence
+  correction still needed recording before closeout; fixed in this
+  completion-status update.
 
 ### 23. Ask Action Policy And Fed-Key Test Discipline
 
