@@ -1545,27 +1545,50 @@ Manual acceptance tests:
 Refinement note: this checklist should be short enough that it is realistic to
 run after every ask-pane change.
 
+Interaction checklist:
+
+Run this in a real Neovim session with `illu.nvim` loaded and the local
+`sidepanes.nvim` checkout on `runtimepath`. Use real files in a small project
+with at least two source files, one Markdown file, and one file outside the
+project root for the cross-root row. Record the exact key or command used for
+each row; do not substitute config-printing checks unless the row explicitly
+changes configuration state.
+
+| Workflow | Setup | Action | Expected user-visible result | Mapping/command used | Result |
+| --- | --- | --- | --- | --- | --- |
+| Create draft from project buffer | Open a normal project file and visually select code. | Invoke visual ask from the project buffer. | Ask pane opens with one `File:` block and one `Selection:` block for the selected project file. |  |  |
+| Create draft from Markdown pane | Open Sidepanes Markdown, focus it, and visually select text in the Markdown pane. | Invoke pane-local visual ask. | Ask pane opens from the Markdown pane and includes the Markdown file/range citation. |  |  |
+| Append same-file context | Keep the ask draft active and select a second range in the same source file. | Invoke visual ask append or active visual ask. | The same `File:` block gains another `Selection:` block; exact duplicates are skipped. |  |  |
+| Append different-file context | Select text in a second file under the same project root. | Invoke visual ask append or active visual ask. | The draft gains a second `File:` block and citation counts/status reflect both files. |  |  |
+| Append cross-root context | Select text from a file outside the current project root. | Append that selection to the active ask draft. | The draft includes root context for the cross-root file so the source is unambiguous. |  |  |
+| Edit prompt, write, send | Edit the ask draft text. | Write the buffer, then quit or use a configured quit-lifecycle shortcut. | The prompt sends to the selected target, the ask draft closes, and the previous pane is restored. |  |  |
+| Edit prompt, cancel | Edit the ask draft text without writing it. | Quit without writing or run hard cancel. | The draft is cancelled without sending and the previous pane is restored. |  |  |
+| Switch target manually | Open an active ask draft with multiple ask-capable targets configured. | Press the model picker mapping in the ask pane and choose another target/preset. | The ask winbar/status target changes before sending. |  |  |
+| Use `before_send` picker | Temporarily set `ask.model_picker = "before_send"` in local config state. | Submit a draft. | Picker opens at send time; chosen target receives the prompt. |  |  |
+| Recover from failed terminal start | Temporarily configure an ask-capable target with a missing command. | Submit a draft to that target. | A warning appears, the draft remains visible, and the winbar/status shows `send_failed`. |  |  |
+| Use mapping help | Focus Markdown, terminal, and ask panes. | Press the help mapping in each pane. | Help opens with the current pane mappings first, then global mappings, then relevant commands. |  |  |
+
 Traceability:
 
 | Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Add a compact manual checklist grouped by workflow: | Pending. | Pending. | Pending. | Run the checklist in a real Neovim session with `illu.nvim` loaded. | Pending. | In Progress |
-| create draft from project buffer. | Pending. | Pending. | Pending. | Use a project-buffer visual ask mapping or command and inspect the draft. | Pending. | In Progress |
-| create draft from Markdown pane. | Pending. | Pending. | Pending. | Use a Markdown-pane visual ask mapping and inspect the draft. | Pending. | In Progress |
-| append same-file context. | Pending. | Pending. | Pending. | Append a second same-file selection and confirm grouping. | Pending. | In Progress |
-| append different-file context. | Pending. | Pending. | Pending. | Append a different file and confirm a second file block. | Pending. | In Progress |
-| append cross-root context. | Pending. | Pending. | Pending. | Append a selection outside the current root and confirm root context is visible. | Pending. | In Progress |
-| edit prompt, write, send. | Pending. | Pending. | Pending. | Edit the ask prompt, write it, then send. | Pending. | In Progress |
-| edit prompt, cancel. | Pending. | Pending. | Pending. | Edit the ask prompt and cancel without sending. | Pending. | In Progress |
-| switch target manually. | Pending. | Pending. | Pending. | Press `M` or `<Tab>` in the ask pane and confirm the target changes. | Pending. | In Progress |
-| use `before_send` picker. | Pending. | Pending. | Pending. | Configure `ask.model_picker = "before_send"` and confirm picker opens at send time. | Pending. | In Progress |
-| recover from failed terminal start. | Pending. | Pending. | Pending. | Submit to a failing target and confirm the draft remains visible with a warning. | Pending. | In Progress |
-| use mapping help. | Pending. | Pending. | Pending. | Press `gh` in Sidepanes panes and inspect mapping help. | Pending. | In Progress |
-| Keep config-printing checks only where the feature is specifically configuration state. | Pending. | Pending. | Pending. | Confirm the checklist uses interactions rather than `vim.print(require("sidepanes").config)` except for configuration-state cases. | Pending. | In Progress |
-| Re-check implementation, tests, docs, and this roadmap before moving on. | Pending. | Pending. | Pending. | Re-read the checklist, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Pending. | In Progress |
-| Run the checklist in a real Neovim session with `illu.nvim` loaded. | Pending. | Not Applicable as automated test: this is the manual execution requirement. | Pending. | Run the whole checklist with `illu.nvim`. | Pending. | In Progress |
-| Mark each workflow pass/fail with the exact mapping or command used. | Pending. | Not Applicable as automated test: this is a manual recording requirement. | Pending. | Record pass/fail and the exact key/command per workflow. | Pending. | In Progress |
-| Refinement note: this checklist should be short enough that it is realistic to run after every ask-pane change. | Pending. | Pending. | Pending. | Review checklist length after adding it. | Pending. | In Progress |
+| Add a compact manual checklist grouped by workflow: | Not Applicable as runtime implementation: this slice adds the interaction checklist under slice 19. | Not Applicable as new automated test: this is a manual QA checklist; existing regressions and matrices cover the underlying behaviors. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Run the checklist in a real Neovim session with `illu.nvim` loaded. | Pending checklist commit. | Implemented |
+| create draft from project buffer. | Checklist row `Create draft from project buffer`. | Existing ask capture regressions and behavior/mapping matrices cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Use a project-buffer visual ask mapping or command and inspect the draft. | Pending checklist commit. | Implemented |
+| create draft from Markdown pane. | Checklist row `Create draft from Markdown pane`. | Existing pane-local visual ask regressions and mapping-zone matrix cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Use a Markdown-pane visual ask mapping and inspect the draft. | Pending checklist commit. | Implemented |
+| append same-file context. | Checklist row `Append same-file context`. | Existing same-file append and duplicate-skip regressions cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Append a second same-file selection and confirm grouping. | Pending checklist commit. | Implemented |
+| append different-file context. | Checklist row `Append different-file context`. | Existing multi-file append/status regressions cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Append a different file and confirm a second file block. | Pending checklist commit. | Implemented |
+| append cross-root context. | Checklist row `Append cross-root context`. | Existing cross-root prompt/citation regressions cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Append a selection outside the current root and confirm root context is visible. | Pending checklist commit. | Implemented |
+| edit prompt, write, send. | Checklist row `Edit prompt, write, send`. | Existing write/send, quit-lifecycle, and submit regressions cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Edit the ask prompt, write it, then send. | Pending checklist commit. | Implemented |
+| edit prompt, cancel. | Checklist row `Edit prompt, cancel`. | Existing cancel/restore and quit command regressions cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Edit the ask prompt and cancel without sending. | Pending checklist commit. | Implemented |
+| switch target manually. | Checklist row `Switch target manually`. | Existing target picker mapping/status/winbar regressions cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Press `M` or `<Tab>` in the ask pane and confirm the target changes. | Pending checklist commit. | Implemented |
+| use `before_send` picker. | Checklist row `Use before_send picker`. | Existing `before_send` picker regressions cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Configure `ask.model_picker = "before_send"` and confirm picker opens at send time. | Pending checklist commit. | Implemented |
+| recover from failed terminal start. | Checklist row `Recover from failed terminal start`. | Existing failed-terminal preservation regressions cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Submit to a failing target and confirm the draft remains visible with a warning. | Pending checklist commit. | Implemented |
+| use mapping help. | Checklist row `Use mapping help`. | Existing mapping-help fed-key/config regressions cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Press `gh` in Sidepanes panes and inspect mapping help. | Pending checklist commit. | Implemented |
+| Keep config-printing checks only where the feature is specifically configuration state. | Checklist preface says not to substitute config-printing checks unless a row explicitly changes configuration state. | Not Applicable as automated test: this is a manual checklist style requirement. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Confirm the checklist uses interactions rather than `vim.print(require("sidepanes").config)` except for configuration-state cases. | Pending checklist commit. | Implemented |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Pending final audit after checklist commit. | Pending final checks/audit for docs-only slice. | Pending final audit. | Re-read the checklist, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Pending. | In Progress |
+| Run the checklist in a real Neovim session with `illu.nvim` loaded. | Checklist preface requires real Neovim with `illu.nvim` loaded. | Not Applicable as automated test: this is the manual execution requirement. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Run the whole checklist with `illu.nvim`. | Pending checklist commit. | Implemented |
+| Mark each workflow pass/fail with the exact mapping or command used. | Checklist table includes `Mapping/command used` and `Result` columns. | Not Applicable as automated test: this is a manual recording requirement. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Record pass/fail and the exact key/command per workflow. | Pending checklist commit. | Implemented |
+| Refinement note: this checklist should be short enough that it is realistic to run after every ask-pane change. | Checklist is 11 workflow rows plus a short preface. | Not Applicable as automated test: checklist brevity is manual review/process quality. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Review checklist length after adding it. | Pending checklist commit. | Implemented |
 
 ### 20. `SidepanesAskStatus`
 
