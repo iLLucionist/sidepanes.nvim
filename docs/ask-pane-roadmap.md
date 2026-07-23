@@ -41,7 +41,7 @@ remain planned.
 | 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
 | 20. `SidepanesAskStatus` | Done | `ask_status(opts)`, `:SidepanesAskStatus`, and `:Sidepanes ask-status` report ask draft status for debugging. |
 | 21. `SidepanesVersion` | Done | `version()`, `:SidepanesVersion`, `:Sidepanes version`, and health output report plugin version and load path. |
-| 22. Interactive Keymap Help | Planned | Add pane-local keybinding help surfaced from the winbar. |
+| 22. Interactive Keymap Help | In Progress | Add pane-local keybinding help surfaced from the winbar. |
 | 23. Ask Action Policy And Fed-Key Test Discipline | Done | Central ask action predicates, policy tests, and fed-key test guidance are implemented and verified. |
 | 24. Ask Architecture Boundary Refactor | Done | Ask behavior is consolidated around pure policy/route/command helpers, thin adapters, a controller factory, and an injected lifecycle executor. |
 | 25. Ask Session State And Status Snapshot Refactor | Done | Ask session snapshots now provide the shared facts/status data used by lifecycle decisions, winbar labels, tests, and future status commands. |
@@ -1743,7 +1743,7 @@ Audit passes:
 
 ### 22. Interactive Keymap Help
 
-Status: `Planned`
+Status: `In Progress`
 
 User response: add a way to view currently active key mappings for interactive
 learning. Show a configurable local mapping in the right side of the winbar,
@@ -1751,6 +1751,12 @@ such as a simple help hint.
 
 Goal: make Sidepanes discoverable without forcing users to memorize every
 mapping.
+
+Remaining implementation order:
+
+1. `22. Interactive Keymap Help`
+2. `19. Interaction-Focused Manual Acceptance Checklist`
+3. Final verification and release-readiness audit
 
 - Add a pane-local help mapping. Suggested default:
   - `mappings.pane.help = "gh"`.
@@ -1808,6 +1814,48 @@ Manual acceptance tests:
 Refinement note: the help view should be generated from actual normalized
 runtime config, not copied static docs, so it reflects personal mappings like
 `qq` and `<leader>qq`.
+
+Traceability:
+
+| Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Add a pane-local help mapping. Suggested default: | Pending. | Pending. | Pending. | Press the help mapping inside Sidepanes pane buffers. | Pending. | In Progress |
+| `mappings.pane.help = "gh"`. | Pending. | Pending. | Pending. | Confirm default `gh` opens mapping help. | Pending. | In Progress |
+| Rationale: short, local, mnemonic enough for "go help", and less disruptive than stealing `H` (`<S-h>`), which is a normal viewport motion. | Pending. | Pending. | This roadmap records the rationale; user-facing docs should document behavior, not the design rationale, unless useful. | Confirm `H` remains unclaimed for viewport motion. | Pending. | In Progress |
+| Winbar hint: right-aligned `gh help` when enabled. | Pending. | Pending. | Pending. | In Sidepanes panes, confirm right winbar hint appears as `gh help`. | Pending. | In Progress |
+| Consider a global help mapping later, such as `mappings.global.help = "<leader>p?"`, but start with pane-local help because the need is local interaction learning. | Pending. | Pending. | Pending. | Confirm no global help mapping is installed by default in this slice. | Pending. | In Progress |
+| Add command/API: | Pending. | Pending. | Pending. | Run the command/API from Neovim. | Pending. | In Progress |
+| `:SidepanesMappings` or `:SidepanesKeymaps`. | Pending. | Pending. | Pending. | Run the selected standalone command. | Pending. | In Progress |
+| root subcommand `:Sidepanes mappings`. | Pending. | Pending. | Pending. | Run `:Sidepanes mappings`. | Pending. | In Progress |
+| Help output should show: | Pending. | Pending. | Pending. | Open mapping help and inspect ordering. | Pending. | In Progress |
+| currently active pane-local mappings first. | Pending. | Pending. | Pending. | Open help from Markdown, terminal, and ask panes; confirm pane-local section appears first. | Pending. | In Progress |
+| then global Sidepanes mappings. | Pending. | Pending. | Pending. | Open help and confirm global mapping section follows pane-local mappings. | Pending. | In Progress |
+| then relevant commands for the current pane. | Pending. | Pending. | Pending. | Open help and confirm current-pane command section follows mappings. | Pending. | In Progress |
+| disabled mappings omitted or marked disabled. | Pending. | Pending. | Pending. | Disable a help-relevant mapping and confirm output omits or marks it disabled. | Pending. | In Progress |
+| Make output readable in Neovim: | Pending. | Pending. | Pending. | Open mapping help in Neovim and inspect readability. | Pending. | In Progress |
+| either a small floating Markdown help buffer. | Pending. | Pending. | Pending. | Confirm chosen readable UI opens from the mapping/command path. | Pending. | In Progress |
+| or a picker-style list if picker dependencies are available. | Pending. | Pending. | Pending. | If picker UI is not implemented in this slice, record why not. | Pending. | In Progress |
+| fall back to a scratch help buffer without requiring Telescope. | Pending. | Pending. | Pending. | Run help without Telescope and confirm it still opens. | Pending. | In Progress |
+| Center the floating Markdown help buffer over the actual Sidepanes pane, not over the full editor: | Pending. | Pending. | Pending. | Open mapping help with Sidepanes visible and inspect float placement. | Pending. | In Progress |
+| read pane geometry from `vim.api.nvim_win_get_position(state.winid)`, `vim.api.nvim_win_get_width(state.winid)`, and `vim.api.nvim_win_get_height(state.winid)`. | Pending. | Pending. | Not Applicable as user docs change: geometry API choice is implementation detail. | Resize/open help and confirm placement tracks Sidepanes pane. | Pending. | In Progress |
+| size the float relative to the pane dimensions. | Pending. | Pending. | Pending. | Resize Sidepanes and confirm help float resizes relative to the pane. | Pending. | In Progress |
+| compute editor-relative `row` and `col` from the pane row/column so the float stays visually attached to Sidepanes. | Pending. | Pending. | Not Applicable as user docs change: geometry math is implementation detail. | Confirm float is attached to Sidepanes pane rather than full editor. | Pending. | In Progress |
+| keep this geometry future-proof for left, right, or bottom pane placement. | Pending. | Pending. | Pending. | If only right-side layout exists today, record compatibility coverage and any no-op rationale. | Pending. | In Progress |
+| if the pane is too small, fall back to a full-editor centered float or a scratch split. | Pending. | Pending. | Pending. | Shrink Sidepanes and confirm fallback behavior. | Pending. | In Progress |
+| Include ask-pane, Markdown-pane, terminal-pane, and global mappings. | Pending. | Pending. | Pending. | Open help from ask, Markdown, and terminal panes and inspect listed mappings. | Pending. | In Progress |
+| Make winbar hint configurable: | Pending. | Pending. | Pending. | Toggle help config and inspect mapping/hint behavior. | Pending. | In Progress |
+| `help.winbar = true`. | Pending. | Pending. | Pending. | Disable winbar hint and confirm it disappears. | Pending. | In Progress |
+| `help.mapping = "gh"` or reuse `mappings.pane.help`. | Pending. | Pending. | Pending. | Change configured mapping and confirm help opens on the configured lhs. | Pending. | In Progress |
+| `help.scope = "pane_first"` initially. | Pending. | Pending. | Pending. | Confirm output orders pane mappings before global mappings. | Pending. | In Progress |
+| Add docs, help, audit smoke coverage, and regression tests. | Pending. | Pending. | Pending. | Review README, Markdown docs, Neovim help, CHANGELOG, release notes, audit smoke, docs contract, and regression coverage. | Pending. | In Progress |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Pending. | Pending. | Pending. | Re-read slice bullets, traceability, changed implementation, tests, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Pending. | In Progress |
+| In the Markdown pane, confirm the winbar shows `gh help` on the right and pressing `gh` opens mapping help with Markdown-pane mappings first. | Pending. | Not Applicable as sole automated test: this row records a manual acceptance workflow; regression coverage should support it separately. | Pending. | Perform this exact Markdown-pane workflow. | Pending. | In Progress |
+| In a Codex pane, press `gh`; confirm terminal-pane mappings are shown first and global Sidepanes mappings are shown after them. | Pending. | Not Applicable as sole automated test: this row records a manual acceptance workflow; regression coverage should support it separately. | Pending. | Perform this exact Codex-pane workflow. | Pending. | In Progress |
+| In the ask pane, press `gh`; confirm ask-specific mappings such as `M`, `gf`, `]f`, `[f`, `qq`, and `<C-CR>` appear before global mappings. | Pending. | Not Applicable as sole automated test: this row records a manual acceptance workflow; regression coverage should support it separately. | Pending. | Perform this exact ask-pane workflow. | Pending. | In Progress |
+| Resize the Sidepanes pane and press `gh`; confirm the help float stays centered over the Sidepanes pane rather than the full editor. | Pending. | Not Applicable as sole automated test: this row records a manual acceptance workflow; regression coverage should support it separately. | Pending. | Resize Sidepanes and perform this exact workflow. | Pending. | In Progress |
+| Move Sidepanes to a future left or bottom placement if that layout exists and confirm the help float still centers over the pane geometry. | Pending. | Not Applicable as sole automated test: this row records a manual/future-compatibility workflow. | Pending. | If left/bottom layout exists, perform this workflow; otherwise record no current layout support. | Pending. | In Progress |
+| Disable the help mapping and confirm the winbar hint disappears. | Pending. | Not Applicable as sole automated test: this row records a manual acceptance workflow; regression coverage should support it separately. | Pending. | Disable help mapping and inspect the winbar. | Pending. | In Progress |
+| Refinement note: the help view should be generated from actual normalized runtime config, not copied static docs, so it reflects personal mappings like `qq` and `<leader>qq`. | Pending. | Pending. | Pending. | Configure personal-like mappings and confirm help reflects normalized runtime values. | Pending. | In Progress |
 
 ### 23. Ask Action Policy And Fed-Key Test Discipline
 
