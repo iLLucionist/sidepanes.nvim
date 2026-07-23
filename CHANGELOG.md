@@ -83,6 +83,8 @@ but they should be called out clearly in this changelog.
 - Ask-pane focus mappings now preserve modified drafts, freshen only
   unmodified written drafts, and keep that fresh reset undoable with normal-mode
   `u`.
+- Ask-pane mapping help now labels `M` and `<Tab>` as target/model picker
+  mappings, so model switching is visible from `gh` while editing a question.
 - In ask pane mode, visual ask mappings such as global `<leader>pa` and
   pane-local `aa` now use the default ask target for the first capture and reuse
   the active draft target when appending more context, instead of reopening the

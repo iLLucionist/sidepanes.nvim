@@ -45,8 +45,8 @@ local pane_rows = {
         { key = "ask_claude", mode = "x", label = "Ask Claude" },
     },
     ask = {
-        { key = "ask_model_picker", mode = "n", label = "Change ask target" },
-        { key = "ask_model_picker_alt", mode = "n", label = "Change ask target" },
+        { key = "ask_model_picker", mode = "n", label = "Change ask target/model" },
+        { key = "ask_model_picker_alt", mode = "n", label = "Change ask target/model" },
         { key = "ask_source", mode = "n", label = "Open citation source" },
         { key = "ask_next_file", mode = "n", label = "Next cited file" },
         { key = "ask_previous_file", mode = "n", label = "Previous cited file" },

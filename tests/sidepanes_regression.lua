@@ -2315,7 +2315,8 @@ test("mapping help formats active mappings and pane-relative geometry", function
     local ask_lines = table.concat(mapping_help.lines(state, { bufnr = 22 }), "\n")
 
     assert(ask_lines:find("Ask Pane Mappings", 1, true), "ask help missed pane heading")
-    assert(ask_lines:find("`M` (n): Change ask target", 1, true), "ask help missed model picker")
+    assert(ask_lines:find("`M` (n): Change ask target/model", 1, true), "ask help missed model picker")
+    assert(ask_lines:find("`<Tab>` (n): Change ask target/model", 1, true), "ask help missed model picker alternate")
     assert(ask_lines:find("`gf` (n): Open citation source", 1, true), "ask help missed source mapping")
     assert(ask_lines:find("`]f` (n): Next cited file", 1, true), "ask help missed next-file mapping")
     assert(ask_lines:find("`[f` (n): Previous cited file", 1, true), "ask help missed previous-file mapping")
@@ -2432,6 +2433,45 @@ test("mapping help opens from the pane-local fed key and follows help config", f
 
     assert(not winbar:find("gh help", 1, true), winbar)
     assert(pane.config.mappings.pane.help == "gh", "help.winbar=false should not disable the mapping")
+end)
+
+test("ask pane mapping help includes target model picker from fed key", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-mapping-help-fed-key-test")
+
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", nil, { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+    vim.api.nvim_set_current_win(pane.winid)
+
+    feed_user_keys("gh")
+    wait_until("ask mapping help float did not open from fed key", function()
+        return vim.api.nvim_get_current_win() ~= pane.winid
+    end)
+
+    local help_bufnr = vim.api.nvim_get_current_buf()
+    local help_lines = table.concat(vim.api.nvim_buf_get_lines(help_bufnr, 0, -1, false), "\n")
+
+    assert(help_lines:find("Ask Pane Mappings", 1, true), help_lines)
+    assert(help_lines:find("`M` (n): Change ask target/model", 1, true), help_lines)
+    assert(help_lines:find("`<Tab>` (n): Change ask target/model", 1, true), help_lines)
 end)
 
 test("pane-local help mapping can be disabled for a fresh buffer", function()
