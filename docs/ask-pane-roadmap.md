@@ -4,8 +4,8 @@ Branch: `feat/ask-pane`
 
 Target release: `v0.4.0`
 
-Status: base ask-pane workflow implemented; stabilization and refactor slices
-remain planned.
+Status: ask-pane implementation slices are complete; final verification and
+release-readiness audit remains.
 
 ## Status Legend
 
@@ -38,7 +38,7 @@ remain planned.
 | 16. Mapping And Command Zone Matrix | Done | Source-of-truth mapping/command zone matrix plus fixture, docs-contract checks, runtime mapping regression, corrected non-ask `:q` command-path ownership, and ask-pane quit-lifecycle shortcuts are present. |
 | 17. Ask Target And Picker Status Visibility | Done | Internal ask status/debug formatter exposes target, root, picker, draft, and count facts for the future status command. |
 | 18. Target Resolver Refactor | Done | Target resolution now lives in a pure resolver with traceable active, last-context, default, picker, and before-send decisions plus snapshot-facing target reasons. |
-| 19. Interaction-Focused Manual Acceptance Checklist | In Progress | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
+| 19. Interaction-Focused Manual Acceptance Checklist | Done | Interaction-focused manual checklist is present, traceable, and covered by docs/fast checks. |
 | 20. `SidepanesAskStatus` | Done | `ask_status(opts)`, `:SidepanesAskStatus`, and `:Sidepanes ask-status` report ask draft status for debugging. |
 | 21. `SidepanesVersion` | Done | `version()`, `:SidepanesVersion`, `:Sidepanes version`, and health output report plugin version and load path. |
 | 22. Interactive Keymap Help | Done | Pane-local `gh` mapping help, commands/API, winbar hint, docs, tests, and audit evidence are implemented. |
@@ -52,8 +52,7 @@ remain planned.
 The remaining planned slices must be implemented in this order unless the
 roadmap is explicitly updated first with the reason for changing the order.
 
-1. `19. Interaction-Focused Manual Acceptance Checklist`
-2. Final verification and release-readiness audit
+1. Final verification and release-readiness audit
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,
@@ -1514,7 +1513,7 @@ Verification results:
 
 ### 19. Interaction-Focused Manual Acceptance Checklist
 
-Status: `In Progress`
+Status: `Done`
 
 User response: yes, do that. Focus on user interaction with Neovim and
 Sidepanes features, not config-printing.
@@ -1550,6 +1549,9 @@ Audit findings:
 - Pass 1 found that the checklist changes release validation process, but
   `CHANGELOG.md` did not mention it. Added an Unreleased entry for the
   interaction-focused manual acceptance checklist.
+- Pass 2 found that slice 19 was implemented but the roadmap status, remaining
+  order, top status summary, and final re-check traceability row were still
+  pending. Updated closeout evidence before final confirmation passes.
 
 Interaction checklist:
 
@@ -1592,7 +1594,8 @@ Traceability:
 | use mapping help. | Checklist row `Use mapping help`. | Existing mapping-help fed-key/config regressions cover automated behavior; this row is manual acceptance. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Press `gh` in Sidepanes panes and inspect mapping help. | `f45cdaf` | Done |
 | Keep config-printing checks only where the feature is specifically configuration state. | Checklist preface says not to substitute config-printing checks unless a row explicitly changes configuration state. | Not Applicable as automated test: this is a manual checklist style requirement. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Confirm the checklist uses interactions rather than `vim.print(require("sidepanes").config)` except for configuration-state cases. | `f45cdaf` | Done |
 | Audit finding: checklist release-validation process was missing from `CHANGELOG.md`. | Added an Unreleased changelog entry for the interaction-focused manual checklist. | `tests/sidepanes_docs_contract_smoke.lua`; `tests/run_checks.sh fast`. | `CHANGELOG.md` Unreleased Added entry and this audit finding. | Re-read `CHANGELOG.md` during audit to confirm release-process evidence is present. | `7cec057` | Done |
-| Re-check implementation, tests, docs, and this roadmap before moving on. | Pending final audit after checklist commit. | Pending final checks/audit for docs-only slice. | Pending final audit. | Re-read the checklist, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Pending. | In Progress |
+| Audit finding: slice closeout status/order and final re-check evidence were still pending. | Updated top roadmap status, Current Slice Status, Remaining Implementation Order, slice status, audit findings, and this trace row. | Not Applicable as new automated behavior test: closeout status documentation only; `tests/sidepanes_docs_contract_smoke.lua`, `tests/run_checks.sh fast`, and `git diff --check` passed. | `docs/ask-pane-roadmap.md` closeout status/order and this audit finding. | Re-read slice status/order and traceability before final confirmation passes. | Pending closeout commit. | In Progress |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Audit passes re-read the checklist, traceability table, roadmap status/order, public docs, changelog, release notes, AGENTS.md, and `illu.nvim` impact. | `tests/sidepanes_docs_contract_smoke.lua`; `tests/run_checks.sh fast`; `git diff --check`. Full checks not required because this slice changed documentation/process only, with no behavior-sensitive or cross-module code changes. | README, Neovim help, Markdown docs, release notes, ROADMAP.md, CHANGELOG.md, AGENTS.md, and this roadmap reviewed; only CHANGELOG and roadmap needed changes. | `illu.nvim` smoke not applicable because defaults, mappings, commands, public API, and local config behavior did not change. | Pending closeout commit. | In Progress |
 | Run the checklist in a real Neovim session with `illu.nvim` loaded. | Checklist preface requires real Neovim with `illu.nvim` loaded. | Not Applicable as automated test: this is the manual execution requirement. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Run the whole checklist with `illu.nvim`. | `f45cdaf` | Done |
 | Mark each workflow pass/fail with the exact mapping or command used. | Checklist table includes `Mapping/command used` and `Result` columns. | Not Applicable as automated test: this is a manual recording requirement. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Record pass/fail and the exact key/command per workflow. | `f45cdaf` | Done |
 | Refinement note: this checklist should be short enough that it is realistic to run after every ask-pane change. | Checklist is 11 workflow rows plus a short preface. | Not Applicable as automated test: checklist brevity is manual review/process quality. | `docs/ask-pane-roadmap.md` slice-19 Interaction checklist. | Review checklist length after adding it. | `f45cdaf` | Done |
