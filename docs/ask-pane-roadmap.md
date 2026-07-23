@@ -5,7 +5,7 @@ Branch: `feat/ask-pane`
 Target release: `v0.4.0`
 
 Status: ask-pane implementation slices are complete; final verification and
-release-readiness audit remains.
+release-readiness audit is in progress.
 
 ## Status Legend
 
@@ -52,7 +52,7 @@ release-readiness audit remains.
 The remaining planned slices must be implemented in this order unless the
 roadmap is explicitly updated first with the reason for changing the order.
 
-1. Final verification and release-readiness audit
+1. Final verification and release-readiness audit (in progress)
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,
@@ -2549,3 +2549,60 @@ Audit gaps:
 | Audit gap: cover synthesizeable ask-pane `:w` command paths with fed-key tests and correct `ask-write-draft` coverage evidence. | `lua/sidepanes/ask_policy.lua` maps `w` to `write_draft`; `tests/ask_pane_mapping_coverage.lua` marks `ask-write-ready` and `ask-write-draft` as fed-key covered; `tests/sidepanes_regression.lua` feeds `:w` for ready and modified ask drafts. | Focused single-test, focused ask/personal/submit, fast, full, and `illu.nvim` smoke checks passed after the fix. | This roadmap, coverage fixture, and CHANGELOG. | Press `:w` on ready and modified ask drafts and compare state to the behavior matrix. | `ec1d381` | Done |
 | Audit gap: update stale roadmap references after the ask command-line fed-key replacement and `:w` command-path fix. | Roadmap references now point to "ask pane fed command-line lifecycle covers q w and wq user paths" and "pane-mode ask write then quit sends accumulated prompt" where applicable. | Not Applicable: documentation reference correction only; no runtime behavior changed. | This roadmap. | Re-read behavior and mapping matrix references before closeout. | `2f47ede` | Done |
 | Audit gap: move the ask-pane `:w` command-path changelog note under `Fixed`. | `CHANGELOG.md` now records the scratch-buffer `:w` command-path repair under `Fixed`. | Not Applicable: changelog categorization only; no runtime behavior changed. | `CHANGELOG.md` and this roadmap. | Re-read changelog section placement before closeout. | `f4e8ae2` | Done |
+
+## Final Verification And Release-Readiness Audit
+
+Status: `In Progress`
+
+User response: check code, docs, tests, and the internal roadmap in repeated
+passes until nothing else comes up; other users rely on this plugin, so the
+release must be complete, exhaustive, correct, and accurate.
+
+Goal: verify `v0.4.0` as a release candidate without adding feature scope.
+
+- Re-read every ask-pane roadmap slice and traceability table for stale status,
+  missing evidence, wrong commit references, contradictions, or skipped bullets.
+- Review implementation correctness and architecture boundaries for the full
+  release, especially ask pane lifecycle, terminal/session recovery, command and
+  mapping adapters, status/version/help surfaces, and compatibility shims.
+- Review automated test coverage for behavior, edge cases, fed-key paths,
+  command paths, mapping zones, state transitions, compatibility requirements,
+  docs contracts, health checks, and real CLI smoke.
+- Run focused ask checks, `tests/run_checks.sh fast`,
+  `tests/run_checks.sh full`, local `illu.nvim` smoke, and `git diff --check`.
+- Run or account for the interaction-focused manual acceptance checklist in a
+  real Neovim session with `illu.nvim`.
+- Re-read README, CHANGELOG, Neovim help docs, Markdown docs, release notes,
+  public ROADMAP, AGENTS.md, and generated helptags/docs artifacts.
+- Verify release-readiness details: version reporting, default compatibility,
+  opt-in ask pane behavior, install/load sanity, repository cleanliness, and no
+  generated assets/logs/artifacts.
+- If any pass finds a gap, append it here, add a traceability row, fix/test/doc
+  it, commit that coherent unit, and restart from the new HEAD.
+- After the last commit, perform at least two consecutive clean non-mutating
+  confirmation passes and report them in the final response.
+
+Manual acceptance tests:
+
+- Run the slice-19 interaction checklist in real Neovim with `illu.nvim`
+  loaded and the local `sidepanes.nvim` checkout on `runtimepath`.
+- Confirm `ask.ui = "float"` remains the public default and `ask.ui = "pane"`
+  remains opt-in.
+- Confirm `:SidepanesVersion`, `:SidepanesAskStatus`, `:SidepanesMappings`,
+  ask submit/write/quit/cancel, target picker, mapping help, and failed-send
+  recovery behave as documented.
+- Confirm `:help sidepanes` opens and public docs match the release behavior.
+
+Traceability:
+
+| Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Re-read every ask-pane roadmap slice and traceability table for stale status, missing evidence, wrong commit references, contradictions, or skipped bullets. | Pending audit pass. | Pending audit pass. | Pending audit pass. | Re-read all slice tables before closeout. | Pending. | In Progress |
+| Review implementation correctness and architecture boundaries for the full release, especially ask pane lifecycle, terminal/session recovery, command and mapping adapters, status/version/help surfaces, and compatibility shims. | Pending audit pass. | Pending audit pass. | Pending audit pass. | Manual architecture review during release audit. | Pending. | In Progress |
+| Review automated test coverage for behavior, edge cases, fed-key paths, command paths, mapping zones, state transitions, compatibility requirements, docs contracts, health checks, and real CLI smoke. | Pending audit pass. | Pending audit pass. | Pending audit pass. | Review coverage table and manual checklist. | Pending. | In Progress |
+| Run focused ask checks, `tests/run_checks.sh fast`, `tests/run_checks.sh full`, local `illu.nvim` smoke, and `git diff --check`. | Pending verification. | Pending verification. | Pending verification evidence in this roadmap. | Re-run checks locally if desired. | Pending. | In Progress |
+| Run or account for the interaction-focused manual acceptance checklist in a real Neovim session with `illu.nvim`. | Pending manual acceptance accounting. | Not Applicable as an automated test: this bullet is itself the final manual acceptance requirement. | Slice 19 checklist and this final audit section. | Run the slice-19 checklist in real Neovim with `illu.nvim`. | Pending. | In Progress |
+| Re-read README, CHANGELOG, Neovim help docs, Markdown docs, release notes, public ROADMAP, AGENTS.md, and generated helptags/docs artifacts. | Pending audit pass. | Pending docs-contract and artifact checks. | Pending audit pass. | Open `:help sidepanes` and compare public docs to release behavior. | Pending. | In Progress |
+| Verify release-readiness details: version reporting, default compatibility, opt-in ask pane behavior, install/load sanity, repository cleanliness, and no generated assets/logs/artifacts. | Pending audit pass. | Pending version/default/load/status checks. | Pending audit pass. | Confirm release-readiness details in local Neovim and git status. | Pending. | In Progress |
+| If any pass finds a gap, append it here, add a traceability row, fix/test/doc it, commit that coherent unit, and restart from the new HEAD. | This final audit section owns release-audit gaps. | Not Applicable until a gap is found. | This roadmap. | Restart audit loop after every fix. | Pending. | In Progress |
+| After the last commit, perform at least two consecutive clean non-mutating confirmation passes and report them in the final response. | Pending final confirmation. | Pending final confirmation. | Final clean passes intentionally reported in the final response instead of written back here. | Re-run clean confirmation passes from the final HEAD. | Pending. | In Progress |
