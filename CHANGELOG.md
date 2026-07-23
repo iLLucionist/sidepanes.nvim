@@ -80,6 +80,9 @@ but they should be called out clearly in this changelog.
 - Ask pane command-line `:w` now routes through the internal draft-write action
   consistently, avoiding Neovim scratch-buffer write errors on repeated ask
   drafts.
+- Ask-pane focus mappings now preserve modified drafts, freshen only
+  unmodified written drafts, and keep that fresh reset undoable with normal-mode
+  `u`.
 - In ask pane mode, visual ask mappings such as global `<leader>pa` and
   pane-local `aa` now use the default ask target for the first capture and reuse
   the active draft target when appending more context, instead of reopening the

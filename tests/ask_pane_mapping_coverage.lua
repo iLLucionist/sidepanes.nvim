@@ -20,6 +20,8 @@ local ready_submit = "ask pane empty ready draft writes then submit cancels with
 local failed_send = "pane-mode ask preserves prompt when target terminal fails to open"
 local model_picker = "ask pane target picker mapping updates target and winbar"
 local navigation = "ask pane navigation mappings move between context headers and source jump opens citation"
+local undo_refresh = "ask session refreshes draft state after undo through adapter facts"
+local undo_reset = "ask pane focus mapping preserves modified drafts and clears unmodified drafts with undo"
 local version_command = "command registration invokes facade callbacks"
 
 return {
@@ -237,6 +239,13 @@ return {
             registration = registration,
             direct = navigation,
             no_fed_key_reason = "Navigation/source-jump mappings are behavior-sensitive but not lifecycle-changing; callback coverage keeps cursor/source assertions deterministic.",
+        },
+        {
+            id = "ask-pane-undo",
+            zone_rows = { "ask-pane-undo" },
+            registration = registration,
+            direct = undo_refresh,
+            fed_key = undo_reset,
         },
         {
             id = "version-command",

@@ -148,6 +148,14 @@ return {
             result = "move through citations or jump to cited source",
         },
         {
+            id = "ask-pane-undo",
+            zone = "ask pane",
+            mode = "normal",
+            mapping = "native undo",
+            default_lhs = "u",
+            result = "undo ask-pane edits and restore reset draft session state when possible",
+        },
+        {
             id = "ask-zone-commands",
             zone = "project buffer, Markdown pane, terminal pane, ask pane",
             mode = "command",

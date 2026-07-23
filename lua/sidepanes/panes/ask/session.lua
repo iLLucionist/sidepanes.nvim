@@ -107,6 +107,44 @@ local function active_session(raw, buffer)
     return type(raw) == "table" and raw.bufnr ~= nil and buffer.valid == true
 end
 
+local function copy(value)
+    if type(value) ~= "table" then
+        return value
+    end
+
+    local result = {}
+
+    for key, item in pairs(value) do
+        result[key] = copy(item)
+    end
+
+    return result
+end
+
+local function lines_equal(left, right)
+    if type(left) ~= "table" or type(right) ~= "table" or #left ~= #right then
+        return false
+    end
+
+    for index, line in ipairs(left) do
+        if line ~= right[index] then
+            return false
+        end
+    end
+
+    return true
+end
+
+local function prompt_from_lines(lines, adapter)
+    return adapter.trim(table.concat(lines or {}, "\n"))
+end
+
+local function ready_prompt(lines, adapter)
+    local prompt = prompt_from_lines(lines, adapter)
+
+    return prompt == "" or prompt == "Question:"
+end
+
 function M.record_state(state, raw, draft_state)
     if type(raw) ~= "table" then
         return
@@ -320,6 +358,138 @@ function M.ensure_buffer(state, adapter)
     adapter.set_option("modified", false, { buf = bufnr })
 
     return bufnr
+end
+
+function M.clear_unmodified_buffer(state, raw, adapter)
+    raw = raw or state.ask_pane or {}
+
+    if not adapter.valid_buf(raw.bufnr) or adapter.get_option("modified", { buf = raw.bufnr }) then
+        return false
+    end
+
+    local lines = adapter.get_lines(raw.bufnr, 0, -1, false)
+
+    if ready_prompt(lines, adapter) then
+        return false
+    end
+
+    raw.undo_restore = {
+        citations = copy(raw.citations or {}),
+        draft_state = raw.draft_state,
+        entry = copy(raw.entry),
+        lines = copy(lines),
+        model_picker_shown = raw.model_picker_shown,
+        origin = copy(raw.origin),
+        previous = copy(raw.previous),
+        ready = raw.ready,
+        root = raw.root,
+        target_reason = raw.target_reason,
+        written_prompt = raw.written_prompt,
+    }
+
+    raw.citations = {}
+    raw.entry = nil
+    raw.model_picker_shown = nil
+    raw.origin = nil
+    raw.ready = true
+    raw.root = nil
+    raw.target_reason = nil
+    raw.written_prompt = nil
+
+    M.record_state(state, raw, STATES.ready_empty)
+    raw.resetting = true
+    if adapter.replace_lines_undoable then
+        adapter.replace_lines_undoable(raw.bufnr, { "Question:", "" })
+    else
+        adapter.set_lines(raw.bufnr, 0, -1, false, { "Question:", "" })
+    end
+    raw.resetting = nil
+    adapter.set_option("modified", false, { buf = raw.bufnr })
+
+    return true
+end
+
+function M.restore_undo_if_matching(state, raw, adapter)
+    raw = raw or state.ask_pane or {}
+
+    local pending = raw.undo_restore
+
+    if type(pending) ~= "table" or not adapter.valid_buf(raw.bufnr) then
+        return false
+    end
+
+    local lines = adapter.get_lines(raw.bufnr, 0, -1, false)
+
+    if not lines_equal(lines, pending.lines) then
+        return false
+    end
+
+    raw.citations = copy(pending.citations or {})
+    raw.entry = copy(pending.entry)
+    raw.model_picker_shown = pending.model_picker_shown
+    raw.origin = copy(pending.origin)
+    raw.previous = copy(pending.previous)
+    raw.ready = pending.ready
+    raw.root = pending.root
+    raw.target_reason = pending.target_reason
+    raw.written_prompt = nil
+    raw.undo_restore = nil
+
+    M.record_state(state, raw, STATES.draft_modified)
+
+    return true
+end
+
+function M.clear_stale_undo_restore(state, raw, adapter)
+    raw = raw or state.ask_pane or {}
+
+    local pending = raw.undo_restore
+
+    if type(pending) ~= "table" or not adapter.valid_buf(raw.bufnr) then
+        return false
+    end
+
+    local lines = adapter.get_lines(raw.bufnr, 0, -1, false)
+
+    if lines_equal(lines, pending.lines) or ready_prompt(lines, adapter) then
+        return false
+    end
+
+    raw.undo_restore = nil
+
+    return true
+end
+
+function M.refresh_after_undo(state, raw, adapter)
+    raw = raw or state.ask_pane or {}
+
+    if not adapter.valid_buf(raw.bufnr) then
+        return false
+    end
+
+    local lines = adapter.get_lines(raw.bufnr, 0, -1, false)
+    local prompt = prompt_from_lines(lines, adapter)
+
+    if adapter.get_option("modified", { buf = raw.bufnr }) then
+        raw.written_prompt = nil
+        M.record_state(state, raw, STATES.draft_modified)
+        return true
+    end
+
+    if ready_prompt(lines, adapter) then
+        raw.written_prompt = nil
+        raw.ready = true
+        M.record_state(state, raw, STATES.ready_empty)
+        return true
+    end
+
+    if raw.written_prompt == prompt then
+        M.record_state(state, raw, STATES.draft_written)
+        return true
+    end
+
+    M.record_state(state, raw, STATES.draft_modified)
+    return true
 end
 
 return M

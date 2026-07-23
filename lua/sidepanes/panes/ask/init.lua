@@ -56,6 +56,23 @@ local session_adapter = {
     mapset = function(mode, abbr, map)
         pcall(vim.fn.mapset, mode, abbr, map)
     end,
+    replace_lines_undoable = function(bufnr, lines)
+        if not util.valid_buf(bufnr) then
+            return
+        end
+
+        vim.api.nvim_buf_call(bufnr, function()
+            local modifiable = vim.api.nvim_get_option_value("modifiable", { buf = bufnr })
+            local reg = vim.fn.getreg("z")
+            local regtype = vim.fn.getregtype("z")
+
+            vim.api.nvim_set_option_value("modifiable", true, { buf = bufnr })
+            vim.fn.setreg("z", table.concat(lines, "\n"), "c")
+            vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('ggVG"zp', true, false, true), "xt", false)
+            vim.fn.setreg("z", reg, regtype)
+            vim.api.nvim_set_option_value("modifiable", modifiable, { buf = bufnr })
+        end)
+    end,
     schedule = function(callback)
         vim.schedule(callback)
     end,
@@ -257,6 +274,9 @@ function M.show(state, deps, opts)
             finish_quit = function()
                 M.finish_quit(state, deps, bufnr)
             end,
+            undo_edit = function()
+                M.undo_edit(state, deps, bufnr)
+            end,
         })
 
         vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
@@ -266,6 +286,12 @@ function M.show(state, deps, opts)
                 local live = state.ask_pane or {}
 
                 if live.bufnr == bufnr and not live.resetting then
+                    if ask_session.restore_undo_if_matching(state, live, session_adapter) then
+                        deps.update_sticky_heading()
+                        return
+                    end
+
+                    ask_session.clear_stale_undo_restore(state, live, session_adapter)
                     set_draft_state(state, live, DRAFT_STATES.draft_modified)
                     deps.update_sticky_heading()
                 end
@@ -338,6 +364,10 @@ function M.show(state, deps, opts)
 
     install_commandline_enter(state, deps, bufnr)
 
+    if opts.reset_unmodified then
+        ask_session.clear_unmodified_buffer(state, ask, session_adapter)
+    end
+
     state.active_mode = "ask"
     state.active_terminal_key = nil
 
@@ -354,6 +384,34 @@ function M.show(state, deps, opts)
     deps.update_sticky_heading()
 
     return bufnr, winid
+end
+
+--- Undo an ask-pane edit and repair session metadata when a fresh reset is undone.
+function M.undo_edit(state, deps, bufnr)
+    bufnr = bufnr or session(state).bufnr
+
+    if not util.valid_buf(bufnr) then
+        return
+    end
+
+    vim.api.nvim_buf_call(bufnr, function()
+        local count = vim.v.count or 0
+        local prefix = count > 0 and tostring(count) or ""
+
+        vim.cmd("silent keepjumps normal! " .. prefix .. "u")
+    end)
+
+    local live = state.ask_pane or {}
+
+    if live.bufnr == bufnr and ask_session.restore_undo_if_matching(state, live, session_adapter) then
+        deps.update_sticky_heading()
+    elseif live.bufnr == bufnr then
+        ask_session.clear_stale_undo_restore(state, live, session_adapter)
+
+        if ask_session.refresh_after_undo(state, live, session_adapter) then
+            deps.update_sticky_heading()
+        end
+    end
 end
 
 --- Change the target entry for the active ask pane.

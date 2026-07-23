@@ -48,6 +48,10 @@ draft state: `ready_empty`, `draft_modified`, `draft_written`,
 Press `M` or `<Tab>` to open the model picker and change the target before
 sending.
 
+Normal-mode ask-pane focus mappings preserve modified drafts. If an unmodified
+written draft is reopened and freshened back to a blank `Question:` prompt,
+press `u` in the ask pane to restore the previous prompt and citation state.
+
 `ask.model_picker` controls picker timing:
 
 - `"manual"` only opens the picker from a mapping,

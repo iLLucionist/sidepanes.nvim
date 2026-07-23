@@ -61,6 +61,12 @@ function M.setup(bufnr, mappings, controller)
             controller.finish_quit()
         end
     end, { desc = "Finish ask pane prompt" })
+
+    set_buffer_map(bufnr, "n", "u", function()
+        if controller.undo_edit then
+            controller.undo_edit()
+        end
+    end, { desc = "Undo ask pane edit" })
 end
 
 return M

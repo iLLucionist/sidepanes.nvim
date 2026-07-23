@@ -226,6 +226,9 @@ are available in your environment.
    while visual `<leader>pa`, `aa`, or `:SidepanesAskAppend` adds selections to
    that prompt. Same-file selections are grouped, duplicate ranges can be
    skipped, and `gf` inside the ask pane jumps back to the cited source.
+   Reopening an unmodified written draft with normal `<leader>pa` or pane-local
+   `ap` starts a fresh `Question:` prompt, while modified drafts are preserved;
+   press `u` in the ask pane to undo an accidental fresh reset.
    Command-line `:q` / `:quit` in non-ask Sidepanes buffers returns to Markdown,
    so personal quit mappings that expand to `:q<CR>` do not close the pane.
 
@@ -422,6 +425,8 @@ The ask pane winbar shows the current target/model and explicit draft state:
 
 When the default `ask_submit = "<C-CR>"` is used, the ask pane also maps
 `<C-J>` as a submit fallback for terminals that report Ctrl+Enter that way.
+The ask pane also keeps normal-mode `u` undoable after focus mappings freshen
+an unmodified draft, restoring the previous prompt and citation state.
 In non-ask Sidepanes buffers, personal normal-mode mappings such as
 `qq -> :q<CR>` or `<leader>qq -> :q<CR>` are guarded only when their RHS is a
 plain quit command, so they return the pane to Markdown instead of closing it.

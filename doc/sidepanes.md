@@ -636,6 +636,8 @@ from multiple files before sending.
 7. Press `<C-CR>`, write and quit, write then quit, or use a configured
    `mappings.pane.ask_send` / `ask_send_alt` after writing, to send.
 8. Quit without writing, or quit with `:q!`, to cancel.
+9. Press `u` in the ask pane to undo edits, including an accidental fresh reset
+   from reopening an unmodified written draft.
 
 In non-ask Sidepanes buffers, command-line `:q` / `:quit` returns to Markdown.
 This keeps personal quit mappings that expand to `:q<CR>` from closing the pane
@@ -662,6 +664,9 @@ The ask pane winbar shows the current target/model and explicit draft state:
 
 When the default `ask_submit = "<C-CR>"` is used, the ask pane also maps
 `<C-J>` as a submit fallback for terminals that report Ctrl+Enter that way.
+Normal-mode `ask_pane` mappings freshen an unmodified written draft back to a
+blank `Question:` prompt, but preserve modified drafts; ask-pane `u` restores
+the previous prompt and citation state after an accidental fresh reset.
 In non-ask Sidepanes buffers, personal normal-mode mappings such as
 `qq -> :q<CR>` or `<leader>qq -> :q<CR>` are guarded only when their RHS is a
 plain quit command, so they return the pane to Markdown instead of closing it.

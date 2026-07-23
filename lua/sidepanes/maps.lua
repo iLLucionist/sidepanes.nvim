@@ -223,7 +223,7 @@ function M.setup(bufnr, deps)
     end, "Toggle sidepanes zoom", { nowait = true })
 
     map(bufnr, "n", mappings.ask_pane, function()
-        deps.show_ask_pane({ focus = true })
+        deps.show_ask_pane({ focus = true, reset_unmodified = true })
     end, "Show ask pane", { nowait = true })
 
     map(bufnr, "n", mappings.help, function()

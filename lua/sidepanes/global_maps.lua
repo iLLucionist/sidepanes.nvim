@@ -114,7 +114,7 @@ function M.setup(api, mappings)
     end, "Switch sidepanes")
 
     map("n", mappings.ask_pane, function()
-        api.show_ask_pane({ focus = true })
+        api.show_ask_pane({ focus = true, reset_unmodified = true })
     end, "Show ask pane")
 
     map("x", mappings.ask, function()

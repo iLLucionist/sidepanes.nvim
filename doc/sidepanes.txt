@@ -237,6 +237,7 @@ Pane-local mappings are installed inside Sidepanes buffers:
     [f               previous ask File block
     ]s               next ask Selection block
     [s               previous ask Selection block
+    u                undo ask-pane edits and reset recovery
     M                change ask pane target/model
     <Tab>            change ask pane target/model
     aa               ask last coding agent from visual selection
@@ -700,6 +701,10 @@ shortcuts, for example `qq` and `<leader>qq`; those shortcuts cancel unwritten
 drafts and send written drafts. The winbar shows the current target/model and
 explicit draft state: `ready_empty`, `draft_modified`, `draft_written`,
 `sending_picker`, `sending_terminal`, `send_failed`, `cancelled`, or `sent`.
+Normal-mode ask-pane focus mappings freshen an unmodified written draft back to
+a blank `Question:` prompt, but preserve modified drafts. Press `u` in the ask
+pane to undo an accidental fresh reset and restore the previous prompt and
+citation state.
 When the default `ask_submit = "<C-CR>"` is used, the ask pane also maps
 `<C-J>` as a submit fallback for terminals that report Ctrl+Enter that way.
 In non-ask Sidepanes buffers, command-line `:q` / `:quit` returns to Markdown.

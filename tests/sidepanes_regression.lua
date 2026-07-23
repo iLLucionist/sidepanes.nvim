@@ -2074,6 +2074,7 @@ test("ask mapping zone matrix matches active maps by user location", function()
     assert(has_map(qbuf, "]s"), "ask pane next selection map missing")
     assert(has_map(qbuf, "[s"), "ask pane previous selection map missing")
     assert(has_map(qbuf, "gf"), "ask pane source map missing")
+    assert(has_map(qbuf, "u"), "ask pane undo map missing")
 
     local command_table = vim.api.nvim_get_commands({})
 
@@ -5142,6 +5143,42 @@ test("ask session records lifecycle history at the session boundary", function()
     assert(vim.deep_equal(state.ask_pane_state_history, { "ready_empty", "draft_modified" }), "record_state history was wrong")
 end)
 
+test("ask session refreshes draft state after undo through adapter facts", function()
+    local state = {
+        ask_pane_state_history = {},
+    }
+    local lines = { "Question:", "written draft" }
+    local modified = false
+    local raw = {
+        bufnr = 12,
+        written_prompt = "Question:\nwritten draft",
+    }
+    local adapter = {
+        get_lines = function(bufnr, start, stop, strict)
+            assert(bufnr == 12 and start == 0 and stop == -1 and strict == false, "refresh read wrong buffer lines")
+            return lines
+        end,
+        get_option = function(name, opts)
+            assert(name == "modified" and opts.buf == 12, "refresh read wrong option")
+            return modified
+        end,
+        trim = util.trim,
+        valid_buf = function(bufnr)
+            return bufnr == 12
+        end,
+    }
+
+    assert(ask_session.refresh_after_undo(state, raw, adapter) == true, "refresh did not handle written prompt")
+    assert(raw.draft_state == "draft_written", "refresh did not restore written state")
+    assert(state.ask_pane_last_state == "draft_written", "refresh did not update last state")
+
+    modified = true
+
+    assert(ask_session.refresh_after_undo(state, raw, adapter) == true, "refresh did not handle modified prompt")
+    assert(raw.draft_state == "draft_modified", "refresh did not mark modified prompt")
+    assert(raw.written_prompt == nil, "refresh did not clear stale written prompt after modified undo")
+end)
+
 test("ask session owns buffer setup reset snapshot and previous capture through adapters", function()
     local valid_bufs = {}
     local created_bufs = {}
@@ -5568,6 +5605,71 @@ test("ask pane opens reusable ready scratch buffer in the side split", function(
     local again = pane.show_ask_pane({ focus = true })
 
     assert(again == bufnr, "ask pane did not reuse existing buffer")
+end)
+
+test("ask pane focus mapping preserves modified drafts and clears unmodified drafts with undo", function()
+    reset_pane()
+
+    local root = root_fixture("ask-pane-focus-clear-undo-test")
+
+    write(root .. "/src/origin.lua", { "selected()" })
+    pane.setup({
+        ask = {
+            ui = "pane",
+        },
+        mappings = {
+            global = {
+                ask_pane = "<leader>pa",
+            },
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "sleep 10" },
+                send_delay_ms = 0,
+                presets = { { name = "default", label = "Default", args = {} } },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    vim.cmd.edit(root .. "/src/origin.lua")
+    pane.ask("codex", nil, { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+    local qbuf = pane.ask_pane.bufnr
+    local original = vim.api.nvim_buf_get_lines(qbuf, 0, -1, false)
+
+    vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "keep this draft" })
+    vim.api.nvim_set_option_value("modified", true, { buf = qbuf })
+    vim.api.nvim_set_current_win(pane.winid)
+    feed_user_keys("<leader>pa")
+
+    assert(pane.ask_pane.bufnr == qbuf, "modified ask focus mapping changed the ask buffer")
+    assert(
+        table.concat(vim.api.nvim_buf_get_lines(qbuf, 0, -1, false), "\n"):find("keep this draft", 1, true),
+        "modified ask focus mapping cleared the draft"
+    )
+    assert(#(pane.ask_pane.citations or {}) == 1, "modified ask focus mapping cleared citation state")
+
+    pane.write_ask_pane(qbuf)
+    assert(vim.api.nvim_get_option_value("modified", { buf = qbuf }) == false, "write did not make the draft unmodified")
+
+    feed_user_keys("<leader>pa")
+
+    assert(vim.deep_equal(vim.api.nvim_buf_get_lines(qbuf, 0, -1, false), { "Question:", "" }), "unmodified ask focus mapping did not clear to a fresh question")
+    assert(vim.api.nvim_get_option_value("modified", { buf = qbuf }) == false, "fresh ask question should not remain modified")
+    assert(#(pane.ask_pane.citations or {}) == 0, "fresh ask question did not clear citation state")
+    assert(pane.ask_pane.draft_state == "ready_empty", "fresh ask question did not reset visible state")
+
+    feed_user_keys("u")
+    wait_until("undo did not restore cleared ask draft", function()
+        return table.concat(vim.api.nvim_buf_get_lines(qbuf, 0, -1, false), "\n"):find("keep this draft", 1, true) ~= nil
+    end)
+
+    assert(not vim.deep_equal(vim.api.nvim_buf_get_lines(qbuf, 0, -1, false), original), "undo restored the pre-edit prompt instead of the edited prompt")
+    assert(#(pane.ask_pane.citations or {}) == 1, "undo did not restore citation state")
+    assert(pane.ask_pane.draft_state == "draft_modified", "undo did not restore a modified draft state")
 end)
 
 test("ask pane captures previous markdown and terminal pane state", function()

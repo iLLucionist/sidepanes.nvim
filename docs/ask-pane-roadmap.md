@@ -234,6 +234,7 @@ Codex-observed acceptance pass, 2026-07-23:
 - [X] Configure `mappings.pane.ask_send_alt = "<leader>qq"`, press `<leader>qq` in the ask pane, and confirm it also requires a written prompt instead of cancelling through the global quit mapping.
 - [X] From a Codex or Claude pane, press a configured `ask_send_alt` such as `<leader>qq` and confirm Sidepanes returns to Markdown instead of closing the pane through a global quit mapping.
 - [X] Press `<C-CR>` in normal mode and insert mode inside the ask pane and confirm each submits the current prompt.
+- [X] Edit a written ask-pane draft, press normal `<leader>pa` or pane-local `ap`, and confirm modified text is preserved; write the draft, press the focus mapping again, and confirm the fresh `Question:` reset can be undone with `u`.
 
 ### Slice 8. Target Picker And Send Flow
 
@@ -1487,6 +1488,7 @@ Scope rules:
 | `ask-pane-submit-and-send` | ask pane | normal/insert | `ask_submit`, `ask_send`, `ask_send_alt` | `<C-CR>`, disabled, disabled | Submit current prompt, or run the quit lifecycle for configured quit-style mappings. | `tests/sidepanes_regression.lua` ask-pane submit tests and "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" |
 | `ask-pane-command-line` | ask pane | command | `:q`, `:q!`, `:w`, `:wq`, `:x`, `:exit` | command-line path | Write, cancel, or submit through ask-pane lifecycle. | `tests/sidepanes_regression.lua` "ask pane fed command-line lifecycle covers q w and wq user paths" and command-line adapter tests |
 | `ask-pane-context-navigation` | ask pane | normal | `ask_next_file`, `ask_previous_file`, `ask_next_selection`, `ask_previous_selection`, `ask_source` | `]f`, `[f`, `]s`, `[s`, `gf` | Move through citations or jump to cited source. | `tests/sidepanes_regression.lua` "ask pane navigation mappings move between context headers and source jump opens citation" |
+| `ask-pane-undo` | ask pane | normal | native undo | `u` | Undo ask-pane edits and restore reset draft session state when possible. | `tests/sidepanes_regression.lua` "ask session refreshes draft state after undo through adapter facts" and "ask pane focus mapping preserves modified drafts and clears unmodified drafts with undo" |
 | `ask-zone-commands` | project buffer, Markdown pane, terminal pane, ask pane | command | `SidepanesAsk`, `SidepanesAskAppend`, `SidepanesAskStatus`, `SidepanesSubmitQuestion`, `SidepanesVersion`, `SidepanesMappings` | `:SidepanesAsk`, `:SidepanesAskAppend`, `:SidepanesAskStatus`, `:SidepanesSubmitQuestion`, `:SidepanesVersion`, `:SidepanesMappings` | Range-aware ask, explicit append, active draft status, active draft submit, version/load-path debugging, or mapping help. | `tests/sidepanes_regression.lua` command dispatch, status, version command, and mappings command tests |
 
 Manual acceptance tests:
@@ -2876,6 +2878,10 @@ Audit findings:
 - Pass 2 completed a Codex-observed acceptance run for the consolidated manual
   checklist at user request, using headless/local-runtime observations and the
   full release check stack rather than a separate human visual pass.
+- Pass 3 found a user-reported ask-pane focus bug: pressing normal
+  `<leader>pa` or pane-local `ap` while an ask draft was modified could clear
+  the draft, and fresh resets did not preserve enough undo/session state for
+  accidental recovery.
 
 Manual acceptance tests:
 
@@ -2904,3 +2910,4 @@ Traceability:
 | Audit gap: pass 1 found older completed rows still used placeholder commit wording instead of exact commit references. | Replaced slice-22 `this completion-status commit` placeholders with `1a0d867`; replaced slice-26 `verification evidence commit` with `ef1bb09` and `closeout evidence commit` with `e4de0a1`. | `rg` audit for placeholder commit wording; `git diff --check`. | This roadmap. | Re-read affected traceability rows before restarting the audit loop. | `5240f97` | Done |
 | Audit gap: pass 1 found an ignored generated `nvim.log` in the repository root after Neovim checks. | Removed the generated `nvim.log` artifact. | `find . -maxdepth 3 -name nvim.log -print`; `git status --short --untracked-files=all`; `git diff --check`. | This roadmap. | Confirm no generated logs/assets remain before release closeout. | `a87bca9` | Done |
 | Audit gap: `illu.nvim` smoke did not fully execute the slice-19 manual interaction checklist by itself. | Resolved by the Codex-observed acceptance pass: the smoke remains integration evidence, and the consolidated checklist now records the broader headless/local-runtime acceptance evidence. | Focused ask/status/mapping/version regression, fast, full, docs contract, and `illu.nvim` smoke passed for the acceptance pass. | Manual Acceptance Checklist and this final audit section. | Checklist rows are all marked `[X]` for the Codex-observed pass; no separate human visual pass is claimed. | `23f9831` | Done |
+| Audit gap: user-reported ask-pane focus mappings cleared modified drafts and accidental fresh resets were not recoverable with undo/session state. | `global_maps.lua` and `maps.lua` pass `reset_unmodified`; `ask_session.clear_unmodified_buffer()`, `restore_undo_if_matching()`, and `clear_stale_undo_restore()` snapshot and recover reset state; `ask_pane.undo_edit()` keeps ask-pane `u` undoable while restoring citations/session metadata. | `tests/sidepanes_regression.lua` "ask pane focus mapping preserves modified drafts and clears unmodified drafts with undo"; mapping registration assertion; `tests/ask_pane_mapping_zone_matrix.lua` and `tests/ask_pane_mapping_coverage.lua` include ask-pane undo coverage. | README, CHANGELOG, `doc/sidepanes.md`, `doc/sidepanes.txt`, `docs/release-notes-v0.4.0.md`, and this roadmap. | Slice 7 manual checklist row for modified-draft preservation and undoable fresh reset. | Pending until fix commit exists. | In Progress |
