@@ -53,6 +53,8 @@ but they should be called out clearly in this changelog.
 - Added pane-local mapping help with default `mappings.pane.help = "gh"`,
   `:SidepanesMappings`, `:Sidepanes mappings`, `mappings_help(opts)`, and a
   configurable `gh help` winbar hint.
+- Added an interaction-focused ask-pane manual acceptance checklist for
+  release validation of the real Neovim workflows.
 
 ### Changed
 
