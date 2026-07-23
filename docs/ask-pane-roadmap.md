@@ -142,6 +142,233 @@ Every remaining planned slice must use this protocol. Do not mark a slice
 The audit must be literal and bullet-by-bullet. A slice-level statement such as
 "this area is covered" is not sufficient.
 
+## Manual Acceptance Checklist
+
+Use this consolidated checklist for human-in-Neovim release acceptance.
+The historical manual notes remain under each slice for traceability, but
+this is the editable checklist to mark while testing.
+
+Notation:
+
+- `- [ ] ...` means open.
+- `- [X] ...` means checked and correct.
+- `- [!] ...` means bug found or check this with Codex.
+
+When marking an item, keep the line prefix and add brief notes after the
+sentence when useful, especially the exact key mapping or command used.
+
+### Slice 1. Branch And Worktree Preflight
+
+- [ ] Run `git status --short --branch` in `sidepanes.nvim` and confirm the branch is `feat/ask-pane`.
+- [ ] Confirm all modified files before implementation are roadmap or agent guidance files: `AGENTS.md`, `ROADMAP.md`, and `docs/ask-pane-roadmap.md`.
+- [ ] Open `docs/ask-pane-roadmap.md` and confirm it names target release `v0.4.0` and includes the implementation audit loop.
+
+### Slice 2. Configuration And Validation
+
+- [ ] In Neovim, run `:lua vim.print(require("sidepanes.config").default_setup().ask)` and confirm it prints `ui = "float"`, `auto_append = true`, `duplicate_policy = "skip"`, and `model_picker = "manual"`.
+- [ ] Configure `ask = { ui = "pane", auto_append = false, duplicate_policy = "allow", model_picker = "before_send" }`, run `:lua vim.print(require("sidepanes").get_config().ask)`, and confirm those values are present.
+- [ ] Configure malformed ask values such as `ask = { ui = "popup" }` with validation enabled and confirm setup reports an ask config warning.
+- [ ] Confirm existing ask behavior still opens the floating prompt editor when `ask.ui` is omitted or left as `"float"`.
+
+### Slice 3. Prompt And Citation Helpers
+
+- [ ] Use the existing floating ask workflow with default `ask.ui = "float"` and confirm the generated prompt still starts with `Question:`, followed by `File:`, `Selection:`, `lines start-end`, and a fenced code block.
+- [ ] Add the same file/range twice once the ask pane append UI exists and confirm duplicate policy `"skip"` reports a duplicate instead of adding a second citation.
+- [ ] Add two selections from the same file out of line order and confirm the prompt shows one `File:` block with `Selection:` citations ordered by line number when the block was not manually reshaped.
+- [ ] Manually edit a same-file context block before appending another selection and confirm the new citation is appended at the end of that file block.
+- [ ] Append a selection from another project root and confirm the `File:` line keeps enough root/path context for the agent to identify the source.
+
+### Slice 4. Ask Pane State And Buffer
+
+- [ ] Configure `ask.ui = "pane"`, run `:lua require("sidepanes").show_ask_pane()`, and confirm Sidepanes opens a reusable ask scratch buffer named `Pane Question`.
+- [ ] Confirm the ask buffer starts in a ready state with only a `Question:` section before any selection has been sent.
+- [ ] Run the ask-pane focus command twice and confirm the same buffer is reused instead of creating a second ask draft.
+- [ ] Confirm the ask buffer is Markdown filetype, does not create a swapfile, and is not listed as a normal file-backed project buffer.
+
+### Slice 5. Ask Pane Window Mode
+
+- [ ] Open a Markdown document in Sidepanes, then open the ask pane and confirm it appears in the same permanent side split.
+- [ ] Confirm the ask pane winbar reads like an ask surface and shows the current target/draft state instead of Markdown heading or terminal identity.
+- [ ] Confirm editable Markdown is not concealed in the ask pane.
+- [ ] Open Codex, switch to the ask pane, and confirm later cancellation can restore Codex as the previous pane mode once cancel behavior is implemented.
+
+### Slice 6. Capture, Append, And Explicit Append
+
+- [ ] With `ask.ui = "pane"`, select a range in one file and invoke the usual ask mapping. Confirm the ask pane opens and the prompt contains the selected file, line range, and fenced text.
+- [ ] Open the ask pane before selecting context, type a question under `Question:`, then capture the first selection. Confirm the typed question is preserved above the generated `File:` block.
+- [ ] Select another range from the same file and invoke the usual ask mapping. Confirm the prompt still has one `File:` block and now has two `Selection:` citations.
+- [ ] Select a range from a different file and run `:SidepanesAskAppend`. Confirm a second `File:` block is added.
+- [ ] Repeat the exact same file/range with `duplicate_policy = "skip"` and confirm Sidepanes reports the duplicate and does not add another citation.
+- [ ] Delete the visible citation from the ask draft, repeat the same file/range, and confirm it is added again rather than skipped from stale internal state.
+- [ ] Set `auto_append = false`, create a first ask prompt, then invoke the usual ask mapping on a second range. Confirm the pane focuses without changing the prompt. Run `:SidepanesAskAppend` and confirm the second range is added.
+
+### Slice 7. Ask Pane Mappings
+
+- [ ] Configure global normal `ask_pane = "<leader>pa"` and visual `ask = "<leader>pa"`. Confirm normal `<leader>pa` opens/focuses the ask pane and visual `<leader>pa` captures the selection.
+- [ ] From a Markdown or terminal Sidepanes buffer, press pane-local `ap` and confirm it switches to the ask pane.
+- [ ] With `model_picker = "before_send"`, start an ask draft from another buffer with visual `<leader>pa` and confirm the first capture uses the default target without opening the picker.
+- [ ] With `model_picker = "before_send"`, start an ask draft inside Sidepanes with `aa` and confirm the first capture uses the default target without opening the picker.
+- [ ] After a draft exists, select more lines with visual `<leader>pa` or `aa` and confirm the selection appends without reopening the picker.
+- [ ] In the ask pane, press `M` or `<Tab>` and confirm the target picker opens.
+- [ ] Change `mappings.pane.ask_model_picker` to another key and set `mappings.pane.ask_model_picker_alt = false`; confirm the custom key opens the picker and `<Tab>` no longer does.
+- [ ] In the ask pane, confirm `]f`, `[f`, `]s`, `[s`, and `gf` are available and do not replace plain normal-mode `q`.
+- [ ] From the Markdown pane, press local `fm` and confirm the Markdown heading picker opens without needing `<leader>fm`.
+- [ ] Configure `mappings.pane.ask_send = "qq"`, press `qq` in the ask pane, and confirm an unwritten prompt is kept with a warning. Run `:w`, press `qq` again, and confirm the written prompt is sent.
+- [ ] Configure `mappings.pane.ask_send_alt = "<leader>qq"`, press `<leader>qq` in the ask pane, and confirm it also requires a written prompt instead of cancelling through the global quit mapping.
+- [ ] From a Codex or Claude pane, press a configured `ask_send_alt` such as `<leader>qq` and confirm Sidepanes returns to Markdown instead of closing the pane through a global quit mapping.
+- [ ] Press `<C-CR>` in normal mode and insert mode inside the ask pane and confirm each submits the current prompt.
+
+### Slice 8. Target Picker And Send Flow
+
+- [ ] Create an ask-pane prompt, press `M`, choose a different Codex/Claude preset, and confirm the winbar target changes.
+- [ ] Set `model_picker = "after_open"` and confirm the picker appears after the first captured selection.
+- [ ] Switch away from an active ask draft and back again; confirm the `after_open` picker does not reappear for that same draft.
+- [ ] Set `model_picker = "before_send"`, write and quit the prompt, choose a model, and confirm the prompt is sent to that target.
+- [ ] Run `:w` in the ask pane and confirm the prompt remains open and marked written/draft in the winbar.
+- [ ] Run `:wq` after editing the prompt and confirm Sidepanes switches to the target terminal and the terminal receives the full accumulated prompt.
+
+### Slice 9. Cancel And Restore
+
+- [ ] Open the ask pane from the Markdown viewer, run `:q`, and confirm the question is cancelled while the Sidepanes split returns to Markdown.
+- [ ] Open the ask pane, edit the prompt, run `:w`, then run `:q`; confirm the prompt is sent and the ask pane does not reopen empty.
+- [ ] Open Codex, switch to the ask pane, run `:q!`, and confirm the question is cancelled while the Sidepanes split returns to Codex.
+- [ ] Confirm unwritten `:q` and hard-cancel `:q!` do not close the Sidepanes window as their primary action.
+- [ ] Confirm cancellation restores the previous pane immediately and only then removes the ask buffer behind the scenes.
+- [ ] Confirm plain normal-mode `q` is not mapped to cancel the ask pane.
+
+### Slice 10. Tests
+
+- [ ] In an ask prompt with multiple files and selections, use `]f` and `[f` to move between `File:` blocks.
+- [ ] Use `]s` and `[s` to move between `Selection:` blocks.
+- [ ] Place the cursor inside a generated citation and press `gf`; confirm the referenced file opens outside the Sidepanes split at the cited start line.
+- [ ] Place the cursor on a `File:` heading and press `gf`; confirm it opens the referenced file at the first cited selection line, not line 1 by default.
+
+### Slice 11. Documentation And Local Opt-In
+
+- [ ] Run `:lua vim.print(require("sidepanes").get_config().ask)` from the personal Neovim config and confirm `ui = "pane"`, `auto_append = true`, `duplicate_policy = "skip"`, and `model_picker = "before_send"`.
+- [ ] Run `:verbose nmap <leader>pa` and confirm the normal-mode mapping opens or focuses the ask pane.
+- [ ] Run `:verbose xmap <leader>pa` and confirm the visual mapping still captures or appends a selection for an ask prompt.
+- [ ] Run `:help sidepanes-ask` and confirm the help documents pane mode, written `:q` send behavior, `:q!` cancellation, `:SidepanesAskAppend`, model picker timing, citation navigation, and `gf` source jumps.
+- [ ] Read `docs/release-notes-v0.4.0.md` and confirm it describes the ask pane as a `v0.4.0` feature while keeping `ask.ui = "float"` as the plugin default.
+
+### Slice 12. Verification
+
+- [ ] Start Neovim with the personal config, run `:Sidepanes`, and confirm there are no Sidepanes health warnings beyond optional missing local dependencies.
+- [ ] Open the ask pane with normal `<leader>pa`, append selections with visual `<leader>pa` across at least two files, write and quit, and confirm the target agent receives one accumulated prompt.
+- [ ] Repeat the flow from a Codex pane and a Markdown pane, then cancel with `:q!`; confirm each cancel restores the previous pane state.
+- [ ] Run `:SidepanesAskAppend` with `ask.auto_append = false` in a temporary local config override and confirm explicit append still mutates the ask draft.
+
+### Slice 13. Send Lifecycle Naming Refactor
+
+- [ ] In the ask pane, edit a prompt and press configured `qq`; confirm it cancels without sending because the prompt is not written.
+- [ ] Run `:w`, press `qq`, and confirm the prompt sends.
+- [ ] Edit a prompt and press `<C-CR>`; confirm it writes and sends immediately.
+- [ ] Configure a failing target terminal, submit the prompt, and confirm the draft remains visible with a warning and `send_failed` state.
+
+### Slice 14. Ask Pane Module Split
+
+- [ ] Open/focus the ask pane, append context, navigate citations, write/send, and cancel from both Markdown and Codex after the module move.
+- [ ] Run `:checkhealth sidepanes` and confirm no module-load errors.
+
+### Slice 15. Formal Behavior Matrix
+
+- [ ] Pick at least one row per action type and execute it directly in Neovim.
+- [ ] Confirm actual behavior matches the matrix before considering the slice done.
+- [ ] Suggested rows for the first manual pass: `ask-q-ready`, `ask-qbang-any`, `ask-write-draft`, `ask-write-quit-draft`, `ask-send-shortcut-unwritten`, `ask-send-shortcut-written`, `ask-send-alt-shortcut`, `non-ask-quit-command`, `ask-submit-draft`, `submit-command-no-draft`, and `non-ask-command-line`.
+
+### Slice 16. Mapping And Command Zone Matrix
+
+- [ ] In a normal project buffer, run the visual ask mapping and confirm it captures context.
+- [ ] In the Markdown pane, press `fm`, `ap`, and visual `aa`; confirm each performs the pane-local action.
+- [ ] With a personal/global `<leader>qq -> :q<CR>` mapping, press `<leader>qq` in a Codex pane; confirm it returns to Markdown without closing the Sidepanes window.
+- [ ] In the ask pane, press `M`, `]f`, `[f`, `]s`, `[s`, `gf`, `qq`, and `<C-CR>`; confirm each follows the matrix.
+
+### Slice 17. Ask Target And Picker Status Visibility
+
+- [ ] Create an ask draft and change target with `M`; confirm status output matches the winbar target.
+- [ ] Set `model_picker = "after_open"`, append first context, and confirm status indicates the picker has been shown.
+- [ ] Set `model_picker = "before_send"`, write/send, and confirm the selected target is reflected before the prompt is sent.
+
+### Slice 18. Target Resolver Refactor
+
+- [ ] Start a first visual ask capture with `model_picker = "before_send"` and confirm no picker appears.
+- [ ] Append another selection and confirm the active draft target is reused.
+- [ ] Press `M` in the ask pane and confirm the picker still opens manually.
+- [ ] Write/send with `before_send` and confirm the picker appears only then.
+
+### Slice 19. Interaction-Focused Manual Acceptance Checklist
+
+- [ ] Run the checklist in a real Neovim session with `illu.nvim` loaded.
+- [ ] Mark each workflow pass/fail with the exact mapping or command used.
+- [ ] Create draft from project buffer: setup: Open a normal project file and visually select code.; action: Invoke visual ask from the project buffer.; expected: Ask pane opens with one `File:` block and one `Selection:` block for the selected project file.; mapping/command used: ; result notes:
+- [ ] Create draft from Markdown pane: setup: Open Sidepanes Markdown, focus it, and visually select text in the Markdown pane.; action: Invoke pane-local visual ask.; expected: Ask pane opens from the Markdown pane and includes the Markdown file/range citation.; mapping/command used: ; result notes:
+- [ ] Append same-file context: setup: Keep the ask draft active and select a second range in the same source file.; action: Invoke visual ask append or active visual ask.; expected: The same `File:` block gains another `Selection:` block; exact duplicates are skipped.; mapping/command used: ; result notes:
+- [ ] Append different-file context: setup: Select text in a second file under the same project root.; action: Invoke visual ask append or active visual ask.; expected: The draft gains a second `File:` block and citation counts/status reflect both files.; mapping/command used: ; result notes:
+- [ ] Append cross-root context: setup: Select text from a file outside the current project root.; action: Append that selection to the active ask draft.; expected: The draft includes root context for the cross-root file so the source is unambiguous.; mapping/command used: ; result notes:
+- [ ] Edit prompt, write, send: setup: Edit the ask draft text.; action: Write the buffer, then quit or use a configured quit-lifecycle shortcut.; expected: The prompt sends to the selected target, the ask draft closes, and the previous pane is restored.; mapping/command used: ; result notes:
+- [ ] Edit prompt, cancel: setup: Edit the ask draft text without writing it.; action: Quit without writing or run hard cancel.; expected: The draft is cancelled without sending and the previous pane is restored.; mapping/command used: ; result notes:
+- [ ] Switch target manually: setup: Open an active ask draft with multiple ask-capable targets configured.; action: Press the model picker mapping in the ask pane and choose another target/preset.; expected: The ask winbar/status target changes before sending.; mapping/command used: ; result notes:
+- [ ] Use `before_send` picker: setup: Temporarily set `ask.model_picker = "before_send"` in local config state.; action: Submit a draft.; expected: Picker opens at send time; chosen target receives the prompt.; mapping/command used: ; result notes:
+- [ ] Recover from failed terminal start: setup: Temporarily configure an ask-capable target with a missing command.; action: Submit a draft to that target.; expected: A warning appears, the draft remains visible, and the winbar/status shows `send_failed`.; mapping/command used: ; result notes:
+- [ ] Use mapping help: setup: Focus Markdown, terminal, and ask panes.; action: Press the help mapping in each pane.; expected: Help opens with the current pane mappings first, then global mappings, then relevant commands.; mapping/command used: ; result notes:
+
+### Slice 20. `SidepanesAskStatus`
+
+- [ ] Open an empty ask pane and run `:SidepanesAskStatus`; confirm it reports a ready draft and no citations.
+- [ ] Append two selections from different files and run status; confirm file and citation counts are correct.
+- [ ] Write the prompt and run status; confirm it reports a written draft.
+- [ ] Cancel/send the draft and run status; confirm it reports inactive/no active ask draft.
+
+### Slice 21. `SidepanesVersion`
+
+- [ ] Run `:SidepanesVersion` from the personal config and confirm it prints `0.4.0-dev` or the release version plus the path under `~/.config/nvim/sidepanes.nvim`.
+- [ ] Temporarily load Sidepanes from another runtime path and confirm the command reports that path.
+
+### Slice 22. Interactive Keymap Help
+
+- [ ] In the Markdown pane, confirm the winbar shows `gh help` on the right and pressing `gh` opens mapping help with Markdown-pane mappings first.
+- [ ] In a Codex pane, press `gh`; confirm terminal-pane mappings are shown first and global Sidepanes mappings are shown after them.
+- [ ] In the ask pane, press `gh`; confirm ask-specific mappings such as `M`, `gf`, `]f`, `[f`, `qq`, and `<C-CR>` appear before global mappings.
+- [ ] Resize the Sidepanes pane and press `gh`; confirm the help float stays centered over the Sidepanes pane rather than the full editor.
+- [ ] Move Sidepanes to a future left or bottom placement if that layout exists and confirm the help float still centers over the pane geometry.
+- [ ] Disable the help mapping and confirm the winbar hint disappears.
+
+### Slice 23. Ask Action Policy And Fed-Key Test Discipline
+
+- [ ] With personal `qq -> :q<CR>` and `<leader>qq -> :q<CR>`, press both in the Markdown pane and a Codex pane; confirm Sidepanes returns to Markdown without closing the window.
+- [ ] In the ask pane, press configured `qq` and `<leader>qq` on unwritten and written drafts; confirm the policy outcomes match cancel/send expectations.
+- [ ] In the ask pane, press Ctrl+Enter in a terminal that reports `<C-CR>` and one that reports `<C-J>`; confirm both submit through the same policy path.
+- [ ] Inspect the direct policy tests and confirm each action plan corresponds to a row in the behavior matrix.
+
+### Slice 24. Ask Architecture Boundary Refactor
+
+- [ ] In the ask pane, run `:q`, `:q!`, `:w`, `:wq`, `:x`, configured `qq`, configured `<leader>qq`, `<C-CR>`, and `<C-J>`; confirm outcomes match the behavior matrix.
+- [ ] In Markdown and Codex panes, press personal plain-quit mappings such as `qq` and `<leader>qq`; confirm Sidepanes does not close.
+- [ ] Change target manually with `M`, then submit; confirm target choice survives the refactor.
+- [ ] Use `model_picker = "before_send"` and confirm picker timing is unchanged.
+- [ ] Force a failed terminal open/send and confirm the draft is preserved with the same warning/state behavior as before.
+
+### Slice 25. Ask Session State And Status Snapshot Refactor
+
+- [ ] Open an empty ask pane and confirm the winbar/status-facing state is `ready_empty`.
+- [ ] Append context, edit the question, write, submit, cancel, and failed-send; confirm visible state labels and behavior agree.
+- [ ] Switch from Markdown to ask and from Codex to ask; confirm previous pane restore behavior still works.
+- [ ] Run any existing debug/status helpers and confirm they report the same target, picker, and draft state visible in the UI.
+
+### Slice 26. Ask Test Architecture And Fed-Key Coverage Cleanup
+
+- [ ] For every mapping listed in the behavior-sensitive coverage table, perform the real keypress in Neovim and compare the outcome to the matrix.
+- [ ] Repeat personal `qq` / `<leader>qq` checks in Markdown, Codex, and ask panes.
+- [ ] Repeat `<C-CR>` / `<C-J>` submit checks from normal and insert ask-pane modes.
+- [ ] Run the focused ask test group and confirm failures point to user behavior, not just callback plumbing.
+
+### Final Release Audit
+
+- [ ] Run the slice-19 interaction checklist in real Neovim with `illu.nvim` loaded and the local `sidepanes.nvim` checkout on `runtimepath`.
+- [ ] Confirm `ask.ui = "float"` remains the public default and `ask.ui = "pane"` remains opt-in.
+- [ ] Confirm `:SidepanesVersion`, `:SidepanesAskStatus`, `:SidepanesMappings`, ask submit/write/quit/cancel, target picker, mapping help, and failed-send recovery behave as documented.
+- [ ] Confirm `:help sidepanes` opens and public docs match the release behavior.
+
 ## Goal
 
 Replace or supplement the current floating ask prompt editor with a configurable
