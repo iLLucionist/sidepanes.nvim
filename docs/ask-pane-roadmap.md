@@ -2582,6 +2582,38 @@ Goal: verify `v0.4.0` as a release candidate without adding feature scope.
 - After the last commit, perform at least two consecutive clean non-mutating
   confirmation passes and report them in the final response.
 
+Verification results:
+
+- Focused ask/personal/submit regression passed with 53 selected tests from
+  `dc1c005`.
+- `tests/run_checks.sh fast` passed with 177 regression tests from `dc1c005`.
+- `tests/run_checks.sh full` passed with 177 regression tests and real CLI
+  smoke from `dc1c005`.
+- `ILLU_SIDEPANES_RUNTIME_PATH=/Users/maximl/.config/nvim/sidepanes.nvim
+  /Users/maximl/.config/nvim/illu.nvim/tests/run_sidepanes_checks.sh` passed
+  from `dc1c005`.
+- Release sanity headless check passed: public default `ask.ui = "float"`,
+  version `0.4.0-dev`, local load path, command registration,
+  `ask_status({ notify = false })`, and `:help sidepanes`.
+- `git diff --check` passed.
+- Artifact scan found no `.DS_Store`, `nvim.log`, temporary ShaDa files, banner
+  asset, or generated temporary files after the final check rerun.
+
+Audit findings:
+
+- Pass 1 found older completed rows still used placeholder commit wording
+  instead of exact commit references. Fixed in `5240f97` and recorded in
+  `45c5c16`.
+- Pass 1 found an ignored generated `nvim.log` in the repository root after
+  Neovim checks. Removed it in `a87bca9` and recorded the commit reference in
+  `dc1c005`.
+- Pass 1 found the local `illu.nvim` smoke does not fully execute every row of
+  the slice-19 interaction checklist. It verifies the local runtime path,
+  config opt-in, health, help resolution, personal ask mappings, ask quit
+  lifecycle shortcuts, and non-ask quit guards, but it is not a full manual
+  pass/fail run for cross-root append, before-send picker, failed terminal
+  recovery, and mapping-help pane workflows.
+
 Manual acceptance tests:
 
 - Run the slice-19 interaction checklist in real Neovim with `illu.nvim`
@@ -2601,10 +2633,11 @@ Traceability:
 | Review implementation correctness and architecture boundaries for the full release, especially ask pane lifecycle, terminal/session recovery, command and mapping adapters, status/version/help surfaces, and compatibility shims. | Pending audit pass. | Pending audit pass. | Pending audit pass. | Manual architecture review during release audit. | Pending. | In Progress |
 | Review automated test coverage for behavior, edge cases, fed-key paths, command paths, mapping zones, state transitions, compatibility requirements, docs contracts, health checks, and real CLI smoke. | Pending audit pass. | Pending audit pass. | Pending audit pass. | Review coverage table and manual checklist. | Pending. | In Progress |
 | Run focused ask checks, `tests/run_checks.sh fast`, `tests/run_checks.sh full`, local `illu.nvim` smoke, and `git diff --check`. | Pending verification. | Pending verification. | Pending verification evidence in this roadmap. | Re-run checks locally if desired. | Pending. | In Progress |
-| Run or account for the interaction-focused manual acceptance checklist in a real Neovim session with `illu.nvim`. | Pending manual acceptance accounting. | Not Applicable as an automated test: this bullet is itself the final manual acceptance requirement. | Slice 19 checklist and this final audit section. | Run the slice-19 checklist in real Neovim with `illu.nvim`. | Pending. | In Progress |
+| Run or account for the interaction-focused manual acceptance checklist in a real Neovim session with `illu.nvim`. | The `illu.nvim` smoke accounts for local runtime loading, config opt-in, health/help, personal ask mappings, ask quit-lifecycle shortcuts, and non-ask quit guards, but it does not fully execute every slice-19 checklist row. | Not Applicable as a replacement automated test: this bullet is itself the final manual acceptance requirement; focused fed-key tests and `illu.nvim` smoke cover substantial behavior but not the complete manual checklist. | Slice 19 checklist and this final audit section. | Full real-Neovim pass/fail checklist remains to be run before calling the release manually accepted. | Pending. | Blocked |
 | Re-read README, CHANGELOG, Neovim help docs, Markdown docs, release notes, public ROADMAP, AGENTS.md, and generated helptags/docs artifacts. | Pending audit pass. | Pending docs-contract and artifact checks. | Pending audit pass. | Open `:help sidepanes` and compare public docs to release behavior. | Pending. | In Progress |
 | Verify release-readiness details: version reporting, default compatibility, opt-in ask pane behavior, install/load sanity, repository cleanliness, and no generated assets/logs/artifacts. | Pending audit pass. | Pending version/default/load/status checks. | Pending audit pass. | Confirm release-readiness details in local Neovim and git status. | Pending. | In Progress |
 | If any pass finds a gap, append it here, add a traceability row, fix/test/doc it, commit that coherent unit, and restart from the new HEAD. | This final audit section owns release-audit gaps. | Not Applicable until a gap is found. | This roadmap. | Restart audit loop after every fix. | Pending. | In Progress |
 | After the last commit, perform at least two consecutive clean non-mutating confirmation passes and report them in the final response. | Pending final confirmation. | Pending final confirmation. | Final clean passes intentionally reported in the final response instead of written back here. | Re-run clean confirmation passes from the final HEAD. | Pending. | In Progress |
 | Audit gap: pass 1 found older completed rows still used placeholder commit wording instead of exact commit references. | Replaced slice-22 `this completion-status commit` placeholders with `1a0d867`; replaced slice-26 `verification evidence commit` with `ef1bb09` and `closeout evidence commit` with `e4de0a1`. | `rg` audit for placeholder commit wording; `git diff --check`. | This roadmap. | Re-read affected traceability rows before restarting the audit loop. | `5240f97` | Done |
 | Audit gap: pass 1 found an ignored generated `nvim.log` in the repository root after Neovim checks. | Removed the generated `nvim.log` artifact. | `find . -maxdepth 3 -name nvim.log -print`; `git status --short --untracked-files=all`; `git diff --check`. | This roadmap. | Confirm no generated logs/assets remain before release closeout. | `a87bca9` | Done |
+| Audit gap: `illu.nvim` smoke does not fully execute the slice-19 manual interaction checklist. | Recorded the coverage boundary: `illu.nvim` smoke covers local integration and personal mapping guards, while focused fed-key regressions cover many behavior paths, but the full slice-19 checklist still needs a real manual pass/fail run. | Focused ask regression, fast, full, docs contract, release sanity, and `illu.nvim` smoke passed; Not Applicable as a full replacement for manual acceptance. | Slice 19 checklist and this final audit section. | Run every slice-19 checklist row in real Neovim with `illu.nvim` loaded, recording exact mapping/command and pass/fail. | Pending. | Blocked |
