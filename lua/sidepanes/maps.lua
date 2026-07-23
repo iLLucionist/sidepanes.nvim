@@ -226,6 +226,12 @@ function M.setup(bufnr, deps)
         deps.show_ask_pane({ focus = true })
     end, "Show ask pane", { nowait = true })
 
+    map(bufnr, "n", mappings.help, function()
+        if deps.show_mappings_help then
+            deps.show_mappings_help({ bufnr = bufnr })
+        end
+    end, "Show Sidepanes mapping help", { nowait = true })
+
     if is_ask then
         map(bufnr, "n", mappings.ask_next_file, function()
             deps.ask_jump_header("file", "next")

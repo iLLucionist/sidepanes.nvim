@@ -29,6 +29,7 @@ local global_maps = require("sidepanes.global_maps")
 local health = require("sidepanes.health")
 local heading_picker = require("sidepanes.heading_picker")
 local local_maps = require("sidepanes.maps")
+local mapping_help = require("sidepanes.mapping_help")
 local nvim_tree_integration = require("sidepanes.integrations.nvim_tree")
 local presets = require("sidepanes.presets")
 local switcher = require("sidepanes.switcher")
@@ -2031,6 +2032,7 @@ test("ask mapping zone matrix matches active maps by user location", function()
     assert(global_map("aa", "x").callback, "project visual ask-last map missing")
     assert(global_map("ax", "x").callback, "project visual ask-codex map missing")
     assert(global_map("ac", "x").callback, "project visual ask-claude map missing")
+    assert(vim.fn.maparg("gh", "n", false, true).desc ~= "Show Sidepanes mapping help", "help map should not be global")
 
     pane.open(root .. "/docs/doc.md")
 
@@ -2041,6 +2043,8 @@ test("ask mapping zone matrix matches active maps by user location", function()
     assert(has_map(pane.bufnr, "ac", "x"), "Markdown pane visual ask-claude map missing")
     assert(has_map(pane.bufnr, "\\gg"), "Markdown pane terminal toggle map missing")
     assert(has_map(pane.bufnr, "<C-G>"), "Markdown pane terminal toggle alt map missing")
+    assert(has_nowait_map(pane.bufnr, "gh"), "Markdown pane help map missing")
+    assert(not has_map(pane.bufnr, "H"), "pane-local help mapping should not claim H")
 
     local ctx = pane.open_terminal("codex", "one", { root = root, focus = true })
     local alt_lhs = expanded_leader("<leader>qq")
@@ -2048,6 +2052,7 @@ test("ask mapping zone matrix matches active maps by user location", function()
     assert(has_nowait_map(ctx.bufnr, "ap"), "terminal pane ask-pane map missing")
     assert(has_map(ctx.bufnr, "\\gg"), "terminal pane normal toggle map missing")
     assert(has_map(ctx.bufnr, "<C-G>"), "terminal pane normal toggle alt map missing")
+    assert(has_nowait_map(ctx.bufnr, "gh"), "terminal pane help map missing")
     assert(has_nowait_map(ctx.bufnr, "\\gg", "t"), "terminal pane terminal-mode toggle map missing")
     assert(has_nowait_map(ctx.bufnr, "<C-G>", "t"), "terminal pane terminal-mode toggle alt map missing")
     assert(not has_map(ctx.bufnr, alt_lhs), "terminal pane should not own ask-send-alt/personal quit lhs")
@@ -2059,6 +2064,7 @@ test("ask mapping zone matrix matches active maps by user location", function()
 
     assert(has_map(qbuf, "M"), "ask pane model picker map missing")
     assert(has_map(qbuf, "<Tab>"), "ask pane model picker alt map missing")
+    assert(has_nowait_map(qbuf, "gh"), "ask pane help map missing")
     assert(has_map(qbuf, "<C-CR>", "n"), "ask pane normal submit map missing")
     assert(has_map(qbuf, "<C-CR>", "i"), "ask pane insert submit map missing")
     assert(has_map(qbuf, "qq"), "ask pane send map missing")
@@ -2076,6 +2082,7 @@ test("ask mapping zone matrix matches active maps by user location", function()
     assert(command_table.SidepanesAskStatus, "SidepanesAskStatus command missing")
     assert(command_table.SidepanesSubmitQuestion, "SidepanesSubmitQuestion command missing")
     assert(command_table.SidepanesVersion, "SidepanesVersion command missing")
+    assert(command_table.SidepanesMappings, "SidepanesMappings command missing")
 end)
 
 test("ask behavior-sensitive mapping coverage table matches matrices and tests", function()
@@ -2170,6 +2177,7 @@ test("pane-local mappings are configurable", function()
                 ask_last = "ma",
                 ask_codex = "mx",
                 ask_claude = "mc",
+                help = "g?",
             }
         end,
         pane_root = function()
@@ -2183,6 +2191,9 @@ test("pane-local mappings are configurable", function()
         end,
         show_ask_pane = function(opts)
             calls.ask_pane = opts
+        end,
+        show_mappings_help = function(opts)
+            calls.help = opts
         end,
         send_ipython = function(opts)
             calls.send_ipython = opts
@@ -2214,6 +2225,7 @@ test("pane-local mappings are configurable", function()
     assert(has_map(bufnr, "ma", "x"), "custom ask-last pane map missing")
     assert(has_map(bufnr, "mx", "x"), "custom ask-Codex pane map missing")
     assert(has_map(bufnr, "mc", "x"), "custom ask-Claude pane map missing")
+    assert(has_map(bufnr, "g?"), "custom help pane map missing")
     assert(not has_map(bufnr, "<C-G>"), "disabled toggle-terminal alternate map was installed")
     assert(not has_map(bufnr, "<C-G>", "t"), "disabled terminal-mode toggle-terminal alternate map was installed")
     assert(not has_map(bufnr, "<leader>gi"), "disabled IPython alternate map was installed")
@@ -2237,6 +2249,8 @@ test("pane-local mappings are configurable", function()
     assert(calls.zoom == true, "custom zoom pane map did not call zoom")
     call_map(bufnr, "mp")
     assert(calls.ask_pane.focus == true, "custom ask-pane map did not focus ask pane")
+    call_map(bufnr, "g?")
+    assert(calls.help.bufnr == bufnr, "custom help pane map did not pass current pane buffer")
     call_map(bufnr, "ma", "x")
     assert(calls.ask_last.bufnr == bufnr and calls.ask_last.visual == true, "custom ask-last pane map did not pass visual opts")
     call_map(bufnr, "mx", "x")
@@ -2245,6 +2259,215 @@ test("pane-local mappings are configurable", function()
     assert(calls.ask_current.tool_name == "claude", "custom ask-Claude pane map used wrong tool")
     call_map(bufnr, "mw")
     assert(calls.wrap == true, "wrap toggle key no longer worked beside pane mappings")
+end)
+
+test("mapping help formats active mappings and pane-relative geometry", function()
+    local state = {
+        bufnr = 11,
+        active_mode = "markdown",
+        config = vim.tbl_deep_extend("force", vim.deepcopy(defaults.config), {
+            mappings = {
+                global = {
+                    toggle = "<leader>pp",
+                    ask_pane = "<leader>pa",
+                },
+                pane = {
+                    ask_send = "qq",
+                    ask_send_alt = "<leader>qq",
+                    help = "g?",
+                    ask_model_picker = "M",
+                    ask_source = "gf",
+                    ask_next_file = "]f",
+                    ask_previous_file = "[f",
+                    ask_submit = "<C-CR>",
+                    toggle_terminal_alt = false,
+                },
+            },
+        }),
+        ask_pane = {
+            bufnr = 22,
+        },
+    }
+
+    local markdown_lines = table.concat(mapping_help.lines(state, { bufnr = 11 }), "\n")
+
+    assert(markdown_lines:find("Markdown Pane Mappings", 1, true), "markdown help missed pane heading")
+    assert(markdown_lines:find("`g?` (n): Show mapping help", 1, true), "markdown help missed configured help mapping")
+    assert(not markdown_lines:find("<C%-g>", 1, false), "disabled pane mapping should not be listed")
+    assert(markdown_lines:find("Global Sidepanes Mappings", 1, true), "mapping help missed global section")
+    assert(markdown_lines:find("`<leader>pp` (n): Toggle Sidepanes", 1, true), "mapping help missed global mapping")
+    assert(markdown_lines:find(":Sidepanes mappings", 1, true), "mapping help missed root mappings command")
+
+    local pane_index = markdown_lines:find("Markdown Pane Mappings", 1, true)
+    local global_index = markdown_lines:find("Global Sidepanes Mappings", 1, true)
+    local command_index = markdown_lines:find("Relevant Commands", 1, true)
+
+    assert(pane_index and global_index and pane_index < global_index, "pane mappings were not listed before global mappings")
+    assert(global_index and command_index and global_index < command_index, "commands were not listed after global mappings")
+
+    local terminal_lines = table.concat(mapping_help.lines(state, { kind = "terminal" }), "\n")
+
+    assert(terminal_lines:find("Terminal Pane Mappings", 1, true), "terminal help missed pane heading")
+    assert(terminal_lines:find("`<leader>gg` (n/t): Toggle Markdown/terminal pane", 1, true), "terminal help missed terminal toggle")
+    assert(terminal_lines:find(":Sidepanes tool {tool} %[preset%]"), "terminal help missed terminal command")
+
+    local ask_lines = table.concat(mapping_help.lines(state, { bufnr = 22 }), "\n")
+
+    assert(ask_lines:find("Ask Pane Mappings", 1, true), "ask help missed pane heading")
+    assert(ask_lines:find("`M` (n): Change ask target", 1, true), "ask help missed model picker")
+    assert(ask_lines:find("`gf` (n): Open citation source", 1, true), "ask help missed source mapping")
+    assert(ask_lines:find("`]f` (n): Next cited file", 1, true), "ask help missed next-file mapping")
+    assert(ask_lines:find("`[f` (n): Previous cited file", 1, true), "ask help missed previous-file mapping")
+    assert(ask_lines:find("`qq` (n): Finish ask prompt", 1, true), "ask help missed configured ask_send mapping")
+    assert(ask_lines:find("`<C-CR>` (n/i): Submit ask prompt", 1, true), "ask help missed submit mapping")
+
+    local geometry = mapping_help.float_geometry({ row = 2, col = 100, width = 80, height = 24 }, { width = 200, height = 60 })
+
+    assert(geometry.relative == "editor", "mapping help float should use editor-relative geometry")
+    assert(geometry.width == 72, "mapping help did not size width relative to pane")
+    assert(geometry.height == 20, "mapping help did not size height relative to pane")
+    assert(geometry.row == 4, "mapping help did not center row over pane")
+    assert(geometry.col == 104, "mapping help did not center col over pane")
+
+    local fallback = mapping_help.float_geometry({ row = 0, col = 120, width = 20, height = 6 }, { width = 180, height = 50 })
+
+    assert(fallback.col == 54, "small-pane fallback did not center in editor")
+    assert(fallback.row == 15, "small-pane fallback did not center in editor")
+
+    local left_geometry = mapping_help.float_geometry({ row = 10, col = 0, width = 50, height = 14 }, { width = 180, height = 50 })
+
+    assert(left_geometry.col == 2, "left-side pane geometry did not stay attached to pane column")
+    assert(left_geometry.row == 12, "left-side pane geometry did not stay attached to pane row")
+
+    local bottom_geometry = mapping_help.float_geometry({ row = 36, col = 40, width = 60, height = 10 }, { width = 180, height = 50 })
+
+    assert(bottom_geometry.col == 42, "bottom-style pane geometry did not stay attached to pane column")
+    assert(bottom_geometry.row == 38, "bottom-style pane geometry did not stay attached to pane row")
+end)
+
+test("mapping help opens from the pane-local fed key and follows help config", function()
+    reset_pane()
+
+    local root = root_fixture("mapping-help-fed-key-test")
+
+    write(root .. "/docs/doc.md", {
+        "# Doc",
+        "",
+        "body",
+    })
+    pane.setup({
+        auto_reflow = false,
+        sticky_heading = true,
+        help = {
+            mapping = "g?",
+        },
+    })
+    pane.open(root .. "/docs/doc.md")
+    pane.focus_toggle()
+
+    local winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+    assert(winbar:find("g? help", 1, true), winbar)
+    assert(has_nowait_map(pane.bufnr, "g?"), "configured help mapping missing")
+    assert(pane.config.mappings.pane.help == "g?", "help.mapping did not normalize to pane-local help mapping")
+
+    feed_user_keys("g?")
+    wait_until("mapping help float did not open from fed key", function()
+        return vim.api.nvim_get_current_win() ~= pane.winid
+    end)
+
+    local help_bufnr = vim.api.nvim_get_current_buf()
+    local help_lines = table.concat(vim.api.nvim_buf_get_lines(help_bufnr, 0, -1, false), "\n")
+
+    assert(vim.bo[help_bufnr].filetype == "markdown", "mapping help did not open a Markdown buffer")
+    assert(help_lines:find("Markdown Pane Mappings", 1, true), help_lines)
+    assert(help_lines:find("`g?` (n): Show mapping help", 1, true), help_lines)
+
+    vim.cmd.close()
+
+    reset_pane()
+    pane.setup({
+        auto_reflow = false,
+        sticky_heading = true,
+        mappings = {
+            pane = {
+                help = "gH",
+            },
+        },
+    })
+    pane.open(root .. "/docs/doc.md")
+
+    winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+    assert(winbar:find("gH help", 1, true), winbar)
+    assert(has_nowait_map(pane.bufnr, "gH"), "pane help mapping override was not reused")
+
+    reset_pane()
+    pane.setup({
+        auto_reflow = false,
+        sticky_heading = true,
+        help = {
+            mapping = false,
+        },
+    })
+    pane.open(root .. "/docs/doc.md")
+
+    winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+    assert(not winbar:find("help", 1, true), winbar)
+    assert(mapping_help.winbar_hint(pane.config) == nil, "disabled help mapping still produced a winbar hint")
+
+    reset_pane()
+    pane.setup({
+        auto_reflow = false,
+        sticky_heading = true,
+        help = {
+            winbar = false,
+        },
+    })
+    pane.open(root .. "/docs/doc.md")
+
+    winbar = vim.api.nvim_get_option_value("winbar", { win = pane.winid })
+
+    assert(not winbar:find("gh help", 1, true), winbar)
+    assert(pane.config.mappings.pane.help == "gh", "help.winbar=false should not disable the mapping")
+end)
+
+test("pane-local help mapping can be disabled for a fresh buffer", function()
+    local bufnr = vim.api.nvim_create_buf(false, true)
+    local called = false
+
+    local_maps.setup(bufnr, {
+        ask_current_coding_agent = function() end,
+        ask_last_coding_agent = function() end,
+        markdown_bufnr = function()
+            return bufnr
+        end,
+        open_terminal = function() end,
+        pane_mappings = function()
+            return {
+                help = false,
+            }
+        end,
+        pane_root = function()
+            return "/tmp"
+        end,
+        show_mappings_help = function()
+            called = true
+        end,
+        show_markdown = function() end,
+        show_ask_pane = function() end,
+        send_ipython = function() end,
+        toggle_markdown_terminal = function() end,
+        toggle_zoom = function() end,
+        toggle_wrap = function() end,
+        wrap_toggle_key = function()
+            return false
+        end,
+    })
+
+    assert(not has_map(bufnr, "gh"), "disabled help mapping was installed")
+    assert(called == false, "disabled help mapping callback was called")
 end)
 
 test("legacy pane-local terminal toggle mapping keys remain aliases", function()
@@ -2629,6 +2852,9 @@ test("command registration invokes facade callbacks", function()
         version = function(opts)
             calls.version = opts
         end,
+        mappings_help = function(opts)
+            calls.mappings_help = opts or {}
+        end,
     }, {
         toggle = "SidepanesTestToggle",
         pick = "SidepanesTestPick",
@@ -2651,6 +2877,7 @@ test("command registration invokes facade callbacks", function()
         ask_codex = "SidepanesTestAskCodex",
         ask_claude = "SidepanesTestAskClaude",
         version = "SidepanesTestVersion",
+        mappings = "SidepanesTestMappings",
     })
 
     vim.cmd("SidepanesTestToggle docs/demo.md")
@@ -2714,6 +2941,8 @@ test("command registration invokes facade callbacks", function()
     assert(calls.ask_tool.opts.line1 == 6 and calls.ask_tool.opts.line2 == 7, "ask claude command did not forward range")
     vim.cmd("SidepanesTestVersion")
     assert(calls.version and calls.version.notify == true, "version command did not report version")
+    vim.cmd("SidepanesTestMappings")
+    assert(calls.mappings_help, "mappings command did not open mapping help")
 end)
 
 test("root command dispatches subcommands and completes choices", function()
@@ -2792,6 +3021,9 @@ test("root command dispatches subcommands and completes choices", function()
         end,
         version = function(opts)
             calls.version = opts
+        end,
+        mappings_help = function(opts)
+            calls.mappings_help = opts or {}
         end,
         config = {
             tools = {
@@ -2892,11 +3124,14 @@ test("root command dispatches subcommands and completes choices", function()
     assert(calls.ask_tool.opts.line1 == 6 and calls.ask_tool.opts.line2 == 7, "root ask-claude subcommand did not forward range")
     vim.cmd("SidepanesRootTest version")
     assert(calls.version and calls.version.notify == true, "root version subcommand did not report version")
+    vim.cmd("SidepanesRootTest mappings")
+    assert(calls.mappings_help, "root mappings subcommand did not open mapping help")
 
     local subcommands = vim.fn.getcompletion("SidepanesRootTest co", "cmdline")
     local ask_subcommands = vim.fn.getcompletion("SidepanesRootTest ask", "cmdline")
     local submit_subcommands = vim.fn.getcompletion("SidepanesRootTest submit", "cmdline")
     local version_subcommands = vim.fn.getcompletion("SidepanesRootTest v", "cmdline")
+    local mappings_subcommands = vim.fn.getcompletion("SidepanesRootTest m", "cmdline")
     local width_subcommands = vim.fn.getcompletion("SidepanesRootTest width", "cmdline")
     local tool_names = vim.fn.getcompletion("SidepanesRootTest tool c", "cmdline")
     local codex_presets = vim.fn.getcompletion("SidepanesRootTest codex g", "cmdline")
@@ -2907,6 +3142,7 @@ test("root command dispatches subcommands and completes choices", function()
     assert(vim.tbl_contains(ask_subcommands, "ask-status"), "root completion did not include ask-status")
     assert(vim.tbl_contains(submit_subcommands, "submit-question"), "root completion did not include submit-question")
     assert(vim.tbl_contains(version_subcommands, "version"), "root completion did not include version")
+    assert(vim.tbl_contains(mappings_subcommands, "mappings"), "root completion did not include mappings")
     assert(vim.tbl_contains(width_subcommands, "width-pick"), "root completion did not include width-pick")
     assert(vim.tbl_contains(width_subcommands, "width"), "root completion did not include width")
     local width_args = vim.fn.getcompletion("SidepanesRootTest width n", "cmdline")
@@ -2937,6 +3173,7 @@ test("default command names use Sidepanes prefix", function()
         ask_status = function() end,
         ask = function() end,
         version = function() end,
+        mappings_help = function() end,
     }
 
     commands.setup(api, true)
@@ -2965,6 +3202,7 @@ test("default command names use Sidepanes prefix", function()
         "SidepanesAskCodex",
         "SidepanesAskClaude",
         "SidepanesVersion",
+        "SidepanesMappings",
     }
     local forbidden = {
         "PaneSwitch",
@@ -3378,6 +3616,7 @@ test("canonical default setup normalizes to runtime defaults", function()
     assert(vim.deep_equal(setup.terminal.agent_resume_badge, defaults.config.agent_resume_badge), "default setup resume badge was wrong")
     assert(vim.deep_equal(setup.ask, defaults.config.ask), "default setup ask config was wrong")
     assert(setup.ask.ui == "float", "default setup ask ui was not float")
+    assert(vim.deep_equal(setup.help, defaults.config.help), "default setup help config was wrong")
     assert(setup.validation.enabled == defaults.config.validate, "default setup validation was wrong")
     assert(vim.deep_equal(normalized, defaults.config), "canonical default setup did not round-trip to runtime defaults")
 end)
@@ -3451,6 +3690,11 @@ test("runtime config converts to canonical setup shape", function()
             duplicate_policy = "allow",
             model_picker = "after_open",
         },
+        help = {
+            winbar = false,
+            mapping = "g?",
+            scope = "pane_first",
+        },
         validate = false,
     })
     local setup = config.to_setup(runtime)
@@ -3498,6 +3742,9 @@ test("runtime config converts to canonical setup shape", function()
     assert(setup.ask.auto_append == false, "to_setup lost ask auto_append")
     assert(setup.ask.duplicate_policy == "allow", "to_setup lost ask duplicate policy")
     assert(setup.ask.model_picker == "after_open", "to_setup lost ask model picker")
+    assert(setup.help.winbar == false, "to_setup lost help winbar flag")
+    assert(setup.help.mapping == "g?", "to_setup lost help mapping")
+    assert(setup.help.scope == "pane_first", "to_setup lost help scope")
     assert(setup.validation.enabled == false, "to_setup lost validation flag")
     assert(vim.deep_equal(normalized, runtime), "canonical setup did not round-trip custom runtime config")
 end)
@@ -3787,6 +4034,12 @@ test("setup validation reports malformed config and implied dependency gaps", fu
             model_picker = "always",
             mystery = true,
         },
+        help = {
+            winbar = "yes",
+            mapping = true,
+            scope = "global",
+            mystery = true,
+        },
         agent_auto_resume = "yes",
         agent_resume_infer_from_transcripts = "no",
         agent_resume_use_claude_pid_metadata = "maybe",
@@ -3844,6 +4097,10 @@ test("setup validation reports malformed config and implied dependency gaps", fu
     assert(joined:find("Sidepanes config ask.auto_append must be a boolean.", 1, true), joined)
     assert(joined:find("Sidepanes config ask.duplicate_policy must be 'skip' or 'allow'.", 1, true), joined)
     assert(joined:find("Sidepanes config ask.model_picker must be 'manual', 'after_open', or 'before_send'.", 1, true), joined)
+    assert(joined:find("Unknown Sidepanes help config key: mystery", 1, true), joined)
+    assert(joined:find("Sidepanes config help.winbar must be a boolean.", 1, true), joined)
+    assert(joined:find("Sidepanes config help.mapping must be a lhs string or false.", 1, true), joined)
+    assert(joined:find("Sidepanes config help.scope must be 'pane_first'.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_auto_resume must be a boolean.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_infer_from_transcripts must be a boolean.", 1, true), joined)
     assert(joined:find("Sidepanes config agent_resume_use_claude_pid_metadata must be a boolean.", 1, true), joined)
@@ -3910,6 +4167,27 @@ test("setup validation accepts ask config and rejects malformed ask tables", fun
     end, invalid), "\n")
 
     assert(joined:find("Sidepanes config ask must be a table.", 1, true), joined)
+end)
+
+test("setup validation accepts help config and rejects malformed help tables", function()
+    local valid = validation.diagnostics({
+        help = {
+            winbar = true,
+            mapping = "g?",
+            scope = "pane_first",
+        },
+    })
+
+    assert(#valid == 0, "valid help config produced diagnostics: " .. vim.inspect(valid))
+
+    local invalid = validation.diagnostics({
+        help = true,
+    })
+    local joined = table.concat(vim.tbl_map(function(item)
+        return item.message
+    end, invalid), "\n")
+
+    assert(joined:find("Sidepanes config help must be a table.", 1, true), joined)
 end)
 
 test("setup validation can be disabled", function()

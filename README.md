@@ -401,6 +401,7 @@ them with `mappings.pane`.
 | `send_ipython` | `ll` | Send visual selection to IPython. |
 | `zoom` | `zz` | Toggle zoom. |
 | `ask_pane` | `ap` | Show or focus the ask pane. |
+| `help` | `gh` | Open the mapping help float for the current Sidepanes pane. |
 | `ask_submit` | `<C-CR>` | Submit the active ask pane prompt from normal or insert mode. |
 | `ask_send` | disabled | Run the ask-pane quit lifecycle: cancel unwritten drafts and send written drafts. |
 | `ask_send_alt` | disabled | Alternate ask-pane quit-lifecycle shortcut. |
@@ -426,6 +427,13 @@ In non-ask Sidepanes buffers, personal normal-mode mappings such as
 plain quit command, so they return the pane to Markdown instead of closing it.
 
 Set a mapping entry to `false` to disable it.
+
+Press `gh` in a Sidepanes pane, run `:SidepanesMappings`, or run
+`:Sidepanes mappings` to open a Markdown help float with the active mappings
+for the current pane first, then global Sidepanes mappings, then relevant
+commands. The winbar hint is shown as `gh help` by default. Configure it with
+`help.winbar`, `help.mapping`, or `mappings.pane.help`; set the mapping to
+`false` to disable both the map and hint.
 
 Markdown Reflow mappings are configured separately through
 `sidepanes.markdown_reflow`.
@@ -458,6 +466,7 @@ in the previous window after `<leader>mP` or `:Sidepanes pick`.
 :Sidepanes ask-status
 :Sidepanes submit-question
 :Sidepanes version
+:Sidepanes mappings
 :MarkdownReflow
 ```
 

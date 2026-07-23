@@ -28,6 +28,9 @@ The ask pane is designed for prompt assembly:
   pane mode, and modified/written flags,
 - `:SidepanesVersion`, `:Sidepanes version`, and `version()` report the
   Sidepanes version and plugin load path for support/debugging,
+- pane-local `mappings.pane.help = "gh"`, `:SidepanesMappings`,
+  `:Sidepanes mappings`, and `mappings_help(opts)` open a Markdown help float
+  showing active pane, global, and command mappings,
 - `:SidepanesAskAppend`, `:Sidepanes ask-append`, and `append_to_ask(opts)`
   append explicitly even when auto-append is disabled,
 - prompts group citations by `File:` and allow multiple `Selection:` blocks per
@@ -119,6 +122,17 @@ mappings = {
     ask_source = "gf",
     ask_model_picker = "M",
     ask_model_picker_alt = "<Tab>",
+    help = "gh",
   },
+}
+```
+
+New help config:
+
+```lua
+help = {
+  winbar = true,
+  mapping = "gh",
+  scope = "pane_first",
 }
 ```

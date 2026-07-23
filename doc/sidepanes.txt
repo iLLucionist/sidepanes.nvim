@@ -129,6 +129,7 @@ subcommands:
     :Sidepanes ask-codex [preset]
     :Sidepanes ask-claude [preset]
     :Sidepanes version
+    :Sidepanes mappings
 <
 
 Standalone commands:
@@ -154,10 +155,14 @@ Standalone commands:
     :SidepanesAskCodex [preset]
     :SidepanesAskClaude [preset]
     :SidepanesVersion
+    :SidepanesMappings
 <
 
 Use :SidepanesVersion, :Sidepanes version, or version() to report the
 Sidepanes version and plugin load path for support and debugging.
+
+Use :SidepanesMappings, :Sidepanes mappings, or mappings_help() to open a
+Markdown mapping help float for the current Sidepanes pane.
 
 Width commands accept columns, percentages, fractions, numeric ratios, deltas,
 and aliases:
@@ -224,6 +229,7 @@ Pane-local mappings are installed inside Sidepanes buffers:
     ll               send visual selection to IPython
     zz               toggle pane zoom
     ap               show ask pane
+    gh               show active mappings and relevant commands
     <C-CR>           submit the active ask pane prompt
     ask_send         disabled by default; ask-pane quit-lifecycle shortcut
     ask_send_alt     disabled by default; alternate quit-lifecycle shortcut
@@ -239,6 +245,12 @@ Pane-local mappings are installed inside Sidepanes buffers:
 <
 
 Pane-local `gf` is implemented by `sidepanes.smart_gf`.
+
+The mapping help float lists the current pane's active mappings first, then
+global Sidepanes mappings, then relevant commands. The winbar shows `gh help`
+by default. Configure it with `help.winbar`, `help.mapping`, or
+`mappings.pane.help`; set the mapping to `false` to disable both the map and
+hint.
 
 Markdown reflow is implemented by `sidepanes.markdown_reflow`. Sidepanes uses
 that module path internally so the reflow code can be extracted later without
@@ -326,6 +338,11 @@ runtime config.
         auto_append = true,
         duplicate_policy = "skip",
         model_picker = "manual",
+      },
+      help = {
+        winbar = true,
+        mapping = "gh",
+        scope = "pane_first",
       },
       validation = {
         enabled = true,
@@ -452,6 +469,7 @@ Stable public functions:
     ask_status(opts)
     submit_ask_pane()
     version()
+    mappings_help(opts)
     shutdown_terminals(opts)
 <
 

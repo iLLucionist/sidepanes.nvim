@@ -34,6 +34,7 @@ local default_commands = {
     ask_codex = "SidepanesAskCodex",
     ask_claude = "SidepanesAskClaude",
     version = "SidepanesVersion",
+    mappings = "SidepanesMappings",
 }
 
 local expected_global_mappings = {

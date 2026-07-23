@@ -223,6 +223,25 @@ local function normalize_mapping_aliases(config, expanded)
     alias("toggle_terminal_alt", "toggle_agent_alt")
 end
 
+--- Keep the user-facing help.mapping shortcut aligned with the installed pane-local map.
+local function normalize_help_mapping(config, expanded)
+    local help = type(config.help) == "table" and config.help or nil
+    local expanded_help = type(expanded.help) == "table" and expanded.help or nil
+
+    if not help or not expanded_help or expanded_help.mapping == nil then
+        return
+    end
+
+    config.mappings = type(config.mappings) == "table" and config.mappings or {}
+    config.mappings.pane = type(config.mappings.pane) == "table" and config.mappings.pane or {}
+
+    local expanded_pane = type(expanded.mappings) == "table" and type(expanded.mappings.pane) == "table" and expanded.mappings.pane or nil
+
+    if not expanded_pane or expanded_pane.help == nil then
+        config.mappings.pane.help = expanded_help.mapping
+    end
+end
+
 --- Return a canonical grouped setup table for an already-normalized runtime config.
 function M.to_setup(runtime_config)
     local config = vim.deepcopy(runtime_config or defaults.config)
@@ -281,6 +300,7 @@ function M.to_setup(runtime_config)
             resolver = config.project_root_resolver,
         },
         ask = vim.deepcopy(config.ask),
+        help = vim.deepcopy(config.help),
         validation = {
             enabled = config.validate,
         },
@@ -304,6 +324,7 @@ function M.normalize(base, opts)
     }
 
     normalize_mapping_aliases(result, expanded)
+    normalize_help_mapping(result, expanded)
     remove_disabled_tools(result, opts)
 
     return result, metadata

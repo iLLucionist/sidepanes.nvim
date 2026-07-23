@@ -28,9 +28,12 @@ local known_commands = {
     width_picker = true,
     ask = true,
     ask_append = true,
+    ask_status = true,
     submit_question = true,
     ask_codex = true,
     ask_claude = true,
+    version = true,
+    mappings = true,
 }
 
 local global_mapping_features = {
@@ -279,6 +282,43 @@ local function validate_ask(diagnostics, config)
     end
 end
 
+local function validate_help(diagnostics, config)
+    local help = config.help
+
+    if help == nil then
+        return
+    end
+
+    if type(help) ~= "table" then
+        warn(diagnostics, "Sidepanes config help must be a table.")
+        return
+    end
+
+    local known_keys = {
+        winbar = true,
+        mapping = true,
+        scope = true,
+    }
+
+    for key in pairs(help) do
+        if not known_keys[key] then
+            warn(diagnostics, "Unknown Sidepanes help config key: " .. tostring(key))
+        end
+    end
+
+    if help.winbar ~= nil and type(help.winbar) ~= "boolean" then
+        warn(diagnostics, "Sidepanes config help.winbar must be a boolean.")
+    end
+
+    if help.mapping ~= nil and help.mapping ~= false and type(help.mapping) ~= "string" then
+        warn(diagnostics, "Sidepanes config help.mapping must be a lhs string or false.")
+    end
+
+    if help.scope ~= nil and help.scope ~= "pane_first" then
+        warn(diagnostics, "Sidepanes config help.scope must be 'pane_first'.")
+    end
+end
+
 --- Validate terminal recovery badge config shape.
 local function validate_terminal(diagnostics, config)
     local known_resume_mechanisms = {
@@ -410,6 +450,7 @@ function M.diagnostics(config)
     validate_markdown(diagnostics, config or {})
     validate_project(diagnostics, config or {})
     validate_ask(diagnostics, config or {})
+    validate_help(diagnostics, config or {})
     validate_terminal(diagnostics, config or {})
     validate_tools(diagnostics, config or {})
 

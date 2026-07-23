@@ -30,6 +30,7 @@ local default_names = {
     ask_codex = "SidepanesAskCodex",
     ask_claude = "SidepanesAskClaude",
     version = "SidepanesVersion",
+    mappings = "SidepanesMappings",
 }
 
 local subcommand_names = {
@@ -48,6 +49,7 @@ local subcommand_names = {
     "ipython-clear",
     "ipython-restart",
     "markdown",
+    "mappings",
     "open",
     "pick",
     "switch",
@@ -312,6 +314,8 @@ local function dispatch_root(api, opts)
         api.ask("claude", parts[2], range_opts(opts))
     elseif subcommand == "version" then
         api.version({ notify = true })
+    elseif subcommand == "mappings" then
+        api.mappings_help()
     else
         vim.notify("Unknown Sidepanes subcommand: " .. subcommand, vim.log.levels.WARN)
         show_help()
@@ -441,6 +445,10 @@ function M.setup(api, config)
 
     command(names.version, function()
         api.version({ notify = true })
+    end, {})
+
+    command(names.mappings, function()
+        api.mappings_help()
     end, {})
 end
 

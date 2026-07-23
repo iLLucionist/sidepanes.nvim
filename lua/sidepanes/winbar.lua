@@ -8,6 +8,7 @@ Architecture: Bridges heading.lua formatting with shared pane state; init.lua in
 local heading = require("sidepanes.heading")
 local ask_pane = require("sidepanes.panes.ask")
 local ask_status = require("sidepanes.panes.ask.status")
+local mapping_help = require("sidepanes.mapping_help")
 local util = require("sidepanes.util")
 
 local M = {}
@@ -174,6 +175,16 @@ local function ask_title(state)
     return ask_status.format_title(ask_pane.snapshot(state))
 end
 
+local function with_help_hint(state, label)
+    local hint = mapping_help.winbar_hint(state.config or {})
+
+    if not hint then
+        return "%#WinBar# " .. heading.statusline_escape(label) .. " %*"
+    end
+
+    return "%#WinBar# " .. heading.statusline_escape(label) .. " %= " .. heading.statusline_escape(hint) .. " %*"
+end
+
 --- Refresh the pane winbar for markdown heading or terminal identity.
 function M.update(state)
     if not util.valid_win(state.winid) then
@@ -195,7 +206,7 @@ function M.update(state)
 
         local label = heading.truncate_display(title, max_width)
 
-        vim.api.nvim_set_option_value("winbar", "%#WinBar# " .. heading.statusline_escape(label) .. " %*", { win = state.winid })
+        vim.api.nvim_set_option_value("winbar", with_help_hint(state, label), { win = state.winid })
         return
     end
 
@@ -219,7 +230,7 @@ function M.update(state)
             prefix = "%#" .. resume_badge_group .. "# " .. heading.statusline_escape(text) .. " %#WinBar#"
         end
 
-        vim.api.nvim_set_option_value("winbar", prefix .. "%#WinBar# " .. heading.statusline_escape(label) .. " %*", { win = state.winid })
+        vim.api.nvim_set_option_value("winbar", prefix .. with_help_hint(state, label), { win = state.winid })
         return
     end
 
@@ -249,7 +260,7 @@ function M.update(state)
         prefix = "%#" .. reload_badge_group .. "# " .. heading.statusline_escape(text) .. " %#WinBar#"
     end
 
-    vim.api.nvim_set_option_value("winbar", prefix .. "%#WinBar# " .. heading.statusline_escape(label) .. " %*", { win = state.winid })
+    vim.api.nvim_set_option_value("winbar", prefix .. with_help_hint(state, label), { win = state.winid })
 end
 
 --- Install autocmds that keep the sticky heading current.

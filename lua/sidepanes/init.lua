@@ -23,6 +23,7 @@ local global_maps = require("sidepanes.global_maps")
 local heading = require("sidepanes.heading")
 local heading_picker = require("sidepanes.heading_picker")
 local lifecycle = require("sidepanes.lifecycle")
+local mapping_help = require("sidepanes.mapping_help")
 local maps = require("sidepanes.maps")
 local picker = require("sidepanes.picker")
 local question = require("sidepanes.question")
@@ -278,6 +279,7 @@ setup_pane_maps = function(bufnr)
         pick_headings = M.pick_headings,
         send_ipython = M.send_ipython,
         show_ask_pane = M.show_ask_pane,
+        show_mappings_help = M.mappings_help,
         show_markdown = M.show_markdown,
         toggle_markdown_terminal = M.toggle_markdown_terminal,
         toggle_markdown_agent = M.toggle_markdown_terminal,
@@ -817,6 +819,11 @@ function M.version(opts)
     return info
 end
 
+--- Show interactive Sidepanes mapping help.
+function M.mappings_help(opts)
+    return mapping_help.open(M, opts)
+end
+
 
 -- =============================================================================
 -- DOCUMENT PICKER API
@@ -899,6 +906,7 @@ local public_functions = {
     "ask_current_coding_agent",
     "ask",
     "version",
+    "mappings_help",
     "pick",
     "pick_headings",
 }

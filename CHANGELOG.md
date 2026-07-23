@@ -50,6 +50,9 @@ but they should be called out clearly in this changelog.
   `:Sidepanes ask-status` for concise ask-pane debugging status.
 - Added `version()`, `:SidepanesVersion`, and `:Sidepanes version` for support
   and debugging output that includes the plugin version and load path.
+- Added pane-local mapping help with default `mappings.pane.help = "gh"`,
+  `:SidepanesMappings`, `:Sidepanes mappings`, `mappings_help(opts)`, and a
+  configurable `gh help` winbar hint.
 
 ### Changed
 

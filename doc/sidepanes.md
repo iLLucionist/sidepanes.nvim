@@ -77,6 +77,7 @@ be configured individually with `commands = { ... }`.
 | `:Sidepanes ask-codex [preset]` | Ask Codex directly. |
 | `:Sidepanes ask-claude [preset]` | Ask Claude directly. |
 | `:Sidepanes version` | Report Sidepanes version and load path. |
+| `:Sidepanes mappings` | Open mapping help for the current pane. |
 
 ### Standalone Commands
 
@@ -103,6 +104,7 @@ be configured individually with `commands = { ... }`.
 | `:SidepanesAskCodex [preset]` | Ask Codex directly. |
 | `:SidepanesAskClaude [preset]` | Ask Claude directly. |
 | `:SidepanesVersion` | Report Sidepanes version and load path. |
+| `:SidepanesMappings` | Open mapping help for the current pane. |
 
 `SidepanesAsk*` commands are range-aware, so they work with visual selections
 and explicit ranges.
@@ -113,6 +115,9 @@ shown flag, citation counts, previous pane mode, and modified/written flags.
 
 `:SidepanesVersion`, `:Sidepanes version`, and `version()` report the Sidepanes
 version and plugin load path for support and debugging.
+
+`:SidepanesMappings`, `:Sidepanes mappings`, and `mappings_help(opts)` open a
+Markdown mapping help float for the current pane.
 
 ## Mapping Surface
 
@@ -162,6 +167,7 @@ Sidepanes buffers.
 | `send_ipython` | `ll` | Send visual selection to IPython. |
 | `zoom` | `zz` | Toggle zoom. |
 | `ask_pane` | `ap` | Show or focus the ask pane. |
+| `help` | `gh` | Open the mapping help float for the current Sidepanes pane. |
 | `ask_submit` | `<C-CR>` | Submit the active ask pane prompt from normal or insert mode. |
 | `ask_send` | disabled | Run the ask-pane quit lifecycle: cancel unwritten drafts and send written drafts. |
 | `ask_send_alt` | disabled | Alternate ask-pane quit-lifecycle shortcut. |
@@ -177,6 +183,13 @@ Sidepanes buffers.
 | `ask_claude` | `ac` | Ask Claude from visual selection. |
 
 Set a mapping entry to `false` to disable it.
+
+Press `gh` in a Sidepanes pane, run `:SidepanesMappings`, or run
+`:Sidepanes mappings` to open a Markdown help float with the active mappings
+for the current pane first, then global Sidepanes mappings, then relevant
+commands. The winbar hint is shown as `gh help` by default. Configure it with
+`help.winbar`, `help.mapping`, or `mappings.pane.help`; set the mapping to
+`false` to disable both the map and hint.
 
 ## Configuration
 
@@ -263,6 +276,11 @@ require("sidepanes").setup({
     auto_append = true,
     duplicate_policy = "skip",
     model_picker = "manual",
+  },
+  help = {
+    winbar = true,
+    mapping = "gh",
+    scope = "pane_first",
   },
   validation = {
     enabled = true,
@@ -728,6 +746,7 @@ append_to_ask(opts)
 ask_status(opts)
 submit_ask_pane()
 version()
+mappings_help(opts)
 ask_last_coding_agent(opts)
 ask_current_coding_agent(tool_name, opts)
 shutdown_terminals(opts)

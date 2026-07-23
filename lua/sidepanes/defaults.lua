@@ -69,6 +69,11 @@ M.config = {
         duplicate_policy = "skip",
         model_picker = "manual",
     },
+    help = {
+        winbar = true,
+        mapping = "gh",
+        scope = "pane_first",
+    },
     shutdown_on_exit = true,
     shutdown_timeout_ms = 300,
     validate = true,
@@ -101,6 +106,7 @@ M.config = {
             ask_last = "aa",
             ask_codex = "ax",
             ask_claude = "ac",
+            help = "gh",
         },
     },
     tools = {
