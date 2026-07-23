@@ -38,7 +38,7 @@ remain planned.
 | 16. Mapping And Command Zone Matrix | Done | Source-of-truth mapping/command zone matrix plus fixture, docs-contract checks, runtime mapping regression, corrected non-ask `:q` command-path ownership, and ask-pane quit-lifecycle shortcuts are present. |
 | 17. Ask Target And Picker Status Visibility | Done | Internal ask status/debug formatter exposes target, root, picker, draft, and count facts for the future status command. |
 | 18. Target Resolver Refactor | Done | Target resolution now lives in a pure resolver with traceable active, last-context, default, picker, and before-send decisions plus snapshot-facing target reasons. |
-| 19. Interaction-Focused Manual Acceptance Checklist | Planned | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
+| 19. Interaction-Focused Manual Acceptance Checklist | In Progress | Replace config-print-heavy checks with realistic Neovim interaction workflows. |
 | 20. `SidepanesAskStatus` | Done | `ask_status(opts)`, `:SidepanesAskStatus`, and `:Sidepanes ask-status` report ask draft status for debugging. |
 | 21. `SidepanesVersion` | Done | `version()`, `:SidepanesVersion`, `:Sidepanes version`, and health output report plugin version and load path. |
 | 22. Interactive Keymap Help | Done | Pane-local `gh` mapping help, commands/API, winbar hint, docs, tests, and audit evidence are implemented. |
@@ -1514,7 +1514,7 @@ Verification results:
 
 ### 19. Interaction-Focused Manual Acceptance Checklist
 
-Status: `Planned`
+Status: `In Progress`
 
 User response: yes, do that. Focus on user interaction with Neovim and
 Sidepanes features, not config-printing.
@@ -1544,6 +1544,28 @@ Manual acceptance tests:
 
 Refinement note: this checklist should be short enough that it is realistic to
 run after every ask-pane change.
+
+Traceability:
+
+| Roadmap bullet | Implementation reference | Automated test reference, or explicit reason no automated test applies | Documentation reference, or explicit reason no docs change applies | Manual acceptance test reference | Commit reference | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Add a compact manual checklist grouped by workflow: | Pending. | Pending. | Pending. | Run the checklist in a real Neovim session with `illu.nvim` loaded. | Pending. | In Progress |
+| create draft from project buffer. | Pending. | Pending. | Pending. | Use a project-buffer visual ask mapping or command and inspect the draft. | Pending. | In Progress |
+| create draft from Markdown pane. | Pending. | Pending. | Pending. | Use a Markdown-pane visual ask mapping and inspect the draft. | Pending. | In Progress |
+| append same-file context. | Pending. | Pending. | Pending. | Append a second same-file selection and confirm grouping. | Pending. | In Progress |
+| append different-file context. | Pending. | Pending. | Pending. | Append a different file and confirm a second file block. | Pending. | In Progress |
+| append cross-root context. | Pending. | Pending. | Pending. | Append a selection outside the current root and confirm root context is visible. | Pending. | In Progress |
+| edit prompt, write, send. | Pending. | Pending. | Pending. | Edit the ask prompt, write it, then send. | Pending. | In Progress |
+| edit prompt, cancel. | Pending. | Pending. | Pending. | Edit the ask prompt and cancel without sending. | Pending. | In Progress |
+| switch target manually. | Pending. | Pending. | Pending. | Press `M` or `<Tab>` in the ask pane and confirm the target changes. | Pending. | In Progress |
+| use `before_send` picker. | Pending. | Pending. | Pending. | Configure `ask.model_picker = "before_send"` and confirm picker opens at send time. | Pending. | In Progress |
+| recover from failed terminal start. | Pending. | Pending. | Pending. | Submit to a failing target and confirm the draft remains visible with a warning. | Pending. | In Progress |
+| use mapping help. | Pending. | Pending. | Pending. | Press `gh` in Sidepanes panes and inspect mapping help. | Pending. | In Progress |
+| Keep config-printing checks only where the feature is specifically configuration state. | Pending. | Pending. | Pending. | Confirm the checklist uses interactions rather than `vim.print(require("sidepanes").config)` except for configuration-state cases. | Pending. | In Progress |
+| Re-check implementation, tests, docs, and this roadmap before moving on. | Pending. | Pending. | Pending. | Re-read the checklist, docs, roadmap status/order, AGENTS.md, and `illu.nvim` impact. | Pending. | In Progress |
+| Run the checklist in a real Neovim session with `illu.nvim` loaded. | Pending. | Not Applicable as automated test: this is the manual execution requirement. | Pending. | Run the whole checklist with `illu.nvim`. | Pending. | In Progress |
+| Mark each workflow pass/fail with the exact mapping or command used. | Pending. | Not Applicable as automated test: this is a manual recording requirement. | Pending. | Record pass/fail and the exact key/command per workflow. | Pending. | In Progress |
+| Refinement note: this checklist should be short enough that it is realistic to run after every ask-pane change. | Pending. | Pending. | Pending. | Review checklist length after adding it. | Pending. | In Progress |
 
 ### 20. `SidepanesAskStatus`
 
