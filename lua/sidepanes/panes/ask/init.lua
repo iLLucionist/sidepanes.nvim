@@ -540,6 +540,9 @@ controller_for = function(state, deps, bufnr)
             cancel_draft = function()
                 M.cancel_draft(state, deps, ask.bufnr)
             end,
+            preserve_draft = function()
+                M.preserve_draft(state, deps, ask.bufnr)
+            end,
             open_before_send_picker = function(prompt)
                 open_before_send_picker(state, deps, ask, prompt)
             end,
@@ -594,6 +597,18 @@ local function restore_previous(state, deps, previous)
     end
 
     deps.show_markdown()
+end
+
+--- Hide the current modified ask-pane prompt and restore the previous pane.
+function M.preserve_draft(state, deps, bufnr)
+    local ask = state.ask_pane or {}
+
+    if bufnr and ask.bufnr ~= bufnr then
+        return
+    end
+
+    set_draft_state(state, ask, DRAFT_STATES.draft_modified)
+    restore_previous(state, deps, ask.previous)
 end
 
 --- Cancel the current ask-pane prompt and restore the previous pane mode.

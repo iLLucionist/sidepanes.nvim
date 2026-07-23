@@ -169,7 +169,7 @@ Sidepanes buffers.
 | `ask_pane` | `ap` | Show or focus the ask pane. |
 | `help` | `gh` | Open the mapping help float for the current Sidepanes pane. |
 | `ask_submit` | `<C-CR>` | Submit the active ask pane prompt from normal or insert mode. |
-| `ask_send` | disabled | Run the ask-pane quit lifecycle: cancel unwritten drafts and send written drafts. |
+| `ask_send` | disabled | Run the ask-pane quit lifecycle: cancel empty drafts, preserve modified drafts, and send written drafts. |
 | `ask_send_alt` | disabled | Alternate ask-pane quit-lifecycle shortcut. |
 | `ask_next_file` | `]f` | Jump to next ask prompt `File:` block. |
 | `ask_previous_file` | `[f` | Jump to previous ask prompt `File:` block. |
@@ -635,7 +635,8 @@ from multiple files before sending.
 6. Use `M` or `<Tab>` in the ask pane to change the target model when needed.
 7. Press `<C-CR>`, write and quit, write then quit, or use a configured
    `mappings.pane.ask_send` / `ask_send_alt` after writing, to send.
-8. Quit without writing, or quit with `:q!`, to cancel.
+8. Quit an empty draft to cancel, quit a modified draft to restore the previous
+   pane while keeping the draft, or quit with `:q!` to discard.
 9. Press `u` in the ask pane to undo edits, including an accidental fresh reset
    from reopening an unmodified written draft.
 

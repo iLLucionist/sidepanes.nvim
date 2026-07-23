@@ -43,6 +43,7 @@ return {
     },
     required_results = {
         "cancel",
+        "preserve draft",
         "warn/keep",
         "write",
         "send",
@@ -64,8 +65,8 @@ return {
             action = ":q",
             aliases = { ":quit" },
             zone = "ask pane",
-            state = "draft_modified -> cancelled",
-            results = { "cancel", "restore previous pane" },
+            state = "draft_modified -> draft_modified",
+            results = { "preserve draft", "restore previous pane" },
         },
         {
             id = "ask-q-written",
@@ -128,8 +129,8 @@ return {
             action = "qq",
             aliases = { "mappings.pane.ask_send" },
             zone = "ask pane",
-            state = "ready_empty, draft_modified -> cancelled",
-            results = { "cancel", "restore previous pane" },
+            state = "ready_empty -> cancelled, draft_modified -> draft_modified",
+            results = { "cancel", "preserve draft", "restore previous pane" },
         },
         {
             id = "ask-send-shortcut-written",
@@ -144,8 +145,8 @@ return {
             action = "<leader>qq",
             aliases = { "mappings.pane.ask_send_alt" },
             zone = "ask pane",
-            state = "ready_empty, draft_modified, draft_written, send_failed -> cancelled, sending_terminal, sent, send_failed",
-            results = { "cancel", "restore previous pane", "send", "switch to target terminal", "warn/keep" },
+            state = "ready_empty -> cancelled, draft_modified -> draft_modified, draft_written, send_failed -> sending_terminal, sent, send_failed",
+            results = { "cancel", "preserve draft", "restore previous pane", "send", "switch to target terminal", "warn/keep" },
         },
         {
             id = "non-ask-quit-command",

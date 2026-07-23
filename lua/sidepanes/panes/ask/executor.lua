@@ -36,6 +36,11 @@ function M.run(plan, handlers)
                 handlers.cancel_draft(item)
             end
             return true
+        elseif item.action == ACTIONS.preserve_draft then
+            if handlers.preserve_draft then
+                handlers.preserve_draft(item)
+            end
+            return true
         elseif item.action == ACTIONS.open_before_send_picker then
             if handlers.open_before_send_picker then
                 handlers.open_before_send_picker(item.prompt, item)

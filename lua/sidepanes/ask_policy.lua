@@ -173,7 +173,7 @@ function M.plan(intent, facts)
         if facts.dirty_buffer then
             return {
                 step(M.ACTIONS.mark_draft_modified),
-                step(M.ACTIONS.cancel_draft),
+                step(M.ACTIONS.preserve_draft),
             }
         end
 

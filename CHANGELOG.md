@@ -58,10 +58,11 @@ but they should be called out clearly in this changelog.
 
 ### Changed
 
-- In ask pane mode, command-line `:q` cancels an unwritten draft, `:q` after
-  `:w` sends the written prompt, and `:q!` cancels the current draft while
-  restoring the previous pane state instead of closing the Sidepanes window.
-  `:wq`, `:x`, and `:exit` also send the accumulated prompt.
+- In ask pane mode, command-line `:q` cancels an empty draft, preserves a
+  modified draft while restoring the previous pane, sends after `:w`, and
+  `:q!` cancels the current draft while restoring the previous pane state
+  instead of closing the Sidepanes window. `:wq`, `:x`, and `:exit` also send
+  the accumulated prompt.
 - Ask pane winbar/status state now uses explicit lifecycle labels:
   `ready_empty`, `draft_modified`, `draft_written`, `sending_picker`,
   `sending_terminal`, `send_failed`, `cancelled`, and `sent`.
@@ -85,6 +86,8 @@ but they should be called out clearly in this changelog.
   `u`.
 - Ask-pane mapping help now labels `M` and `<Tab>` as target/model picker
   mappings, so model switching is visible from `gh` while editing a question.
+- Ask-pane `:q` and configured quit-lifecycle mappings now preserve modified
+  drafts and restore the previous pane instead of discarding the draft.
 - In ask pane mode, visual ask mappings such as global `<leader>pa` and
   pane-local `aa` now use the default ask target for the first capture and reuse
   the active draft target when appending more context, instead of reopening the
@@ -92,8 +95,8 @@ but they should be called out clearly in this changelog.
 - Failed ask pane sends now preserve the draft and show a warning when the
   target terminal cannot be opened.
 - Configured ask-pane quit-lifecycle shortcuts such as `qq` and `<leader>qq`
-  now cancel unwritten drafts without warning and send only after the draft has
-  been written.
+  now cancel empty drafts without warning, preserve modified drafts, and send
+  only after the draft has been written.
 - In non-ask Sidepanes buffers, command-line `:q` / `:quit` now returns to
   Markdown, so personal quit mappings like `<leader>qq -> :q<CR>` do not close
   the Sidepanes window or trigger an ask-pane send warning from a Codex or

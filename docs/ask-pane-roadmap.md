@@ -230,8 +230,8 @@ Codex-observed acceptance pass, 2026-07-23:
 - [X] Change `mappings.pane.ask_model_picker` to another key and set `mappings.pane.ask_model_picker_alt = false`; confirm the custom key opens the picker and `<Tab>` no longer does.
 - [X] In the ask pane, confirm `]f`, `[f`, `]s`, `[s`, and `gf` are available and do not replace plain normal-mode `q`.
 - [X] From the Markdown pane, press local `fm` and confirm the Markdown heading picker opens without needing `<leader>fm`.
-- [X] Configure `mappings.pane.ask_send = "qq"`, press `qq` in the ask pane, and confirm an unwritten prompt is kept with a warning. Run `:w`, press `qq` again, and confirm the written prompt is sent.
-- [X] Configure `mappings.pane.ask_send_alt = "<leader>qq"`, press `<leader>qq` in the ask pane, and confirm it also requires a written prompt instead of cancelling through the global quit mapping.
+- [X] Configure `mappings.pane.ask_send = "qq"`, press `qq` on an empty ask draft and confirm it cancels, press `qq` on a modified draft and confirm it preserves/restores, then run `:w`, press `qq` again, and confirm the written prompt is sent.
+- [X] Configure `mappings.pane.ask_send_alt = "<leader>qq"`, press `<leader>qq` in the ask pane, and confirm it follows the same empty/modified/written quit lifecycle instead of cancelling through the global quit mapping.
 - [X] From a Codex or Claude pane, press a configured `ask_send_alt` such as `<leader>qq` and confirm Sidepanes returns to Markdown instead of closing the pane through a global quit mapping.
 - [X] Press `<C-CR>` in normal mode and insert mode inside the ask pane and confirm each submits the current prompt.
 - [X] Edit a written ask-pane draft, press normal `<leader>pa` or pane-local `ap`, and confirm modified text is preserved; write the draft, press the focus mapping again, and confirm the fresh `Question:` reset can be undone with `u`.
@@ -250,7 +250,7 @@ Codex-observed acceptance pass, 2026-07-23:
 - [X] Open the ask pane from the Markdown viewer, run `:q`, and confirm the question is cancelled while the Sidepanes split returns to Markdown.
 - [X] Open the ask pane, edit the prompt, run `:w`, then run `:q`; confirm the prompt is sent and the ask pane does not reopen empty.
 - [X] Open Codex, switch to the ask pane, run `:q!`, and confirm the question is cancelled while the Sidepanes split returns to Codex.
-- [X] Confirm unwritten `:q` and hard-cancel `:q!` do not close the Sidepanes window as their primary action.
+- [X] Confirm empty/modified `:q` and hard-cancel `:q!` do not close the Sidepanes window as their primary action.
 - [X] Confirm cancellation restores the previous pane immediately and only then removes the ask buffer behind the scenes.
 - [X] Confirm plain normal-mode `q` is not mapped to cancel the ask pane.
 
@@ -278,7 +278,7 @@ Codex-observed acceptance pass, 2026-07-23:
 
 ### Slice 13. Send Lifecycle Naming Refactor
 
-- [X] In the ask pane, edit a prompt and press configured `qq`; confirm it cancels without sending because the prompt is not written.
+- [X] In the ask pane, edit a prompt and press configured `qq`; confirm it restores the previous pane without sending and keeps the modified draft for reopening.
 - [X] Run `:w`, press `qq`, and confirm the prompt sends.
 - [X] Edit a prompt and press `<C-CR>`; confirm it writes and sends immediately.
 - [X] Configure a failing target terminal, submit the prompt, and confirm the draft remains visible with a warning and `send_failed` state.
@@ -354,7 +354,7 @@ Codex-observed acceptance pass, 2026-07-23:
 ### Slice 23. Ask Action Policy And Fed-Key Test Discipline
 
 - [X] With personal `qq -> :q<CR>` and `<leader>qq -> :q<CR>`, press both in the Markdown pane and a Codex pane; confirm Sidepanes returns to Markdown without closing the window.
-- [X] In the ask pane, press configured `qq` and `<leader>qq` on unwritten and written drafts; confirm the policy outcomes match cancel/send expectations.
+- [X] In the ask pane, press configured `qq` and `<leader>qq` on empty, modified, and written drafts; confirm the policy outcomes match cancel/preserve/send expectations.
 - [X] In the ask pane, press Ctrl+Enter in a terminal that reports `<C-CR>` and one that reports `<C-J>`; confirm both submit through the same policy path.
 - [X] Inspect the direct policy tests and confirm each action plan corresponds to a row in the behavior matrix.
 
@@ -419,8 +419,10 @@ The public plugin default should remain compatible with current users:
 9. Write and quit, write then quit, use an explicit submit mapping, or use a
    configured ask-pane send mapping after writing to send the prompt to the
    selected agent target.
-10. Quit an unwritten draft with `:q`, or any draft with `:q!`, to cancel and
-   restore the pane mode that was active before the ask pane opened.
+10. Quit an empty draft with `:q` to cancel, quit a modified draft with `:q` to
+   restore the previous pane while keeping the draft, or use `:q!` to discard
+   any draft and restore the pane mode that was active before the ask pane
+   opened.
 
 ## Prompt Shape
 
@@ -614,15 +616,16 @@ ask = {
   that opens the referenced file and moves to the cited line range.
 - Do not add a normal-mode `q` cancel mapping in the ask pane. Neovim users
   already understand buffer/file-like editing, and cancellation should be tied to
-  command-line quit behavior: `:q` cancels before write, `:q` sends after write,
-  and `:q!` cancels.
+  command-line quit behavior: `:q` cancels empty drafts, preserves modified
+  drafts, sends after write, and `:q!` cancels.
 
 ### 8. Cancel, Quit, And Restore
 
 - Intercept `:q`, `:q!`, `:quit`, and `:quit!` while the ask pane buffer is
   active.
-- Treat `:q` / `:quit` as cancellation before a write and send after a write;
-  treat `:q!` / `:quit!` as cancellation.
+- Treat `:q` / `:quit` as cancellation for empty drafts, preservation for
+  modified drafts, and send after a write; treat `:q!` / `:quit!` as
+  cancellation.
 - Do not close the Sidepanes window as the primary action.
 - Restore the pane to the mode that was active before the ask pane opened:
   Markdown returns to Markdown, Codex returns to Codex, Claude returns to Claude,
@@ -665,8 +668,9 @@ ask = {
 - Same-file selections are ordered by line number when the file block is still
   machine-shaped.
 - Cross-root selections are allowed and rendered with enough root/path context.
-- `:q` cancels unwritten drafts, `:q` after `:w` sends, and `:q!` cancels while
-  restoring the previous pane mode without closing the Sidepanes pane.
+- `:q` cancels empty drafts, preserves modified drafts, sends after `:w`, and
+  `:q!` cancels while restoring the previous pane mode without closing the
+  Sidepanes pane.
 - Plain normal-mode `q` is not mapped to cancel the ask pane.
 - Ask-pane-local model picker updates the target entry and winbar.
 - Configured automatic model picker behavior fires before send, after open, or
@@ -900,12 +904,13 @@ Manual acceptance tests:
   not replace plain normal-mode `q`.
 - From the Markdown pane, press local `fm` and confirm the Markdown heading
   picker opens without needing `<leader>fm`.
-- Configure `mappings.pane.ask_send = "qq"`, press `qq` in the ask pane, and
-  confirm an unwritten prompt is kept with a warning. Run `:w`, press `qq`
-  again, and confirm the written prompt is sent.
+- Configure `mappings.pane.ask_send = "qq"`, press `qq` on an empty ask draft
+  and confirm it cancels, press `qq` on a modified draft and confirm it
+  preserves/restores, then run `:w`, press `qq` again, and confirm the written
+  prompt is sent.
 - Configure `mappings.pane.ask_send_alt = "<leader>qq"`, press `<leader>qq` in
-  the ask pane, and confirm it also requires a written prompt instead of
-  cancelling through the global quit mapping.
+  the ask pane, and confirm it follows the same empty/modified/written quit
+  lifecycle instead of cancelling through the global quit mapping.
 - From a Codex or Claude pane, press a configured `ask_send_alt` such as
   `<leader>qq` and confirm Sidepanes returns to Markdown instead of closing the
   pane through a global quit mapping.
@@ -944,7 +949,8 @@ Manual acceptance tests:
 ### 9. Cancel And Restore
 
 - Intercept command-line `:q`, `:q!`, `:quit`, and `:quit!` for ask-pane buffers.
-- Cancel the current question on unwritten `:q` or hard-cancel `:q!`.
+- Cancel an empty question on `:q`, preserve a modified question on `:q`, and
+  hard-cancel any draft with `:q!`.
 - Send the current question on `:q` only when the prompt was already written and
   remains unmodified after that write.
 - Restore the pane to the previous Markdown or terminal state.
@@ -965,8 +971,8 @@ Manual acceptance tests:
   prompt is sent and the ask pane does not reopen empty.
 - Open Codex, switch to the ask pane, run `:q!`, and confirm the question is
   cancelled while the Sidepanes split returns to Codex.
-- Confirm unwritten `:q` and hard-cancel `:q!` do not close the Sidepanes window
-  as their primary action.
+- Confirm empty/modified `:q` and hard-cancel `:q!` do not close the Sidepanes
+  window as their primary action.
 - Confirm cancellation restores the previous pane immediately and only then
   removes the ask buffer behind the scenes.
 - Confirm plain normal-mode `q` is not mapped to cancel the ask pane.
@@ -1074,7 +1080,8 @@ Goal: make the write/send/cancel lifecycle impossible to confuse.
 - Rename or restructure internal actions so their names describe exact
   semantics:
   - `submit_now`: write current buffer contents and send immediately.
-  - `finish_quit`: cancel unwritten drafts and send written, unmodified prompts.
+  - `finish_quit`: cancel empty drafts, preserve modified drafts, and send
+    written, unmodified prompts.
   - `quit_action`: command-line quit dispatcher for `:q`, `:q!`, `:wq`, `:x`,
     `:xit`, and `:exit`.
   - `cancel_draft`: cancel without sending and restore the previous pane.
@@ -1092,8 +1099,8 @@ Goal: make the write/send/cancel lifecycle impossible to confuse.
 - Update tests so each user action asserts both the visible result and the
   internal state transition.
 - Align stale manual acceptance and docs with the corrected quit-style mapping
-  behavior: configured `qq` / `<leader>qq` cancel unwritten drafts and send
-  written drafts.
+  behavior: configured `qq` / `<leader>qq` cancel empty drafts, preserve
+  modified drafts, and send written drafts.
 - Manual acceptance gap: non-ask Sidepanes panes must survive real normal-mode
   personal quit mappings whose RHS is plain `:q<CR>` / `:quit<CR>`, such as
   `qq` or `<leader>qq`; command-line `<CR>` interception alone is not enough
@@ -1105,8 +1112,8 @@ Goal: make the write/send/cancel lifecycle impossible to confuse.
 
 Manual acceptance tests:
 
-- In the ask pane, edit a prompt and press configured `qq`; confirm it cancels
-  without sending because the prompt is not written.
+- In the ask pane, edit a prompt and press configured `qq`; confirm it restores
+  the previous pane without sending and keeps the modified draft for reopening.
 - Run `:w`, press `qq`, and confirm the prompt sends.
 - Edit a prompt and press `<C-CR>`; confirm it writes and sends immediately.
 - Configure a failing target terminal, submit the prompt, and confirm the draft
@@ -1122,7 +1129,7 @@ Traceability table:
 | --- | --- | --- | --- | --- | --- |
 | Rename or restructure internal actions so their names describe exact semantics: | `lua/sidepanes/ask_pane.lua` defines `submit_now`, `finish_quit`, `quit_action`, and `cancel_draft`; `lua/sidepanes/init.lua` calls those exact names from facade methods. | `tests/sidepanes_regression.lua` command-line, send mapping, submit mapping, empty-submit, failed-send, and accumulated-send tests passed in `tests/run_checks.sh full`. | `CHANGELOG.md`, README, Neovim help, Markdown docs, release notes, this roadmap matrix, and `tests/ask_pane_behavior_matrix.lua` describe the explicit lifecycle. | Manual lifecycle checks listed under this slice. | Done |
 | `submit_now`: write current buffer contents and send immediately. | `lua/sidepanes/ask_pane.lua` `M.submit_now`; `lua/sidepanes/init.lua` `submit_ask_pane()` delegates to `submit_now`. | `tests/sidepanes_regression.lua` "ask pane submit mapping sends modified prompt from normal and insert modes" asserts visible send and state history; "ask pane empty ready draft writes then submit cancels without sending" covers ready-empty submit. Full checks passed. | README, `doc/sidepanes.md`, `doc/sidepanes.txt`, release notes, CHANGELOG, and behavior matrix document `<C-CR>` submit. | Press `<C-CR>` from a modified ask pane and confirm write+send. | Done |
-| `finish_quit`: cancel unwritten drafts and send written, unmodified prompts. | `lua/sidepanes/ask_pane.lua` `M.finish_quit`; `ask_send` / `ask_send_alt` callbacks call it; `finish_ask_pane()` delegates to it. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts", "ask pane fed command-line lifecycle covers q w and wq user paths", and fallback `:q` tests assert visible results and states. Full checks passed. | README/help/Markdown docs/release notes/CHANGELOG/roadmap describe `qq` / `<leader>qq` and `:q` quit lifecycle. | Press configured `qq` on unwritten and written drafts. | Done |
+| `finish_quit`: cancel empty drafts, preserve modified drafts, and send written, unmodified prompts. | `lua/sidepanes/ask_pane.lua` `M.finish_quit`; `ask_send` / `ask_send_alt` callbacks call it; `finish_ask_pane()` delegates to it. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle for empty modified and written prompts", "ask pane fed command-line lifecycle covers q w and wq user paths", and fallback `:q` tests assert visible results and states. Full checks passed. | README/help/Markdown docs/release notes/CHANGELOG/roadmap describe `qq` / `<leader>qq` and `:q` quit lifecycle. | Press configured `qq` on empty, modified, and written drafts. | Done |
 | `quit_action`: command-line quit dispatcher for `:q`, `:q!`, `:wq`, `:x`, `:xit`, and `:exit`. | `lua/sidepanes/ask_pane.lua` `quit_action()` dispatches to `finish_quit`, `cancel_draft`, or `submit_now`; command-line `<CR>` and fallback `CmdlineLeave` both use it. | `tests/sidepanes_regression.lua` "ask pane command-line mapping cancels q and sends wq through internal callbacks", "direct ask pane command-line fallback cancels without missing pane deps", and "ask pane typed q bang cancels without closing the side pane". Full checks passed. | Behavior matrix and public docs list command aliases and quit/write semantics. | Manually run each listed command in the ask pane. | Done |
 | `cancel_draft`: cancel without sending and restore the previous pane. | `lua/sidepanes/ask_pane.lua` `M.cancel_draft` sets `cancelled`, restores previous pane, and resets the draft. | `tests/sidepanes_regression.lua` cancel-restore, all-terminal cancel, typed `:q!`, direct fallback `:q`, and send-mapping cancellation tests assert visible restore and `cancelled`. Full checks passed. | Public docs and release notes document cancellation restoring the previous pane; behavior matrix uses `cancelled`. | Cancel from Markdown and terminal origins and confirm previous pane restore. | Done |
 | Capture explicit ask draft states instead of deriving everything from `modified` plus `written_prompt`: | `lua/sidepanes/ask_pane.lua` `DRAFT_STATES`, `M.DRAFT_STATES`, `set_draft_state`, `ask_pane_last_state`, and `ask_pane_state_history`; `lua/sidepanes/winbar.lua` reads `ask.draft_state`. | State-history assertions added across open, write, cancel, submit, send, picker, and failed-send regression tests. Full checks passed. | README/help/Markdown docs/release notes/CHANGELOG/roadmap list explicit state labels. | Manual status/winbar checks for each state where visible. | Done |
@@ -1136,11 +1143,11 @@ Traceability table:
 | `sent`: prompt was sent and state was cleared. | `send_prompt()` sets `sent` before `reset_session()` on successful terminal send. | Regression send paths assert `sent` as last state after written `qq`, `<leader>qq`, `<C-CR>`, and before-send picker. Full checks passed. | README/help/Markdown docs/release notes/CHANGELOG/roadmap list `sent`. | Send with `:w` then `qq`, `:wq`, or `<C-CR>`. | Done |
 | Update winbar/status output to use the explicit state labels where useful. | `lua/sidepanes/winbar.lua` `ask_title()` uses `ask.draft_state`; runtime updates call `deps.update_sticky_heading()`. | `tests/sidepanes_regression.lua` ready-empty winbar assertion; send/failure state tests cover state source. Full checks passed. | README/help/Markdown docs/release notes/CHANGELOG/roadmap list winbar labels. | Inspect ask pane winbar/status while moving through draft states. | Done |
 | Update tests so each user action asserts both the visible result and the internal state transition. | Regression helpers `has_state` / `assert_state_history_contains`; lifecycle tests assert visible send/cancel/preserve plus state histories. | `tests/run_checks.sh full` passed with 153 regression tests plus docs contract, audit, health, and real CLI smoke. | Behavior matrix fixture and roadmap align with explicit state histories. | Manual checks mirror automated state-transition rows. | Done |
-| Align stale manual acceptance and docs with the corrected quit-style mapping behavior: configured `qq` / `<leader>qq` cancel unwritten drafts and send written drafts. | `ask_send` / `ask_send_alt` map to `finish_quit`; non-ask command-path behavior remains separate. | `tests/sidepanes_regression.lua` covers unwritten/written `qq` and `<leader>qq`; `illu.nvim` smoke passed for local integration. Full checks passed. | README, help docs, Markdown docs, release notes, CHANGELOG, behavior matrix, zone matrix, and this roadmap describe quit-lifecycle behavior. | Press configured `qq` / `<leader>qq` on unwritten and written drafts. | Done |
+| Align stale manual acceptance and docs with the corrected quit-style mapping behavior: configured `qq` / `<leader>qq` cancel empty drafts, preserve modified drafts, and send written drafts. | `ask_send` / `ask_send_alt` map to `finish_quit`; non-ask command-path behavior remains separate. | `tests/sidepanes_regression.lua` covers empty/modified/written `qq` and `<leader>qq`; `illu.nvim` smoke passed for local integration. Full checks passed. | README, help docs, Markdown docs, release notes, CHANGELOG, behavior matrix, zone matrix, and this roadmap describe quit-lifecycle behavior. | Press configured `qq` / `<leader>qq` on empty, modified, and written drafts. | Done |
 | Manual acceptance gap: non-ask Sidepanes panes must survive real normal-mode personal quit mappings whose RHS is plain `:q<CR>` / `:quit<CR>`, such as `qq` or `<leader>qq`; command-line `<CR>` interception alone is not enough for non-recursive normal mappings. | `lua/sidepanes/maps.lua` installs narrow non-ask pane-local guards only for configured ask-send lhs values whose existing global normal-mode RHS is plain quit. | `tests/sidepanes_regression.lua` "personal normal quit mappings do not close markdown or terminal side panes" feeds real `qq` and `<leader>qq` mappings; `tests/run_checks.sh full` and `illu.nvim` smoke passed. | README, Neovim help, Markdown docs, release notes, CHANGELOG, and this roadmap describe the plain-quit guard. | Press real personal `qq -> :q<CR>` and `<leader>qq -> :q<CR>` mappings in Markdown and terminal panes; confirm the Sidepanes window remains open. | Done |
 | Manual acceptance gap: default ask submit must work for terminals that report Ctrl+Enter as `<C-J>`, and tests must feed the actual mapping instead of only calling the registered callback. | `lua/sidepanes/ask_pane.lua` maps `<C-J>` in normal and insert ask-pane modes when `ask_submit` is the default `<C-CR>`. | `tests/sidepanes_regression.lua` "ask pane submit mapping sends modified prompt from normal and insert modes" feeds `<C-J>` and asserts send/state transitions; `tests/run_checks.sh full` passed. | README, Neovim help, Markdown docs, release notes, CHANGELOG, and this roadmap document the `<C-J>` fallback. | Press Ctrl+Enter in the ask pane, and if the terminal reports it as `<C-J>`, confirm it still submits. | Done |
 | Re-check implementation, tests, docs, and this roadmap before moving on. | Repeated audits found and fixed stale facade aliases, stale roadmap matrix state names, stale completed-trace wording, and remaining-order status. | `tests/run_checks.sh fast`, `tests/run_checks.sh full`, `illu.nvim` smoke, and `git diff --check` passed; final audit found no new gaps. | README, CHANGELOG, Neovim help, Markdown docs, release notes, roadmap matrix/status, and AGENTS.md reviewed; no AGENTS.md change needed. | Manual acceptance rows remain listed under this slice. | Done |
-| In the ask pane, edit a prompt and press configured `qq`; confirm it cancels without sending because the prompt is not written. | `finish_quit` cancels modified buffers through `cancel_draft`. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" asserts no send, no warning, `cancelled`. Full checks passed. | This slice manual acceptance section plus public quit-lifecycle docs. | Perform this exact workflow in Neovim. | Done |
+| In the ask pane, edit a prompt and press configured `qq`; confirm it restores the previous pane without sending and keeps the modified draft for reopening. | `finish_quit` preserves modified buffers through `preserve_draft`. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle for empty modified and written prompts" asserts no send, no warning, preserved buffer/text, and `draft_modified`. Full checks passed. | This slice manual acceptance section plus public quit-lifecycle docs. | Perform this exact workflow in Neovim. | Done |
 | Run `:w`, press `qq`, and confirm the prompt sends. | `write_draft` records `draft_written`; `finish_quit` sends written unmodified prompt. | Same regression test asserts written `qq` send and `sent` state. Full checks passed. | This slice manual acceptance section plus public quit-lifecycle docs. | Perform this exact workflow in Neovim. | Done |
 | Edit a prompt and press `<C-CR>`; confirm it writes and sends immediately. | `submit_now` writes then calls `finish_quit`. | `tests/sidepanes_regression.lua` "ask pane submit mapping sends modified prompt from normal and insert modes" asserts normal/insert send and `sent`. Full checks passed. | This slice manual acceptance section plus public submit docs. | Perform this exact workflow in Neovim. | Done |
 | Configure a failing target terminal, submit the prompt, and confirm the draft remains visible with a warning and `send_failed` state. | `send_prompt()` sets `send_failed`, leaves the ask buffer active, and updates winbar. | `tests/sidepanes_regression.lua` "pane-mode ask preserves prompt when target terminal fails to open" asserts warning, preserved draft, ask mode, and `send_failed`. Full checks passed. | This slice manual acceptance section plus `send_failed` docs. | Perform this exact workflow in Neovim. | Done |
@@ -1354,7 +1361,7 @@ Scope rules:
 | Row ID | User action | Aliases | Pane zone | Draft state | Expected result | Existing automated coverage |
 | --- | --- | --- | --- | --- | --- | --- |
 | `ask-q-ready` | `:q` | `:quit` | ask pane | `ready_empty -> cancelled` | Cancel empty draft and restore previous pane. | `tests/sidepanes_regression.lua` "direct ask pane command-line fallback cancels without missing pane deps" |
-| `ask-q-modified` | `:q` | `:quit` | ask pane | `draft_modified -> cancelled` | Cancel unwritten draft and restore previous pane. | `tests/sidepanes_regression.lua` "pane-mode ask cancel restores previous markdown and terminal modes" |
+| `ask-q-modified` | `:q` | `:quit` | ask pane | `draft_modified -> draft_modified` | Restore previous pane and keep the modified draft for later. | `tests/sidepanes_regression.lua` "ask pane fed command-line lifecycle covers q w and wq user paths" |
 | `ask-q-written` | `:q` | `:quit` | ask pane | `draft_written -> sending_terminal -> sent` | Send written prompt, switch to target terminal, and clear ask state. | `tests/sidepanes_regression.lua` "ask pane fed command-line lifecycle covers q w and wq user paths" |
 | `ask-q-failed-send` | `:q` | `:quit` | ask pane | `send_failed -> sending_terminal` or `send_failed` | Retry the preserved written prompt; if the target still fails, warn and keep the draft. | `tests/sidepanes_regression.lua` "pane-mode ask preserves prompt when target terminal fails to open" plus written send/finish tests |
 | `ask-qbang-any` | `:q!` | `:quit!` | ask pane | `ready_empty`, `draft_modified`, `draft_written`, `send_failed -> cancelled` | Cancel draft and restore previous pane without sending. | `tests/sidepanes_regression.lua` "ask pane typed q bang cancels without closing the side pane" |
@@ -1362,9 +1369,9 @@ Scope rules:
 | `ask-write-draft` | `:w` | none | ask pane | `draft_modified`, `draft_written`, `send_failed -> draft_written` | Cache current prompt, mark buffer unmodified, stay in ask pane, and update winbar. | `tests/sidepanes_regression.lua` "ask pane fed command-line lifecycle covers q w and wq user paths" and ask-pane send mapping tests |
 | `ask-write-quit-ready` | `:wq` | `:wq!`, `:x`, `:xit`, `:exit` | ask pane | `ready_empty -> draft_written -> cancelled` | Write the empty draft, then cancel and restore previous pane because there is no prompt body to send. | `tests/sidepanes_regression.lua` "ask pane empty ready draft writes then submit cancels without sending" |
 | `ask-write-quit-draft` | `:wq` | `:wq!`, `:x`, `:xit`, `:exit` | ask pane | `draft_modified`, `draft_written`, `send_failed -> draft_written`, `sending_picker`, `sending_terminal`, `sent`, `send_failed` | Write current prompt and send; on success switch to target terminal and clear ask state; on target failure warn and keep draft. | `tests/sidepanes_regression.lua` "ask pane command-line mapping cancels q and sends wq through internal callbacks", "ask pane fed command-line lifecycle covers q w and wq user paths", and "pane-mode ask write then quit sends accumulated prompt" |
-| `ask-send-shortcut-unwritten` | `qq` | `mappings.pane.ask_send` | ask pane | `ready_empty`, `draft_modified -> cancelled` | Follow the quit lifecycle: cancel the unwritten draft and restore the previous pane. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" |
-| `ask-send-shortcut-written` | `qq` | `mappings.pane.ask_send` | ask pane | `draft_written`, `send_failed -> sending_terminal`, `sent`, `send_failed` | Send written prompt; on success switch to target terminal and clear ask state; on target failure warn and keep draft. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" |
-| `ask-send-alt-shortcut` | `<leader>qq` | `mappings.pane.ask_send_alt` | ask pane | `ready_empty`, `draft_modified`, `draft_written`, `send_failed -> cancelled`, `sending_terminal`, `sent`, `send_failed` | Same as `qq`: cancel unwritten drafts and send written drafts. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" |
+| `ask-send-shortcut-unwritten` | `qq` | `mappings.pane.ask_send` | ask pane | `ready_empty -> cancelled`, `draft_modified -> draft_modified` | Follow the quit lifecycle: cancel an empty draft, or restore previous pane and keep a modified draft. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle for empty modified and written prompts" |
+| `ask-send-shortcut-written` | `qq` | `mappings.pane.ask_send` | ask pane | `draft_written`, `send_failed -> sending_terminal`, `sent`, `send_failed` | Send written prompt; on success switch to target terminal and clear ask state; on target failure warn and keep draft. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle for empty modified and written prompts" |
+| `ask-send-alt-shortcut` | `<leader>qq` | `mappings.pane.ask_send_alt` | ask pane | `ready_empty -> cancelled`, `draft_modified -> draft_modified`, `draft_written`, `send_failed -> sending_terminal`, `sent`, `send_failed` | Same as `qq`: cancel empty drafts, preserve modified drafts, and send written drafts. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle for empty modified and written prompts" |
 | `non-ask-quit-command` | `:q` | `:quit` | Markdown pane, terminal pane | not ask draft state | Show Markdown instead of closing the Sidepanes pane; personal plain-quit mappings such as `<leader>qq -> :q<CR>` are guarded so they behave the same. | `tests/sidepanes_regression.lua` "personal quit mapping in terminal pane follows q command path with plain quit guard" and "personal normal quit mappings do not close markdown or terminal side panes" |
 | `ask-submit-ready` | `<C-CR>` | `mappings.pane.ask_submit` | ask pane | `ready_empty -> draft_written -> cancelled` | Write the empty draft, then cancel and restore previous pane because there is no prompt body to send. | `tests/sidepanes_regression.lua` "ask pane empty ready draft writes then submit cancels without sending" |
 | `ask-submit-draft` | `<C-CR>` | `mappings.pane.ask_submit` | ask pane | `draft_modified`, `draft_written`, `send_failed -> draft_written`, `sending_terminal`, `sent`, `send_failed` | Write current prompt and send; on success switch to target terminal and clear ask state; on target failure warn and keep draft. | `tests/sidepanes_regression.lua` "ask pane submit mapping sends modified prompt from normal and insert modes" |
@@ -1463,8 +1470,8 @@ Scope rules:
   the pane; visual ask mappings capture the selected range.
 - Markdown, terminal, and ask-pane mappings are buffer-local Sidepanes mappings.
 - Ask-pane `ask_send` and `ask_send_alt` are disabled by default. When enabled,
-  they follow the ask-pane quit lifecycle: cancel an unwritten draft and send a
-  written draft.
+  they follow the ask-pane quit lifecycle: cancel an empty draft, preserve a
+  modified draft, and send a written draft.
 - In non-ask Sidepanes buffers, `:q` / `:quit` returns to Markdown. This is the
   command path used by collision-prone personal/global quit mappings such as a
   user-defined `<leader>qq -> :q<CR>`. Sidepanes does not install non-ask
@@ -1485,7 +1492,7 @@ Scope rules:
 | `terminal-pane-terminal-mode-toggles` | terminal pane | terminal | `toggle_terminal`, `toggle_terminal_alt` | `<leader>gg`, `<C-g>` | Toggle safely while terminal-input mode is active. | `tests/sidepanes_regression.lua` "pane-local slot maps exist on markdown and terminal panes" and zone matrix regression |
 | `terminal-pane-quit-command` | terminal pane | command/normal | `:q`, `:quit`, guarded plain-quit mappings | command path and guarded personal mappings such as `<leader>qq -> :q<CR>` | Show Markdown instead of closing the Sidepanes pane or triggering ask-pane send behavior. | `tests/sidepanes_regression.lua` "personal quit mapping in terminal pane follows q command path with plain quit guard" and "personal normal quit mappings do not close markdown or terminal side panes" |
 | `ask-pane-target-picker` | ask pane | normal | `ask_model_picker`, `ask_model_picker_alt`, `help` | `M`, `<Tab>`, `gh` | Open ask target/model picker or show mapping help. | `tests/sidepanes_regression.lua` "ask pane target picker mapping updates target and winbar" and zone matrix regression |
-| `ask-pane-submit-and-send` | ask pane | normal/insert | `ask_submit`, `ask_send`, `ask_send_alt` | `<C-CR>`, disabled, disabled | Submit current prompt, or run the quit lifecycle for configured quit-style mappings. | `tests/sidepanes_regression.lua` ask-pane submit tests and "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" |
+| `ask-pane-submit-and-send` | ask pane | normal/insert | `ask_submit`, `ask_send`, `ask_send_alt` | `<C-CR>`, disabled, disabled | Submit current prompt, or run the quit lifecycle for configured quit-style mappings. | `tests/sidepanes_regression.lua` ask-pane submit tests and "ask pane send mappings follow quit lifecycle for empty modified and written prompts" |
 | `ask-pane-command-line` | ask pane | command | `:q`, `:q!`, `:w`, `:wq`, `:x`, `:exit` | command-line path | Write, cancel, or submit through ask-pane lifecycle. | `tests/sidepanes_regression.lua` "ask pane fed command-line lifecycle covers q w and wq user paths" and command-line adapter tests |
 | `ask-pane-context-navigation` | ask pane | normal | `ask_next_file`, `ask_previous_file`, `ask_next_selection`, `ask_previous_selection`, `ask_source` | `]f`, `[f`, `]s`, `[s`, `gf` | Move through citations or jump to cited source. | `tests/sidepanes_regression.lua` "ask pane navigation mappings move between context headers and source jump opens citation" |
 | `ask-pane-undo` | ask pane | normal | native undo | `u` | Undo ask-pane edits and restore reset draft session state when possible. | `tests/sidepanes_regression.lua` "ask session refreshes draft state after undo through adapter facts" and "ask pane focus mapping preserves modified drafts and clears unmodified drafts with undo" |
@@ -1517,7 +1524,7 @@ Traceability table:
 | ask pane. | Matrix rows `ask-pane-target-picker`, `ask-pane-submit-and-send`, and `ask-pane-context-navigation`; fixture required zone `ask pane`. | Zone matrix regression checks `M`, `<Tab>`, `<C-CR>`, `qq`, `<leader>qq`, `]f`, `[f`, `]s`, `[s`, and `gf`; existing behavior tests cover callbacks. | This roadmap matrix. | Manual check: press the listed ask-pane mappings and compare to matrix. | Done |
 | Include global mappings, pane-local mappings, visual mappings, and commands: | Mapping matrix rows cover global, pane-local, visual, and command modes; fixture `required_mappings` and `required_commands`. | Docs contract checks fixture vocabulary and row IDs; zone matrix regression checks active installed maps and registered commands. | This roadmap matrix and `CHANGELOG.md` Unreleased Added entry. | Manual checks listed under this slice cover global, pane-local, visual, and command paths. | Done |
 | `ask_pane`, `ask`, `ask_last`, `ask_codex`, `ask_claude`. | Matrix rows `project-global-*`, `markdown-pane-*`, and `terminal-pane-ask-and-toggles`; fixture `required_mappings`. | Zone matrix regression and global/pane-local mapping tests cover these mappings. | This roadmap matrix. | Manual project and Markdown visual ask checks. | Done |
-| `ask_submit`, `ask_send`, `ask_send_alt`. | Matrix row `ask-pane-submit-and-send`; fixture `required_mappings`. | Zone matrix regression checks ask-pane send maps and absence of non-ask `ask_send_alt` collision shims; existing ask-pane send/submit tests cover behavior, including unwritten `qq` / `<leader>qq` cancellation. Focused regression passed with 153 tests. | This roadmap matrix. | Manual ask-pane `qq` / `<leader>qq` / `<C-CR>` checks. | Done |
+| `ask_submit`, `ask_send`, `ask_send_alt`. | Matrix row `ask-pane-submit-and-send`; fixture `required_mappings`. | Zone matrix regression checks ask-pane send maps and absence of non-ask `ask_send_alt` collision shims; existing ask-pane send/submit tests cover behavior, including empty `qq` / `<leader>qq` cancellation and modified `qq` / `<leader>qq` preservation. Focused regression passed with 153 tests. | This roadmap matrix. | Manual ask-pane `qq` / `<leader>qq` / `<C-CR>` checks. | Done |
 | `ask_model_picker`, `ask_model_picker_alt`. | Matrix row `ask-pane-target-picker`; fixture `required_mappings`. | Zone matrix regression checks `M` and `<Tab>`; existing target picker tests cover behavior and configurability. | This roadmap matrix. | Manual ask-pane `M` check plus optional `<Tab>`. | Done |
 | `ask_next_file`, `ask_previous_file`, `ask_next_selection`, `ask_previous_selection`, `ask_source`. | Matrix row `ask-pane-context-navigation`; fixture `required_mappings`. | Zone matrix regression checks mapping presence; existing navigation/source jump test covers behavior. | This roadmap matrix. | Manual ask-pane `]f`, `[f`, `]s`, `[s`, `gf` checks. | Done |
 | Markdown heading picker `headings`. | Matrix row `markdown-pane-heading-and-ask`; fixture `required_mappings`. | Zone matrix regression checks `fm`; existing configurable pane mapping and heading picker tests cover behavior. | This roadmap matrix. | Manual Markdown-pane `fm` check. | Done |
@@ -1525,12 +1532,12 @@ Traceability table:
 | `SidepanesAsk`, `SidepanesAskAppend`, `SidepanesSubmitQuestion`, `SidepanesAskStatus`, and `SidepanesVersion` once implemented. | Matrix row `ask-zone-commands`; fixture required commands include `SidepanesAskStatus` and `SidepanesVersion`, with no planned command placeholders remaining. | Zone matrix regression verifies current commands are registered; docs contract verifies the command row remains documented. | This roadmap matrix. | Manual command checks for implemented commands, including `:SidepanesVersion`. | Done |
 | Explicitly test collision-prone mappings such as `<leader>qq` against personal global mappings that expand to `:q<CR>`; direct command-line `:q` uses the command path, while non-recursive normal mappings with plain quit RHS are guarded pane-locally in non-ask panes. | `lua/sidepanes/maps.lua` installs command-line `:q` handling plus narrow plain-quit normal-map guards for configured ask-send lhs values; `lua/sidepanes/ask_pane.lua` mirrors the non-ask command-line branch while an ask draft owns command-line `<CR>`. | `tests/sidepanes_regression.lua` "personal quit mapping in terminal pane follows q command path with plain quit guard" and "personal normal quit mappings do not close markdown or terminal side panes" cover command-line and real fed-key paths. Full checks and `illu.nvim` smoke passed. | README, Neovim help, Markdown docs, release notes, CHANGELOG, and this roadmap document command-path behavior and narrow plain-quit guards. | Manual Codex-pane personal `<leader>qq -> :q<CR>` check. | Done |
 | Ensure Sidepanes owns the non-ask Sidepanes-buffer `:q` / `:quit` command path by returning to Markdown, so personal quit mappings behave consistently in terminal and Markdown pane buffers even while an active ask draft exists. | `lua/sidepanes/maps.lua` `install_commandline_enter()` handles non-ask Sidepanes-buffer `:q`; `lua/sidepanes/ask_pane.lua` `commandline_enter()` handles the same non-ask branch while an ask draft is active; `lua/sidepanes/internal.lua` exposes the internal `show_markdown()` callback for command strings. | Focused regression covers no-active-draft terminal `:q`, active-draft terminal `:q`, active-draft Markdown `:quit`, and no-non-ask-map cases; docs contract passed; `illu.nvim` smoke passed. | README, `doc/sidepanes.md`, `doc/sidepanes.txt`, `docs/release-notes-v0.4.0.md`, `CHANGELOG.md`, and this roadmap. | Manual `:q` and personal `<leader>qq -> :q<CR>` checks from Codex and Markdown panes. | Done |
-| Ensure ask-pane `ask_send` / `ask_send_alt` mappings follow the ask-pane quit lifecycle instead of warning as send-only shortcuts when configured to quit-style keys such as `qq` or `<leader>qq`. | `lua/sidepanes/ask_pane.lua` maps configured `ask_send` and `ask_send_alt` to `M.finish_quit()`, and the dead send-only warning path was removed. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" covers unwritten `qq`, written `qq`, unwritten `<leader>qq`, and written `<leader>qq`. Focused regression passed with 153 tests. | README, Neovim help, Markdown docs, release notes, CHANGELOG, behavior matrix, zone matrix, and this roadmap document quit-lifecycle behavior. | Manual ask-pane `qq` and `<leader>qq` checks on unwritten and written drafts. | Done |
+| Ensure ask-pane `ask_send` / `ask_send_alt` mappings follow the ask-pane quit lifecycle instead of warning as send-only shortcuts when configured to quit-style keys such as `qq` or `<leader>qq`. | `lua/sidepanes/ask_pane.lua` maps configured `ask_send` and `ask_send_alt` to `M.finish_quit()`, and the dead send-only warning path was removed. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle for empty modified and written prompts" covers empty, modified, and written `qq` / `<leader>qq` flows. Focused regression passed with 153 tests. | README, Neovim help, Markdown docs, release notes, CHANGELOG, behavior matrix, zone matrix, and this roadmap document quit-lifecycle behavior. | Manual ask-pane `qq` and `<leader>qq` checks on empty, modified, and written drafts. | Done |
 | Re-check implementation, tests, docs, and this roadmap before moving on. | Renewed audit covered command-line hook ordering, stale non-ask `ask_send_alt` claims, stale ask-pane send-only warning claims, fixture row IDs, README, CHANGELOG, help docs, Markdown docs, release notes, roadmap status, AGENTS.md, and illu.nvim integration. | Focused regression, docs contract, `illu.nvim` smoke, `tests/run_checks.sh fast`, `tests/run_checks.sh full`, and `git diff --check` passed after the ask-pane quit-style mapping correction. | Public docs and roadmap now describe quit-lifecycle mappings rather than send-only warning mappings. AGENTS.md process guidance did not change. | Manual acceptance rows remain listed under this slice for interactive verification. | Done |
 | In a normal project buffer, run the visual ask mapping and confirm it captures context. | Manual workflow corresponds to matrix row `project-global-visual-ask`. | Not Applicable: manual Neovim workflow; automated zone matrix regression covers configured visual map installation. | This roadmap manual acceptance section. | Run visual `<leader>pa` in a project buffer and confirm selected context is captured. | Done |
 | In the Markdown pane, press `fm`, `ap`, and visual `aa`; confirm each performs the pane-local action. | Manual workflow corresponds to rows `markdown-pane-heading-and-ask` and `markdown-pane-visual-ask`. | Not Applicable: manual Neovim workflow; automated zone matrix regression covers mapping installation. | This roadmap manual acceptance section. | Press `fm`, `ap`, and visual `aa` in Markdown pane. | Done |
 | With a personal/global `<leader>qq -> :q<CR>` mapping, press `<leader>qq` in a Codex pane; confirm it returns to Markdown without closing the Sidepanes window. | Manual workflow corresponds to row `terminal-pane-quit-command`. | `tests/sidepanes_regression.lua` covers the command path and real fed-key plain-quit guard; `illu.nvim` smoke verifies the local Codex-pane `<leader>qq` guard. | This roadmap manual acceptance section. | Press personal `<leader>qq -> :q<CR>` in a Codex pane after leaving terminal-input mode. | Done |
-| In the ask pane, press `M`, `]f`, `[f`, `]s`, `[s`, `gf`, `qq`, `<leader>qq`, and `<C-CR>`; confirm each follows the matrix. | Manual workflow corresponds to rows `ask-pane-target-picker`, `ask-pane-submit-and-send`, and `ask-pane-context-navigation`. | `tests/sidepanes_regression.lua` covers `qq` / `<leader>qq` quit lifecycle without the send-written warning; `illu.nvim` smoke covers personal ask-pane `qq` / `<leader>qq` unwritten cancellation. | This roadmap manual acceptance section. | Press the listed ask-pane mappings and compare to matrix, including unwritten `qq` / `<leader>qq` cancellation. | Done |
+| In the ask pane, press `M`, `]f`, `[f`, `]s`, `[s`, `gf`, `qq`, `<leader>qq`, and `<C-CR>`; confirm each follows the matrix. | Manual workflow corresponds to rows `ask-pane-target-picker`, `ask-pane-submit-and-send`, and `ask-pane-context-navigation`. | `tests/sidepanes_regression.lua` covers `qq` / `<leader>qq` quit lifecycle without the send-written warning; `illu.nvim` smoke covers personal ask-pane `qq` / `<leader>qq` empty-draft cancellation. | This roadmap manual acceptance section. | Press the listed ask-pane mappings and compare to matrix, including empty `qq` / `<leader>qq` cancellation and modified-draft preservation. | Done |
 
 Audit passes:
 
@@ -2210,8 +2217,9 @@ Manual acceptance tests:
 - With personal `qq -> :q<CR>` and `<leader>qq -> :q<CR>`, press both in the
   Markdown pane and a Codex pane; confirm Sidepanes returns to Markdown without
   closing the window.
-- In the ask pane, press configured `qq` and `<leader>qq` on unwritten and
-  written drafts; confirm the policy outcomes match cancel/send expectations.
+- In the ask pane, press configured `qq` and `<leader>qq` on empty, modified,
+  and written drafts; confirm the policy outcomes match cancel/preserve/send
+  expectations.
 - In the ask pane, press Ctrl+Enter in a terminal that reports `<C-CR>` and one
   that reports `<C-J>`; confirm both submit through the same policy path.
 - Inspect the direct policy tests and confirm each action plan corresponds to a
@@ -2239,7 +2247,7 @@ Traceability table:
 | Update AGENTS.md process guidance: behavior-sensitive keymap tests must include real fed-key coverage; callback tests alone are registration tests, not behavior tests. | `AGENTS.md` Local Checks section now includes the fed-key testing rule. | Not Applicable: process documentation only; docs contract/fast checks passed. | `AGENTS.md`. | Review AGENTS.md before next slice. | Done |
 | Re-check implementation, tests, docs, and this roadmap before moving on. | Audit covered `ask_policy`, ask-pane plan execution, maps policy usage, AGENTS.md, README, CHANGELOG, help docs, Markdown docs, release notes, roadmap status/order, and `illu.nvim` smoke. | `tests/run_checks.sh fast`, `tests/run_checks.sh full`, `illu.nvim` smoke, and `git diff --check` passed. | Docs audited; only AGENTS.md/CHANGELOG/roadmap needed changes for this internal refactor and test discipline. | Manual acceptance rows remain listed under this slice. | Done |
 | With personal `qq -> :q<CR>` and `<leader>qq -> :q<CR>`, press both in the Markdown pane and a Codex pane; confirm Sidepanes returns to Markdown without closing the window. | `lua/sidepanes/maps.lua` non-ask plain-quit guard via policy. | `tests/sidepanes_regression.lua` "personal normal quit mappings do not close markdown or terminal side panes"; illu smoke covers local Codex `<leader>qq`. Full checks passed. | This slice manual acceptance section and public plain-quit guard docs. | Perform this exact workflow in Neovim. | Done |
-| In the ask pane, press configured `qq` and `<leader>qq` on unwritten and written drafts; confirm the policy outcomes match cancel/send expectations. | `ask_policy.plan()` drives `finish_quit`; ask-pane send maps call `M.finish_quit`. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts"; direct policy plan test covers modified/written finish branches. Full checks passed. | This slice manual acceptance section and public quit-lifecycle docs. | Perform this exact workflow in Neovim. | Done |
+| In the ask pane, press configured `qq` and `<leader>qq` on empty, modified, and written drafts; confirm the policy outcomes match cancel/preserve/send expectations. | `ask_policy.plan()` drives `finish_quit`; ask-pane send maps call `M.finish_quit`. | `tests/sidepanes_regression.lua` "ask pane send mappings follow quit lifecycle for empty modified and written prompts"; direct policy plan test covers empty/modified/written finish branches. Full checks passed. | This slice manual acceptance section and public quit-lifecycle docs. | Perform this exact workflow in Neovim. | Done |
 | In the ask pane, press Ctrl+Enter in a terminal that reports `<C-CR>` and one that reports `<C-J>`; confirm both submit through the same policy path. | `ask_pane.lua` maps `<C-J>` when `ask_submit` is default `<C-CR>`; `submit_now()` executes `ask_policy.plan()`. | Submit mapping regression covers registered `<C-CR>` callback and fed-key `<C-J>` fallback; direct policy test covers submit branches. Full checks passed. | This slice manual acceptance section and `<C-J>` fallback docs. | Perform this exact workflow in Neovim. | Done |
 | Inspect the direct policy tests and confirm each action plan corresponds to a row in the behavior matrix. | Direct policy tests exercise plans matching behavior matrix rows for quit, write-quit, send shortcuts, submit, failed/no-draft, and before-send picker paths. | `tests/sidepanes_regression.lua` direct policy test and docs contract passed. | This slice manual acceptance section and behavior matrix. | Review direct policy tests against the matrix. | Done |
 
@@ -2761,7 +2769,7 @@ Traceability table:
 | Run focused ask tests, `tests/run_checks.sh fast`, `tests/run_checks.sh full`, `illu.nvim` smoke when mappings/local integration are affected, and `git diff --check`. | Focused ask/personal/submit regression, fast checks, full checks, local `illu.nvim` smoke, and `git diff --check` were run after the audit-gap fix. | Focused ask run passed with 47 selected tests; `tests/run_checks.sh fast` passed with 166 regression tests; `tests/run_checks.sh full` passed with 166 regression tests and real CLI smoke; `ILLU_SIDEPANES_RUNTIME_PATH=/Users/maximl/.config/nvim/sidepanes.nvim /Users/maximl/.config/nvim/illu.nvim/tests/run_sidepanes_checks.sh` passed; `git diff --check` passed. | Verification results are recorded below; CHANGELOG notes the `:w` command-path fix. | Run the same checks locally if desired. | `ec1d381`; `ef1bb09` | Done |
 | Re-check implementation, tests, docs, roadmap, README, CHANGELOG, help docs, Markdown docs, release notes, AGENTS.md, and `illu.nvim` applicability before moving on. | Restarting audit passes checked the slice bullets, traceability table, implementation boundaries, mapping zones, command paths, state transitions, fed-key coverage, manual acceptance references, README, CHANGELOG, help docs, Markdown docs, release notes, roadmap status/order, AGENTS.md process requirements, and `illu.nvim` applicability. | Focused ask/personal/submit, fast, full, `illu.nvim` smoke, coverage-table integrity, and `git diff --check` evidence are recorded in this slice; final two clean non-mutating confirmation passes are required after the last commit and reported in the final response. | This roadmap records audit evidence; CHANGELOG, help docs, Markdown docs, and release notes were reviewed for the `:w` command-path fix; no README change applies because the README does not enumerate ask-pane command-line lifecycle details. | Review the traceability table, manual checklist, and final two clean confirmation passes before moving on. | `e4de0a1` | Done |
 | For every mapping listed in the behavior-sensitive coverage table, perform the real keypress in Neovim and compare the outcome to the matrix. | `tests/ask_pane_mapping_coverage.lua` is the behavior-sensitive coverage table; fed-key tests exercise the same real keypaths where automated synthesis applies. | Not Applicable as automated test: this bullet is itself a manual acceptance requirement, supported by fed-key regressions and the coverage-table integrity test. | Coverage table plus existing behavior/mapping matrices. | Perform this exact manual workflow. | `e8c6d20` | Done |
-| Repeat personal `qq` / `<leader>qq` checks in Markdown, Codex, and ask panes. | Guarded quit mappings and ask send mappings are listed in `tests/ask_pane_mapping_coverage.lua`. | `tests/sidepanes_regression.lua` "personal normal quit mappings do not close markdown or terminal side panes" and "ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts" passed in the focused ask run. | Existing mapping docs remain unchanged because behavior did not change. | Perform this exact manual workflow. | `e8c6d20` | Done |
+| Repeat personal `qq` / `<leader>qq` checks in Markdown, Codex, and ask panes. | Guarded quit mappings and ask send mappings are listed in `tests/ask_pane_mapping_coverage.lua`. | `tests/sidepanes_regression.lua` "personal normal quit mappings do not close markdown or terminal side panes" and "ask pane send mappings follow quit lifecycle for empty modified and written prompts" passed in the focused ask run. | Existing mapping docs remain unchanged because behavior did not change. | Perform this exact manual workflow. | `e8c6d20` | Done |
 | Repeat `<C-CR>` / `<C-J>` submit checks from normal and insert ask-pane modes. | Submit fed-key coverage is listed in `tests/ask_pane_mapping_coverage.lua`; helper-driven tests feed the literal submit keys. | `tests/sidepanes_regression.lua` "ask pane submit mapping sends modified prompt from normal and insert modes" feeds normal `<C-CR>`, insert `<C-CR>`, and `<C-J>` fallback. | Existing mapping docs remain unchanged because behavior did not change. | Perform this exact manual workflow. | `e8c6d20` | Done |
 | Run the focused ask test group and confirm failures point to user behavior, not just callback plumbing. | `SIDEPANES_TEST_FILTER` enables focused ask/personal/submit runs; ask layer markers identify policy, snapshot, executor, adapter, registration, fed-key, and smoke areas. | Focused ask/personal/submit regression passed with 47 selected tests. | This roadmap; no public docs change applies because this is test architecture. | Perform this exact manual workflow. | `e8c6d20`, `047347c` | Done |
 
@@ -2885,6 +2893,10 @@ Audit findings:
 - Pass 4 found ask-pane mapping help listed the model picker keys as changing
   the ask target only, making model switching hard to discover from `gh` while
   editing a question.
+- Pass 5 found a user-reported ask-pane dirty-quit bug: pressing `:q` or a
+  configured quit-lifecycle mapping while the ask draft was modified restored
+  the previous pane but discarded the draft, so reopening showed only
+  `Question:`.
 
 Manual acceptance tests:
 
@@ -2915,3 +2927,4 @@ Traceability:
 | Audit gap: `illu.nvim` smoke did not fully execute the slice-19 manual interaction checklist by itself. | Resolved by the Codex-observed acceptance pass: the smoke remains integration evidence, and the consolidated checklist now records the broader headless/local-runtime acceptance evidence. | Focused ask/status/mapping/version regression, fast, full, docs contract, and `illu.nvim` smoke passed for the acceptance pass. | Manual Acceptance Checklist and this final audit section. | Checklist rows are all marked `[X]` for the Codex-observed pass; no separate human visual pass is claimed. | `23f9831` | Done |
 | Audit gap: user-reported ask-pane focus mappings cleared modified drafts and accidental fresh resets were not recoverable with undo/session state. | `global_maps.lua` and `maps.lua` pass `reset_unmodified`; `ask_session.clear_unmodified_buffer()`, `restore_undo_if_matching()`, and `clear_stale_undo_restore()` snapshot and recover reset state; `ask_pane.undo_edit()` keeps ask-pane `u` undoable while restoring citations/session metadata. | `tests/sidepanes_regression.lua` "ask pane focus mapping preserves modified drafts and clears unmodified drafts with undo"; mapping registration assertion; `tests/ask_pane_mapping_zone_matrix.lua` and `tests/ask_pane_mapping_coverage.lua` include ask-pane undo coverage; focused, fast, full, `illu.nvim` smoke, and `git diff --check` passed after the fix. | README, CHANGELOG, `doc/sidepanes.md`, `doc/sidepanes.txt`, `docs/release-notes-v0.4.0.md`, and this roadmap. | Slice 7 manual checklist row for modified-draft preservation and undoable fresh reset. | `af81a3d` | Done |
 | Audit gap: ask-pane `gh` help made model switching hard to discover because `M` and `<Tab>` were labelled as target-only changes. | `mapping_help.lua` labels `ask_model_picker` and `ask_model_picker_alt` as "Change ask target/model". | `tests/sidepanes_regression.lua` "mapping help formats active mappings and pane-relative geometry" asserts formatter output for `M` and `<Tab>`; "ask pane mapping help includes target model picker from fed key" opens `gh` from a live ask pane and checks both labels; focused, fast, full, `illu.nvim` smoke, and `git diff --check` passed. | CHANGELOG and this roadmap; README/help/release docs already document the mapping as target/model. | Press `gh` in the ask pane and confirm `M` and `<Tab>` show as target/model picker mappings. | `30ec59b` | Done |
+| Audit gap: dirty `:q` or configured quit-lifecycle mappings discarded modified ask drafts, so reopening showed only `Question:`. | `ask_policy.plan()` returns `preserve_draft` for dirty `finish_quit`; `ask_executor.run()` executes that action; `ask_pane.preserve_draft()` records `draft_modified`, restores the previous pane, and keeps the modified buffer/session intact. | Direct policy and executor tests cover the preserve action; fed command-line `:q` test asserts previous-pane restore plus preserved buffer/text; ask-send fed-key tests assert modified `qq` / `<leader>qq` preserve; behavior matrix/docs contract cover the changed rows. | README, CHANGELOG, Neovim help, Markdown docs, release notes, behavior matrix, and this roadmap describe empty/modified/written quit-lifecycle behavior. | Edit an ask draft, run `:q`, confirm previous pane restores, reopen the ask pane, and confirm the edited text remains; run `:q!` to confirm explicit discard still works. | Pending | In Progress |

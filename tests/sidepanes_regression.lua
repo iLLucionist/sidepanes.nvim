@@ -4794,7 +4794,7 @@ test("ask action policy classifies command lines plain quit mappings and lifecyc
     assert(
         vim.deep_equal(
             plan_actions(ask_policy.plan(intents.finish_quit, { valid_buffer = true, dirty_buffer = true })),
-            { actions.mark_draft_modified, actions.cancel_draft }
+            { actions.mark_draft_modified, actions.preserve_draft }
         ),
         "finish modified plan was wrong"
     )
@@ -5562,6 +5562,22 @@ test("ask lifecycle executor runs policy actions through fake handlers", functio
 
     assert(result == false, "notify_no_prompt should stop as unhandled")
     assert(vim.deep_equal(calls, { "notify" }), "notify plan did not stop: " .. vim.inspect(calls))
+
+    calls = {}
+    result = ask_executor.run({
+        { action = actions.preserve_draft },
+        { action = actions.cancel_draft },
+    }, {
+        preserve_draft = function()
+            table.insert(calls, "preserve")
+        end,
+        cancel_draft = function()
+            table.insert(calls, "cancel")
+        end,
+    })
+
+    assert(result == true, "preserve_draft should stop as handled")
+    assert(vim.deep_equal(calls, { "preserve" }), "preserve plan did not stop: " .. vim.inspect(calls))
 end)
 
 test("ask controller composes facts policy and executor handlers", function()
@@ -6820,15 +6836,28 @@ test("ask pane fed command-line lifecycle covers q w and wq user paths", functio
     vim.api.nvim_set_option_value("modified", true, { buf = modified_buf })
     vim.api.nvim_set_current_win(winid)
     feed_user_command("q")
-    wait_until("fed :q did not cancel modified ask pane", function()
-        return pane.active_mode == "markdown" and not vim.api.nvim_buf_is_valid(modified_buf)
+    wait_until("fed :q did not preserve modified ask pane", function()
+        return pane.active_mode == "markdown"
+            and vim.api.nvim_buf_is_valid(modified_buf)
+            and pane.ask_pane.bufnr == modified_buf
     end)
     assert(not read_file(out):find("cancel modified prompt with q", 1, true), "fed :q sent modified prompt")
+    assert_pane_window(winid, pane.bufnr, "fed :q modified")
+    assert(vim.api.nvim_get_option_value("modified", { buf = modified_buf }), "fed :q modified cleared the dirty draft flag")
     assert_state_history_contains(
         pane.ask_pane_state_history,
-        { "ready_empty", "draft_modified", "cancelled" },
+        { "ready_empty", "draft_modified" },
         "fed :q modified"
     )
+    assert(pane.ask_pane_last_state == "draft_modified", "fed :q modified did not keep draft_modified state")
+
+    pane.show_ask_pane({ focus = true })
+    assert(pane.ask_pane.bufnr == modified_buf, "fed :q modified did not reuse preserved ask buffer")
+    assert(
+        table.concat(vim.api.nvim_buf_get_lines(modified_buf, 0, -1, false), "\n"):find("cancel modified prompt with q", 1, true),
+        "fed :q modified lost the draft text"
+    )
+    pane.cancel_ask_pane(modified_buf)
 
     local written_buf = open_ask_from_source()
 
@@ -7110,7 +7139,7 @@ test("ask pane target picker mapping is configurable", function()
     assert(pane.ask_pane.entry.preset_name == "two", "custom ask model picker mapping did not update target")
 end)
 
-test("ask pane send mappings follow quit lifecycle instead of warning on unwritten prompts", function()
+test("ask pane send mappings follow quit lifecycle for empty modified and written prompts", function()
     reset_pane()
 
     local root = root_fixture("ask-pane-send-map-test")
@@ -7162,15 +7191,20 @@ test("ask pane send mappings follow quit lifecycle instead of warning on unwritt
         feed_user_keys("qq")
     end)
 
-    assert(not has_notify(messages, "Write the ask prompt before sending"), "unwritten ask send mapping warned instead of quitting")
-    assert(read_file(out) == "", "unwritten ask send mapping sent prompt")
-    assert(not pane.ask_pane.bufnr, "unwritten ask send mapping did not cancel ask state")
+    assert(not has_notify(messages, "Write the ask prompt before sending"), "modified ask send mapping warned instead of preserving")
+    assert(read_file(out) == "", "modified ask send mapping sent prompt")
+    assert(pane.ask_pane.bufnr == qbuf, "modified ask send mapping did not preserve ask state")
+    assert(
+        table.concat(vim.api.nvim_buf_get_lines(qbuf, 0, -1, false), "\n"):find("cancel from qq", 1, true),
+        "modified ask send mapping lost draft text"
+    )
     assert_state_history_contains(
         pane.ask_pane_state_history,
-        { "ready_empty", "draft_modified", "cancelled" },
-        "unwritten qq"
+        { "ready_empty", "draft_modified" },
+        "modified qq"
     )
-    assert(pane.ask_pane_last_state == "cancelled", "unwritten qq did not record cancelled")
+    assert(pane.ask_pane_last_state == "draft_modified", "modified qq did not keep modified state")
+    pane.cancel_ask_pane(qbuf)
 
     qbuf = open_ask()
     vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send from qq" })
@@ -7196,15 +7230,20 @@ test("ask pane send mappings follow quit lifecycle instead of warning on unwritt
         feed_user_keys(alt_lhs)
     end)
 
-    assert(not has_notify(messages, "Write the ask prompt before sending"), "unwritten ask send alt mapping warned instead of quitting")
-    assert(not read_file(out):find("cancel from leader qq", 1, true), "unwritten ask send alt mapping sent prompt")
-    assert(not pane.ask_pane.bufnr, "unwritten ask send alt mapping did not cancel ask state")
+    assert(not has_notify(messages, "Write the ask prompt before sending"), "modified ask send alt mapping warned instead of preserving")
+    assert(not read_file(out):find("cancel from leader qq", 1, true), "modified ask send alt mapping sent prompt")
+    assert(pane.ask_pane.bufnr == qbuf, "modified ask send alt mapping did not preserve ask state")
+    assert(
+        table.concat(vim.api.nvim_buf_get_lines(qbuf, 0, -1, false), "\n"):find("cancel from leader qq", 1, true),
+        "modified ask send alt mapping lost draft text"
+    )
     assert_state_history_contains(
         pane.ask_pane_state_history,
-        { "ready_empty", "draft_modified", "cancelled" },
-        "unwritten leader qq"
+        { "ready_empty", "draft_modified" },
+        "modified leader qq"
     )
-    assert(pane.ask_pane_last_state == "cancelled", "unwritten leader qq did not record cancelled")
+    assert(pane.ask_pane_last_state == "draft_modified", "modified leader qq did not keep modified state")
+    pane.cancel_ask_pane(qbuf)
 
     qbuf = open_ask()
     vim.api.nvim_buf_set_lines(qbuf, 1, 1, false, { "send from leader qq" })

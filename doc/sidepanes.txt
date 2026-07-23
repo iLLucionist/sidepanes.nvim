@@ -680,12 +680,13 @@ project root, the file heading includes root context so the target agent can
 disambiguate it.
 
 The prompt is sent only after the buffer has been written and then quit. In the
-ask pane, command-line `:q` cancels an unwritten draft, while `:q` after `:w`
-sends the written prompt. `:q!` always cancels the draft. Cancellation restores
-the previous pane state, such as Codex, Claude, IPython, a custom terminal, or
-Markdown. Plain normal-mode `q` is not mapped. `:wq`, `:x`, and `:exit` write
-and send the accumulated prompt. Cancellation restores the previous pane before
-deleting the draft buffer so the Sidepanes split stays visually stable.
+ask pane, command-line `:q` cancels an empty draft, preserves a modified draft
+while restoring the previous pane, and sends after `:w`. `:q!` always cancels
+the draft. Cancellation restores the previous pane state, such as Codex,
+Claude, IPython, a custom terminal, or Markdown. Plain normal-mode `q` is not
+mapped. `:wq`, `:x`, and `:exit` write and send the accumulated prompt.
+Cancellation restores the previous pane before deleting the draft buffer so the
+Sidepanes split stays visually stable.
 
 `ask.model_picker` controls model selection in pane mode:
 
@@ -697,9 +698,10 @@ deleting the draft buffer so the Sidepanes split stays visually stable.
 Inside the ask pane, `M` and `<Tab>` open the model picker. `<C-CR>` submits the
 current prompt from normal or insert mode. Set `mappings.pane.ask_send` or
 `mappings.pane.ask_send_alt` to bind additional pane-local quit-lifecycle
-shortcuts, for example `qq` and `<leader>qq`; those shortcuts cancel unwritten
-drafts and send written drafts. The winbar shows the current target/model and
-explicit draft state: `ready_empty`, `draft_modified`, `draft_written`,
+shortcuts, for example `qq` and `<leader>qq`; those shortcuts cancel empty
+drafts, preserve modified drafts, and send written drafts. The winbar
+shows the current target/model and explicit draft state: `ready_empty`,
+`draft_modified`, `draft_written`,
 `sending_picker`, `sending_terminal`, `send_failed`, `cancelled`, or `sent`.
 Normal-mode ask-pane focus mappings freshen an unmodified written draft back to
 a blank `Question:` prompt, but preserve modified drafts. Press `u` in the ask

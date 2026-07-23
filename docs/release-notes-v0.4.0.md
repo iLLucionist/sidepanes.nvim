@@ -17,7 +17,8 @@ The ask pane is designed for prompt assembly:
 - pane-local `mappings.pane.headings = "fm"` opens the Markdown heading picker
   from the Markdown pane,
 - optional pane-local `mappings.pane.ask_send` / `ask_send_alt` runs the
-  ask-pane quit lifecycle, cancelling unwritten drafts and sending written ones,
+  ask-pane quit lifecycle, cancelling empty drafts, preserving modified drafts,
+  and sending written ones,
 - in non-ask Sidepanes buffers, command-line `:q` / `:quit` returns to Markdown,
   so personal quit mappings such as `<leader>qq -> :q<CR>` do not close the pane
   or trigger ask-pane send,
@@ -59,11 +60,12 @@ press `u` in the ask pane to restore the previous prompt and citation state.
   selection, and
 - `"before_send"` opens it just before sending.
 
-Command-line `:q` cancels an unwritten draft, while `:q` after `:w` sends the
-written prompt. `:q!` always cancels the current draft and restores the previous
-Sidepanes state, such as Codex, Claude, IPython, a custom terminal, or
-Markdown. `:wq`, `:x`, and `:exit` write and send the accumulated prompt. Plain
-normal-mode `q` remains unmapped.
+Command-line `:q` cancels an empty draft, preserves a modified draft while
+restoring the previous Sidepanes state, and sends after `:w`. `:q!` always
+cancels the current draft and restores the previous Sidepanes state, such as
+Codex, Claude, IPython, a custom terminal, or Markdown. `:wq`, `:x`, and
+`:exit` write and send the accumulated prompt. Plain normal-mode `q` remains
+unmapped.
 
 When the default `ask_submit = "<C-CR>"` is used, the ask pane also maps
 `<C-J>` as a submit fallback for terminals that report Ctrl+Enter that way.

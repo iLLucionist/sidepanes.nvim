@@ -406,7 +406,7 @@ them with `mappings.pane`.
 | `ask_pane` | `ap` | Show or focus the ask pane. |
 | `help` | `gh` | Open the mapping help float for the current Sidepanes pane. |
 | `ask_submit` | `<C-CR>` | Submit the active ask pane prompt from normal or insert mode. |
-| `ask_send` | disabled | Run the ask-pane quit lifecycle: cancel unwritten drafts and send written drafts. |
+| `ask_send` | disabled | Run the ask-pane quit lifecycle: cancel empty drafts, preserve modified drafts, and send written drafts. |
 | `ask_send_alt` | disabled | Alternate ask-pane quit-lifecycle shortcut. |
 | `ask_next_file` | `]f` | Jump to next ask prompt `File:` block. |
 | `ask_previous_file` | `[f` | Jump to previous ask prompt `File:` block. |
