@@ -7,7 +7,7 @@ Architecture: Pure helpers with no Neovim API calls; command/API adapters decide
 
 local M = {}
 
-M.VERSION = "0.4.0-dev"
+M.VERSION = "0.4.0"
 
 local module_suffix = "/lua/sidepanes/version.lua"
 

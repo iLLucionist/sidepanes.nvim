@@ -2793,8 +2793,8 @@ test("version module and public API report version and load path", function()
         source = root .. "/lua/sidepanes/version.lua",
     })
 
-    assert(sidepanes_version.VERSION == "0.4.0-dev", "version constant was wrong")
-    assert(fixture.version == "0.4.0-dev", "version info used wrong version")
+    assert(sidepanes_version.VERSION == "0.4.0", "version constant was wrong")
+    assert(fixture.version == "0.4.0", "version info used wrong version")
     assert(fixture.load_path == root, "version info did not trim module path")
     assert(
         sidepanes_version.info({ source = "@/tmp/other/lua/sidepanes/version.lua" }).load_path == "/tmp/other",
@@ -2807,18 +2807,18 @@ test("version module and public API report version and load path", function()
 
     local public_info = pane.version()
 
-    assert(public_info.version == "0.4.0-dev", "public version API used wrong version")
+    assert(public_info.version == "0.4.0", "public version API used wrong version")
     assert(public_info.load_path == root, "public version API reported wrong load path")
 
     local messages = capture_notify(function()
         local notified = pane.version({ notify = true })
 
-        assert(notified.version == "0.4.0-dev", "notifying version API returned wrong version")
+        assert(notified.version == "0.4.0", "notifying version API returned wrong version")
     end)
 
     assert(#messages == 1, "version API notify did not emit one message")
     assert(messages[1].level == vim.log.levels.INFO, "version API notify used wrong log level")
-    assert(messages[1].message:find("Sidepanes version: 0.4.0-dev", 1, true), "version notify missed version")
+    assert(messages[1].message:find("Sidepanes version: 0.4.0", 1, true), "version notify missed version")
     assert(messages[1].message:find("Load path: " .. root, 1, true), "version notify missed load path")
 end)
 
@@ -3954,7 +3954,7 @@ test("health check reports configured commands, mappings, and tools", function()
     end)
 
     assert(has_health_report(reports, "ok", "sidepanes.nvim loaded"), "health did not report plugin loaded")
-    assert(has_health_report(reports, "info", "Version: 0.4.0-dev"), "health did not report version")
+    assert(has_health_report(reports, "info", "Version: 0.4.0"), "health did not report version")
     assert(has_health_report(reports, "info", "Load path: " .. helpers.repo_root(1)), "health did not report load path")
     assert(has_health_report(reports, "ok", "External reflow command found: sh"), "health did not find reflow command")
     assert(has_health_report(reports, "ok", "Codex command found: sh"), "health did not find Codex command")

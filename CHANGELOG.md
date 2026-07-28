@@ -11,7 +11,7 @@ This project uses lightweight semantic versioning once tags begin:
 Before `v1.0.0`, the plugin may still make breaking changes in minor releases,
 but they should be called out clearly in this changelog.
 
-## Unreleased
+## v0.4.0 - 2026-07-28
 
 ### Added
 
