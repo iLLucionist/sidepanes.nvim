@@ -71,6 +71,13 @@ but they should be called out clearly in this changelog.
 - Ask-pane lifecycle decisions now flow through a central action policy so
   keymaps, command-line handlers, and tests share one set of predicates for
   write, submit, quit, cancel, picker, and send behavior.
+- Refactored the ask workflow around smaller composable modules: pure policy
+  and route helpers, a target resolver, session/status snapshot helpers,
+  controller/executor adapters, and `lua/sidepanes/panes/ask/*` implementation
+  modules with root compatibility shims.
+- Refactored ask-pane tests around behavior matrices, mapping-zone coverage,
+  fed-key paths, and shared lifecycle facts so user-visible mappings and
+  command-line flows are tested through the same decisions as the runtime.
 - Ask pane cancellation now restores the previous pane before deleting the draft
   buffer, reducing visual flicker in the Sidepanes window.
 - `ask.model_picker = "after_open"` now opens the picker only once per active

@@ -91,6 +91,27 @@ reopening the picker.
 If the selected target terminal cannot be opened, the ask pane keeps the draft
 visible and warns instead of discarding the prompt.
 
+## Refactor And Maintainability
+
+The ask workflow was also refactored substantially. Ask-pane behavior now flows
+through smaller composable pieces instead of scattered keymap and command-line
+branches:
+
+- pure policy and route helpers decide write, submit, quit, cancel, picker, and
+  send behavior,
+- the target resolver owns active-target, last-context, default-target, picker,
+  and before-send decisions,
+- session/status snapshot helpers provide the shared facts used by lifecycle
+  decisions, winbar labels, status output, and tests,
+- controller and executor adapters keep Neovim buffer/window effects at the
+  edge of the ask workflow, and
+- ask-pane implementation modules now live under `lua/sidepanes/panes/ask/*`,
+  with root compatibility shims for older internal module paths.
+
+The test suite was reorganized around behavior matrices, mapping-zone coverage,
+fed-key paths, and shared lifecycle facts so mapping behavior, command-line
+behavior, status output, and internal policy decisions stay aligned.
+
 ## Navigation
 
 Generated citation headings support quick movement:
