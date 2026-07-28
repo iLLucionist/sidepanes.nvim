@@ -335,7 +335,7 @@ local function reset_pane()
     pane.markdown_file_signature = nil
     pane.markdown_reloaded = false
     pane.markdown_reload_badge_armed = false
-    pane.markdown_reload_token = 0
+    pane.markdown_reload_token = (pane.markdown_reload_token or 0) + 1
     pane.markdown_watcher_path = nil
     pane.markdown_reload_timer = nil
     pane.active_mode = "markdown"
