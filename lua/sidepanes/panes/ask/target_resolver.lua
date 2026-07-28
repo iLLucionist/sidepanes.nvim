@@ -102,7 +102,9 @@ end
 function M.before_send(facts)
     facts = facts or {}
 
-    if facts.picker_mode == "before_send" or facts.model_picker == "before_send" then
+    local picker_satisfied = facts.model_picker_satisfied == true or facts.target_reason == REASONS.explicit_target_change
+
+    if (facts.picker_mode == "before_send" or facts.model_picker == "before_send") and not picker_satisfied then
         return decision(DECISIONS.picker, REASONS.before_send_picker, {
             entries = M.picker_entries(facts),
             root = facts.root,

@@ -644,6 +644,12 @@ In non-ask Sidepanes buffers, command-line `:q` / `:quit` returns to Markdown.
 This keeps personal quit mappings that expand to `:q<CR>` from closing the pane
 or triggering ask-pane send shortcuts while a terminal pane is focused.
 
+`ask.model_picker = "before_send"` is respected across ask entry points. In the
+floating scratch prompt, visual `aa` / `ax` opens the editor first and defers
+model selection until after the prompt is written and finished. A manual
+`M` / `<Tab>` target choice in the scratch prompt or ask pane satisfies that
+pending picker, so Sidepanes does not prompt for a model twice.
+
 The prompt includes file name, root, selected range, selected text, and detected
 snippet language. For Markdown files, Sidepanes detects fenced code-block
 language at the selected range, so Python in a Markdown fence is sent as

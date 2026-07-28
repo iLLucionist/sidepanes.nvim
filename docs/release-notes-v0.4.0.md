@@ -56,9 +56,14 @@ press `u` in the ask pane to restore the previous prompt and citation state.
 `ask.model_picker` controls picker timing:
 
 - `"manual"` only opens the picker from a mapping,
-- `"after_open"` opens it once when a new ask draft receives its first captured
-  selection, and
+- `"after_open"` opens it once when a new ask-pane draft receives its first
+  captured selection, and
 - `"before_send"` opens it just before sending.
+
+The `"before_send"` timing is respected in both ask UIs. With the floating
+scratch prompt, visual `aa` / `ax` opens the editor first and defers model
+selection until after write and quit. If `M` or `<Tab>` already selected a
+target/model manually, Sidepanes reuses that choice instead of asking again.
 
 Command-line `:q` cancels an empty draft, preserves a modified draft while
 restoring the previous Sidepanes state, and sends after `:w`. `:q!` always

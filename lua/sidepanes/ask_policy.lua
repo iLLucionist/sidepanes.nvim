@@ -130,8 +130,10 @@ function M.normalize_facts(facts)
         dirty_buffer = facts.dirty_buffer or facts.modified or false,
         live_prompt = facts.live_prompt or "",
         picker_mode = facts.picker_mode or facts.model_picker,
+        model_picker_satisfied = facts.model_picker_satisfied == true,
         previous_pane = facts.previous_pane,
         terminal_available = facts.terminal_available,
+        target_reason = facts.target_reason,
         valid_buffer = facts.valid_buffer or facts.valid_buf or false,
         written_prompt = facts.written_prompt,
     }
@@ -141,6 +143,18 @@ function M.normalize_facts(facts)
     result.valid_buf = result.valid_buffer
 
     return result
+end
+
+function M.before_send_picker_satisfied(facts)
+    facts = facts or {}
+
+    return facts.model_picker_satisfied == true or facts.target_reason == "explicit_target_change"
+end
+
+function M.should_open_before_send_picker(facts)
+    facts = M.normalize_facts(facts)
+
+    return facts.picker_mode == "before_send" and not M.before_send_picker_satisfied(facts)
 end
 
 local function step(action, fields)
@@ -181,7 +195,7 @@ function M.plan(intent, facts)
             return { step(M.ACTIONS.cancel_draft) }
         end
 
-        if facts.picker_mode == "before_send" then
+        if M.should_open_before_send_picker(facts) then
             return { step(M.ACTIONS.open_before_send_picker, { prompt = facts.written_prompt }) }
         end
 
@@ -200,7 +214,7 @@ function M.plan(intent, facts)
             }
         end
 
-        if facts.picker_mode == "before_send" then
+        if M.should_open_before_send_picker(facts) then
             return {
                 step(M.ACTIONS.write_draft),
                 step(M.ACTIONS.open_before_send_picker, { prompt = facts.live_prompt }),

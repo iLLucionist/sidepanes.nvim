@@ -75,6 +75,11 @@ but they should be called out clearly in this changelog.
   buffer, reducing visual flicker in the Sidepanes window.
 - `ask.model_picker = "after_open"` now opens the picker only once per active
   draft instead of each time the draft is refocused.
+- `ask.model_picker = "before_send"` is now honored consistently by the
+  floating scratch prompt and the ask pane: visual `aa` / `ax` capture opens the
+  editor first, and model selection happens only after the prompt is written and
+  finished. A manual `M` / `<Tab>` target choice satisfies that pending
+  before-send picker instead of prompting twice.
 
 ### Fixed
 

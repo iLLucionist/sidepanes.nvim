@@ -4783,9 +4783,22 @@ test("ask action policy classifies command lines plain quit mappings and lifecyc
     assert(facts.valid_buffer == true and facts.valid_buf == true, "valid buffer facts were wrong")
     assert(facts.dirty_buffer == true and facts.modified == true, "dirty buffer facts were wrong")
     assert(facts.picker_mode == "before_send" and facts.model_picker == "before_send", "picker facts were wrong")
+    assert(facts.model_picker_satisfied == false, "picker satisfied fact default was wrong")
     assert(facts.active_target == "codex", "active target fact was lost")
     assert(facts.previous_pane == "markdown", "previous pane fact was lost")
     assert(facts.terminal_available == true, "terminal availability fact was lost")
+    assert(facts.target_reason == nil, "target reason fact default was wrong")
+    assert(
+        ask_policy.should_open_before_send_picker({ picker_mode = "before_send" }),
+        "before-send picker should open when unsatisfied"
+    )
+    assert(
+        not ask_policy.should_open_before_send_picker({
+            picker_mode = "before_send",
+            target_reason = "explicit_target_change",
+        }),
+        "manual target changes should satisfy before-send picker"
+    )
 
     assert(
         vim.deep_equal(plan_actions(ask_policy.plan(intents.finish_quit, { valid_buf = false })), { actions.noop }),
@@ -4948,6 +4961,15 @@ test("ask target resolver centralizes pane-mode target decisions", function()
     assert(decision.kind == "picker", "before_send should request picker even with an active target")
     assert(decision.reason == "before_send_picker", "before_send picker reason was wrong")
     assert(decision.entries[1] == default and decision.entries[2] == extra, "before_send picker entries were wrong")
+
+    decision = ask_target_resolver.before_send({
+        active_entry = active,
+        picker_entries = { extra },
+        picker_mode = "before_send",
+        target_entries = { default },
+        target_reason = "explicit_target_change",
+    })
+    assert(decision.kind == "target" and decision.entry == active, "manual target change should satisfy before_send picker")
 
     local entry, reason = ask_route.default_entry({
         active_entry = active,
@@ -7763,6 +7785,199 @@ test("question write then quit sends prompt and focuses terminal", function()
     assert(next(pane.question_buffers) == nil, "sent question buffer was not cleared")
     assert(vim.api.nvim_get_current_win() == pane.winid, "send did not focus the pane terminal")
     assert(pane.active_mode == "codex", "send did not activate Codex")
+end)
+
+test("question before-send model picker is deferred for ask-current mapping", function()
+    reset_pane()
+
+    local root = root_fixture("question-before-send-deferred-test")
+    local out = helpers.tmp_path("sidepanes-question-before-send-deferred.txt")
+    local picker_module = require("sidepanes.picker")
+    local original_numbered_select = picker_module.numbered_select
+    local picker_calls = {}
+
+    pcall(vim.fn.delete, out)
+    write(root .. "/src/origin.py", { "print('origin')" })
+
+    pane.setup({
+        ask = {
+            model_picker = "before_send",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "tee -a " .. out },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                    { name = "two", label = "Two", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    local ok, err = xpcall(function()
+        picker_module.numbered_select = function(prompt, picker_entries, callback, state)
+            table.insert(picker_calls, prompt)
+            return original_numbered_select(prompt, picker_entries, callback, state)
+        end
+
+        vim.cmd.edit(root .. "/src/origin.py")
+        pane.ask_current_coding_agent("codex", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+        assert(#picker_calls == 0, "ask-current opened model picker before the question was written")
+
+        local qbuf = only_question_buf()
+
+        set_question(qbuf, { "Question:", "defer picker until finish" })
+        pane.write_question(qbuf)
+        pane._test_next_choice = "2"
+        pane.finish_question(qbuf)
+
+        wait_for_file(out, "defer picker until finish")
+        assert(#picker_calls == 1, "finish did not open exactly one before-send picker: " .. vim.inspect(picker_calls))
+
+        local terminal_ctx = pane.terminals[util.terminal_key("codex", root)]
+
+        assert(terminal_ctx and terminal_ctx.preset_name == "two", "before-send picker did not send to selected Codex preset")
+    end, debug.traceback)
+
+    picker_module.numbered_select = original_numbered_select
+
+    if not ok then
+        error(err)
+    end
+end)
+
+test("question before-send model picker is deferred for ask-last mapping", function()
+    reset_pane()
+
+    local root = root_fixture("question-before-send-ask-last-deferred-test")
+    local out = helpers.tmp_path("sidepanes-question-before-send-ask-last-deferred.txt")
+    local picker_module = require("sidepanes.picker")
+    local original_numbered_select = picker_module.numbered_select
+    local picker_calls = {}
+
+    pcall(vim.fn.delete, out)
+    write(root .. "/src/origin.py", { "print('origin')" })
+
+    pane.setup({
+        ask = {
+            model_picker = "before_send",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "tee -a " .. out },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                    { name = "two", label = "Two", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    local ok, err = xpcall(function()
+        picker_module.numbered_select = function(prompt, picker_entries, callback, state)
+            table.insert(picker_calls, prompt)
+            return original_numbered_select(prompt, picker_entries, callback, state)
+        end
+
+        vim.cmd.edit(root .. "/src/origin.py")
+        pane.ask_last_coding_agent({ bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+        assert(#picker_calls == 0, "ask-last opened model picker before the question was written")
+
+        local qbuf = only_question_buf()
+
+        set_question(qbuf, { "Question:", "ask last defers picker until finish" })
+        pane.write_question(qbuf)
+        pane._test_next_choice = "2"
+        pane.finish_question(qbuf)
+
+        wait_for_file(out, "ask last defers picker until finish")
+        assert(#picker_calls == 1, "ask-last finish did not open exactly one before-send picker: " .. vim.inspect(picker_calls))
+
+        local terminal_ctx = pane.terminals[util.terminal_key("codex", root)]
+
+        assert(terminal_ctx and terminal_ctx.preset_name == "two", "ask-last before-send picker did not send to selected Codex preset")
+    end, debug.traceback)
+
+    picker_module.numbered_select = original_numbered_select
+
+    if not ok then
+        error(err)
+    end
+end)
+
+test("question manual target picker satisfies before-send model picker", function()
+    reset_pane()
+
+    local root = root_fixture("question-before-send-manual-target-test")
+    local out = helpers.tmp_path("sidepanes-question-before-send-manual-target.txt")
+    local picker_module = require("sidepanes.picker")
+    local original_numbered_select = picker_module.numbered_select
+    local picker_calls = {}
+
+    pcall(vim.fn.delete, out)
+    write(root .. "/src/origin.py", { "print('origin')" })
+
+    pane.setup({
+        ask = {
+            model_picker = "before_send",
+        },
+        tools = {
+            codex = {
+                label = "Codex",
+                cmd = { "sh", "-c", "tee -a " .. out },
+                send_delay_ms = 0,
+                presets = {
+                    { name = "one", label = "One", args = {} },
+                    { name = "two", label = "Two", args = {} },
+                },
+            },
+            claude = false,
+            ipython = false,
+        },
+    })
+
+    local ok, err = xpcall(function()
+        picker_module.numbered_select = function(prompt, picker_entries, callback, state)
+            table.insert(picker_calls, prompt)
+            assert(#picker_calls == 1, "manual target choice should be the only picker call")
+            return original_numbered_select(prompt, picker_entries, callback, state)
+        end
+
+        vim.cmd.edit(root .. "/src/origin.py")
+        pane.ask("codex", "one", { bufnr = vim.api.nvim_get_current_buf(), line1 = 1, line2 = 1 })
+
+        local qbuf = only_question_buf()
+
+        pane._test_next_choice = "2"
+        pane.change_question_target(qbuf)
+
+        set_question(qbuf, { "Question:", "manual target should not ask twice" })
+        pane.write_question(qbuf)
+        pane.finish_question(qbuf)
+
+        wait_for_file(out, "manual target should not ask twice")
+        assert(#picker_calls == 1, "finish opened another before-send picker")
+
+        local terminal_ctx = pane.terminals[util.terminal_key("codex", root)]
+
+        assert(terminal_ctx and terminal_ctx.preset_name == "two", "manual target did not determine send preset")
+    end, debug.traceback)
+
+    picker_module.numbered_select = original_numbered_select
+
+    if not ok then
+        error(err)
+    end
 end)
 
 test("question command-line mapping calls internal lifecycle callbacks", function()

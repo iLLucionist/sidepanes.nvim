@@ -7,6 +7,7 @@ Architecture: Orchestrates selection, picker, and terminal callbacks while keepi
 
 local util = require("sidepanes.util")
 local selection = require("sidepanes.selection")
+local ask_policy = require("sidepanes.ask_policy")
 local ask_pane = require("sidepanes.panes.ask")
 local ask_cmdline = require("sidepanes.panes.ask.cmdline")
 local ask_route = require("sidepanes.ask_route")
@@ -78,11 +79,37 @@ local function ask_target_entries(deps, root)
     return deps.tool_shortcut_entries(root, { ask_only = true })
 end
 
+local function ask_config(state)
+    return type(state.config) == "table" and type(state.config.ask) == "table" and state.config.ask or {}
+end
+
 local function ask_picker_entries(deps, root)
     return ask_target_resolver.picker_entries({
         picker_entries = deps.terminal_entries(root, 1, { ask_only = true }),
         target_entries = ask_target_entries(deps, root),
     })
+end
+
+local function default_ask_entry(deps, context)
+    local decision = ask_target_resolver.resolve({
+        picker_entries = deps.terminal_entries(context.root, 1, { ask_only = true }),
+        root = context.root,
+        target_entries = ask_target_entries(deps, context.root),
+    })
+
+    if decision.kind == ask_target_resolver.DECISIONS.target and decision.entry then
+        return decision.entry, decision.reason
+    end
+
+    if decision.entries and decision.entries[1] then
+        return decision.entries[1], decision.reason
+    end
+
+    return nil, decision.reason
+end
+
+local function defer_missing_target_picker(state)
+    return ask_config(state).model_picker == "before_send"
 end
 
 --- Build ask target entries and invoke a callback for the selected entry.
@@ -135,7 +162,9 @@ local function ask_pane_existing_or_default(state, deps, context, origin)
 end
 
 --- Open the editable ask prompt scratch buffer.
-local function open_buffer(state, deps, entry, context, origin)
+local function open_buffer(state, deps, entry, context, opts)
+    opts = opts or {}
+    local origin = opts.origin
     origin = origin or capture_origin(state)
 
     local scratch = vim.api.nvim_create_buf(false, true)
@@ -144,6 +173,7 @@ local function open_buffer(state, deps, entry, context, origin)
     local sent = false
     local buffer_state = {
         entry = entry,
+        target_reason = opts and opts.target_reason,
         written_prompt = nil,
     }
     local initial_prompt = selection.prompt_template(context)
@@ -227,6 +257,60 @@ local function open_buffer(state, deps, entry, context, origin)
         end
     end
 
+    local function send_prompt(prompt, current_entry, opts)
+        opts = opts or {}
+
+        if sent then
+            return
+        end
+
+        sent = true
+        vim.api.nvim_set_option_value("modified", false, { buf = scratch })
+        restore_origin(state, deps, origin)
+
+        local ctx, started = deps.open_terminal(current_entry.tool_name, current_entry.preset_name, {
+            bufnr = context.bufnr,
+            root = current_entry.root or context.root,
+            focus = true,
+        })
+
+        if ctx then
+            deps.send_prompt_to_terminal(ctx, current_entry, prompt, started)
+        end
+
+        if not opts.from_wipeout then
+            close_scratch()
+        end
+    end
+
+    local function open_before_send_picker(prompt, opts)
+        local current_entry = buffer_state.entry or entry
+        local decision = ask_target_resolver.before_send({
+            active_entry = current_entry,
+            picker_entries = deps.terminal_entries(context.root, 1, { ask_only = true }),
+            picker_mode = ask_config(state).model_picker,
+            root = context.root,
+            target_entries = ask_target_entries(deps, context.root),
+            target_reason = buffer_state.target_reason,
+        })
+
+        if decision.kind == ask_target_resolver.DECISIONS.target and decision.entry then
+            send_prompt(prompt, decision.entry, opts)
+            return
+        end
+
+        deps.numbered_select("Question target", decision.entries or {}, function(choice)
+            if not choice then
+                return
+            end
+
+            buffer_state.entry = choice
+            buffer_state.target_reason = ask_target_resolver.REASONS.explicit_target_change
+            update_prompt_chrome()
+            send_prompt(prompt, choice, opts)
+        end)
+    end
+
     local function finish(opts)
         opts = opts or {}
 
@@ -254,24 +338,17 @@ local function open_buffer(state, deps, entry, context, origin)
             return
         end
 
-        sent = true
-        vim.api.nvim_set_option_value("modified", false, { buf = scratch })
-        restore_origin(state, deps, origin)
-
-        local current_entry = buffer_state.entry or entry
-        local ctx, started = deps.open_terminal(current_entry.tool_name, current_entry.preset_name, {
-            bufnr = context.bufnr,
-            root = current_entry.root or context.root,
-            focus = true,
-        })
-
-        if ctx then
-            deps.send_prompt_to_terminal(ctx, current_entry, prompt, started)
+        if
+            ask_policy.should_open_before_send_picker({
+                picker_mode = ask_config(state).model_picker,
+                target_reason = buffer_state.target_reason,
+            })
+        then
+            open_before_send_picker(prompt, opts)
+            return
         end
 
-        if not opts.from_wipeout then
-            close_scratch()
-        end
+        send_prompt(prompt, buffer_state.entry or entry, opts)
     end
 
     local function write_prompt()
@@ -291,6 +368,7 @@ local function open_buffer(state, deps, entry, context, origin)
     local function change_target()
         pick_target(state, deps, "Question target", context, function(choice)
             buffer_state.entry = choice
+            buffer_state.target_reason = ask_target_resolver.REASONS.explicit_target_change
             update_prompt_chrome()
 
             if util.valid_win(scratch_win) then
@@ -427,7 +505,7 @@ function M.ask_with_entry(state, deps, entry, opts)
         return
     end
 
-    open_buffer(state, deps, entry, context, opts.origin)
+    open_buffer(state, deps, entry, context, opts)
 end
 
 --- Append the current selection to the ask pane, creating one if needed.
@@ -496,6 +574,15 @@ function M.ask_last_coding_agent(state, deps, opts)
     local ctx = deps.last_coding_agent_context(context.root)
 
     if not ctx then
+        if defer_missing_target_picker(state) then
+            local entry, reason = default_ask_entry(deps, context)
+
+            if entry then
+                M.ask_with_entry(state, deps, entry, { context = context, origin = origin, target_reason = reason })
+                return
+            end
+        end
+
         pick_target(state, deps, "Ask", context, function(choice, reason)
             M.ask_with_entry(state, deps, choice, { context = context, origin = origin, target_reason = reason })
         end)
@@ -528,6 +615,15 @@ function M.ask_current_coding_agent(state, deps, tool_name, opts)
     local ctx = deps.terminal_context_for_tool(tool_name, context.root)
 
     if not ctx then
+        if defer_missing_target_picker(state) then
+            M.ask(state, deps, tool_name, nil, {
+                context = context,
+                origin = origin,
+                target_reason = ask_target_resolver.REASONS.default_ask_target,
+            })
+            return
+        end
+
         pick_target(state, deps, "Ask", context, function(choice, reason)
             M.ask_with_entry(state, deps, choice, { context = context, origin = origin, target_reason = reason })
         end)

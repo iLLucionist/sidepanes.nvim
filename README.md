@@ -229,6 +229,10 @@ are available in your environment.
    Reopening an unmodified written draft with normal `<leader>pa` or pane-local
    `ap` starts a fresh `Question:` prompt, while modified drafts are preserved;
    press `u` in the ask pane to undo an accidental fresh reset.
+   When `ask.model_picker = "before_send"`, Sidepanes also defers model
+   selection in the floating scratch prompt: visual `aa` / `ax` opens the prompt
+   first, then asks for the model only after write and quit. If you manually
+   choose a target with `M` or `<Tab>`, that choice is reused at send time.
    Command-line `:q` / `:quit` in non-ask Sidepanes buffers returns to Markdown,
    so personal quit mappings that expand to `:q<CR>` do not close the pane.
 
@@ -430,6 +434,10 @@ an unmodified draft, restoring the previous prompt and citation state.
 In non-ask Sidepanes buffers, personal normal-mode mappings such as
 `qq -> :q<CR>` or `<leader>qq -> :q<CR>` are guarded only when their RHS is a
 plain quit command, so they return the pane to Markdown instead of closing it.
+When `ask.model_picker = "before_send"`, the floating scratch prompt follows
+the same post-write timing for visual `aa` / `ax`: the prompt opens first, the
+picker appears only after write and quit, and a manual `M` / `<Tab>` target
+choice prevents a duplicate send-time picker.
 
 Set a mapping entry to `false` to disable it.
 

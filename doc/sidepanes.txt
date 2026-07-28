@@ -688,12 +688,18 @@ mapped. `:wq`, `:x`, and `:exit` write and send the accumulated prompt.
 Cancellation restores the previous pane before deleting the draft buffer so the
 Sidepanes split stays visually stable.
 
-`ask.model_picker` controls model selection in pane mode:
+`ask.model_picker` controls model selection timing:
 
 - `"manual"` keeps selection manual.
-- `"after_open"` shows the picker once when a new draft receives its first
-  selection.
+- `"after_open"` shows the picker once when a new ask-pane draft receives its
+  first selection.
 - `"before_send"` shows the picker before the prompt is sent.
+
+The `"before_send"` timing is respected by the floating scratch prompt as well
+as the ask pane. Visual `aa` / `ax` opens the editor first, then asks for the
+model only after the prompt is written and finished. If `M` or `<Tab>` already
+changed the target manually, that choice satisfies the pending before-send
+picker and Sidepanes does not prompt twice.
 
 Inside the ask pane, `M` and `<Tab>` open the model picker. `<C-CR>` submits the
 current prompt from normal or insert mode. Set `mappings.pane.ask_send` or
