@@ -279,12 +279,15 @@ function M.setup_autocmds(state, group, deps)
                 return
             end
 
+            local clear_reload = deps.clear_reload_badge and should_clear_reload_badge(state)
+            local clear_resume = deps.clear_resume_badge and should_clear_resume_badge(state)
+
             vim.schedule(function()
-                if deps.clear_reload_badge and should_clear_reload_badge(state) then
+                if clear_reload then
                     deps.clear_reload_badge()
                 end
 
-                if deps.clear_resume_badge and should_clear_resume_badge(state) then
+                if clear_resume then
                     deps.clear_resume_badge()
                 end
             end)
