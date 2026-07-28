@@ -1,6 +1,6 @@
 # sidepanes.nvim
 
-[![Tests](https://github.com/iLLucionist/sidepanes.nvim/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/iLLucionist/sidepanes.nvim/actions/workflows/tests.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/iLLucionist/sidepanes.nvim/tests.yml?branch=main&label=Tests&logo=github)](https://github.com/iLLucionist/sidepanes.nvim/actions/workflows/tests.yml)
 [![Release](https://img.shields.io/github/v/release/iLLucionist/sidepanes.nvim?label=release)](https://github.com/iLLucionist/sidepanes.nvim/releases)
 [![Tag](https://img.shields.io/github/v/tag/iLLucionist/sidepanes.nvim?label=tag)](https://github.com/iLLucionist/sidepanes.nvim/tags)
 [![License](https://badgen.net/badge/license/MIT/blue)](LICENSE)
