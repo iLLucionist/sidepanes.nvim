@@ -50,6 +50,8 @@ but they should be called out clearly in this changelog.
   `:Sidepanes ask-status` for concise ask-pane debugging status.
 - Added `version()`, `:SidepanesVersion`, and `:Sidepanes version` for support
   and debugging output that includes the plugin version and load path.
+- `:checkhealth sidepanes` now also reports the Sidepanes version and loaded
+  plugin path.
 - Added pane-local mapping help with default `mappings.pane.help = "gh"`,
   `:SidepanesMappings`, `:Sidepanes mappings`, `mappings_help(opts)`, and a
   configurable `gh help` winbar hint.
@@ -90,6 +92,8 @@ but they should be called out clearly in this changelog.
 - The README install example now uses the grouped v0.4 setup shape, includes
   the ask-pane help/config keys, and demonstrates the recommended
   post-write `ask.model_picker = "before_send"` workflow.
+- Setup validation now covers the new `ask` and `help` config groups plus
+  `markdown.reload_badge.min_display_ms`.
 
 ### Fixed
 

@@ -12,7 +12,9 @@ instead of the floating ask prompt. The plugin default remains
 
 The ask pane is designed for prompt assembly:
 
-- normal-mode `mappings.global.ask_pane` opens or focuses the pane,
+- `show_ask_pane(opts)`, `:Sidepanes ask`, `mappings.global.ask_pane`, and
+  `mappings.pane.ask_pane` open or focus an empty ask pane before any selection
+  exists,
 - visual ask mappings append selected context when `ask.auto_append = true`,
 - pane-local `mappings.pane.headings = "fm"` opens the Markdown heading picker
   from the Markdown pane,
@@ -168,3 +170,19 @@ help = {
   scope = "pane_first",
 }
 ```
+
+Setup validation now understands the `ask` and `help` config groups, including
+`ask.ui`, `ask.duplicate_policy`, `ask.model_picker`, `help.mapping`, and
+`help.scope`. It also validates `markdown.reload_badge.min_display_ms`.
+
+## Diagnostics And Other Fixes
+
+`:checkhealth sidepanes` now reports both the Sidepanes version and the loaded
+plugin path, matching the new `:SidepanesVersion` / `version()` support output.
+
+Markdown reload behavior also got a small polish pass:
+
+- returning focus to an already-open Markdown side pane checks for source-file
+  changes immediately instead of waiting for polling or idle checks, and
+- `markdown.reload_badge.min_display_ms` keeps a fresh `[RELOADED]` badge
+  visible through quick pane-switch gestures before interaction can clear it.
