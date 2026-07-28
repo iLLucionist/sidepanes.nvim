@@ -5,7 +5,8 @@ Branch: `feat/ask-pane`
 Target release: `v0.4.0`
 
 Status: ask-pane implementation slices are complete; Codex-observed manual
-acceptance passed; final release-readiness audit is in closeout.
+acceptance passed; release-readiness audit and two final non-mutating
+confirmation passes passed after `1250fa0`. Ready to tag `v0.4.0`.
 
 ## Status Legend
 
@@ -49,10 +50,11 @@ acceptance passed; final release-readiness audit is in closeout.
 
 ## Remaining Implementation Order
 
-The remaining planned slices must be implemented in this order unless the
-roadmap is explicitly updated first with the reason for changing the order.
+No planned implementation work remains before tagging `v0.4.0`. The historical
+implementation order below explains why the completed slices were sequenced the
+way they were.
 
-1. Final non-mutating confirmation passes after the latest audit commit
+1. Done: final non-mutating confirmation passes after the latest audit commit
 
 The matrices came first because they define the behavior contract before
 implementation changes. Slice 23 introduced the first central ask action policy,

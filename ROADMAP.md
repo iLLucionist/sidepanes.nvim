@@ -40,7 +40,7 @@ Released as `v0.2.0` on 2026-07-21.
 
 ## v0.4.0 Ask Pane Workflow
 
-Status: implemented and verified on `feat/ask-pane`; not released yet.
+Status: ready to tag from `feat/ask-pane`; not released yet.
 
 Goal: add a configurable ask pane for multi-selection, multi-file agent prompts.
 See `docs/ask-pane-roadmap.md`.
@@ -76,9 +76,9 @@ Before calling release work complete, run:
 tests/run_checks.sh full
 ```
 
-Also verify:
+Also verify before or immediately after tagging, as applicable:
 
 - `:help sidepanes` opens from the installed plugin.
 - `:checkhealth sidepanes` has no unexpected Sidepanes warnings or errors.
-- A real lazy.nvim install can load `sidepanes.nvim` from GitHub without a
+- A real lazy.nvim install can load the tagged release from GitHub without a
   local source fallback.
