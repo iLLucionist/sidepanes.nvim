@@ -37,9 +37,10 @@ ships built-in Markdown reflow as `sidepanes.markdown_reflow`.
 ## Install
 
 With lazy.nvim, this example installs the dependencies used for the intended
-complete functionality: document and heading pickers, Markdown heading parsing,
-optional Markdown decorations, coding-agent terminals, IPython, and Markdown
-reflow.
+workflow: document and heading pickers, Markdown heading parsing, optional
+Markdown decorations, coding-agent terminals, IPython, and Markdown reflow. The
+setup table uses the current grouped v0.4 configuration shape; inspect
+`require("sidepanes.config").default_setup()` for the complete default table.
 
 ```lua
 {
@@ -59,7 +60,15 @@ reflow.
   },
   config = function()
     require("sidepanes").setup({
+      layout = {
+        width = 100,
+        zoom_text_width = 90,
+        sticky_relative_width = false,
+        width_snap_points = { 60, 70, 80, 90, 100, 110, 120, "1/3", "40%", "1/2", "60%", "2/3", "75%" },
+        width_picker_points = { "1/4", "1/3", "2/5", "1/2", "60%", "2/3", "75%", 100, 120 },
+      },
       markdown = {
+        wrap = false,
         auto_reload = true,
         reload_interval_ms = 1000,
         reload_badge_ms = 0,
@@ -72,6 +81,15 @@ reflow.
             bg = "WarningMsg",
             bold = true,
           },
+        },
+        wrap_toggle_key = "<leader>mw",
+        sticky_heading = true,
+        reflow = {
+          enabled = true,
+          cmd = { "mdfmt", "--stdin", "--width", "{width}", "--wrap", "always" },
+          fallback = true,
+          protect_tables = true,
+          margin = 8,
         },
       },
       terminal = {
@@ -112,10 +130,24 @@ reflow.
         ui = "float",
         auto_append = true,
         duplicate_policy = "skip",
-        model_picker = "manual",
+        -- Recommended pane workflow: write the scratch prompt first, then pick.
+        -- Use "manual" for no automatic picker, or "after_open" for first open.
+        model_picker = "before_send",
+      },
+      help = {
+        winbar = true,
+        mapping = "gh",
+        scope = "pane_first",
       },
       lifecycle = {
+        focus_on_switch = true,
         focus_on_pick = true,
+        focus_on_ask = true,
+        shutdown_on_exit = true,
+        shutdown_timeout_ms = 300,
+      },
+      validation = {
+        enabled = true,
       },
       commands = true,
       mappings = {
@@ -169,6 +201,20 @@ reflow.
           ask_last = "aa",
           ask_codex = "ax",
           ask_claude = "ac",
+          help = "gh",
+        },
+      },
+      tools = {
+        codex = {
+          models = { "gpt-5.5", "gpt-5.6-sol" },
+          efforts = { "high", "medium", "xhigh" },
+          speeds = { "fast", "normal" },
+          default = { model = "gpt-5.5", effort = "high", speed = "fast" },
+        },
+        claude = {
+          models = { "sonnet", "opus", "fable" },
+          efforts = { "normal", "high" },
+          default = { model = "sonnet", effort = "normal" },
         },
       },
     })

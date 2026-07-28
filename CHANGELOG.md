@@ -80,6 +80,9 @@ but they should be called out clearly in this changelog.
   editor first, and model selection happens only after the prompt is written and
   finished. A manual `M` / `<Tab>` target choice satisfies that pending
   before-send picker instead of prompting twice.
+- The README install example now uses the grouped v0.4 setup shape, includes
+  the ask-pane help/config keys, and demonstrates the recommended
+  post-write `ask.model_picker = "before_send"` workflow.
 
 ### Fixed
 
